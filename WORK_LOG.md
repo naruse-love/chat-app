@@ -1,3 +1,71 @@
+# WORK LOG — Milestone 5 & 6: Image Service, Providers & UI Screens (2026-07-12)
+
+## Files Created/Changed
+
+### Image Service (`lib/services/`)
+- `lib/services/image_service.dart`: Picks images from camera/gallery via `image_picker`, compresses to <1MB (max 1024px), saves to app documents directory, and encodes to Base64 data URI for OpenAI Vision-compatible requests.
+
+### Database Layer Update (`lib/data/`)
+- `lib/data/message_dao.dart`: Updated to resolve relative image paths to absolute paths using the device's application support directory.
+
+### State Management (`lib/providers/`)
+- `lib/providers/theme_provider.dart`: Manages dark/light theme toggle.
+- `lib/providers/api_config_provider.dart`: Manages API configuration CRUD with Secure Storage integration.
+- `lib/providers/model_provider.dart`: Fetches and caches model lists from `/v1/models`.
+- `lib/providers/conversation_provider.dart`: Manages conversation list CRUD, pin/archive, and active conversation state.
+- `lib/providers/chat_provider.dart`: Manages active conversation messages, streaming state (`isGenerating`, `streamContent`, `streamReasoning`), and delegates to `AgentService`.
+- `lib/providers/agent_provider.dart`: Tracks agent tool-calling state (e.g. `isSearching`, `searchQuery`).
+- `lib/providers/settings_provider.dart`: Manages SearXNG URL, API timeouts, and other global settings.
+
+### App Shell (`lib/`)
+- `lib/app.dart`: `MaterialApp` with `ProviderScope`, custom slide-transition routing to `/`, `/settings`, `/settings/api_config`, `/settings/system_prompts`, `/model_selector`.
+- `lib/main.dart`: Cleaned up to use `AppTheme` and `ProviderScope`.
+
+### UI Screens (`lib/screens/`)
+- `lib/screens/home_screen.dart`: Chat UI with sidebar drawer (pinned/archived conversations), top model/config switcher, `ListView.builder` message list, streaming bubble, and stop-generation button.
+- `lib/screens/settings_screen.dart`: SearXNG URL, API key management links, and theme toggle.
+- `lib/screens/api_config_screen.dart`: Add/Edit/Delete API configurations with connection test.
+- `lib/screens/model_selector_screen.dart`: Model list grouped by provider with Vision/Tools capability chips.
+- `lib/screens/system_prompt_screen.dart`: System prompt template CRUD with preview.
+
+### Widgets (`lib/widgets/`)
+- `lib/widgets/chat_bubble.dart`: Message bubbles with reasoning fold panel (`reasoning_content`), local/base64/remote image thumbnail, and role-based alignment.
+- `lib/widgets/chat_input.dart`: Multi-line input with image preview panel and send/stop button.
+- `lib/widgets/markdown_renderer.dart`: Streaming-aware Markdown with 100ms throttle, syntax-highlighted code blocks (via `highlight`), and one-click copy.
+
+### Theme (`lib/theme/`)
+- `lib/theme/app_theme.dart`: Dark (`#1A1A2E` base) and Light (`#F5F5F5` base) Material3 themes.
+
+### Configuration
+- `pubspec.yaml`: Added `markdown: ^7.0.0` as explicit dependency (required by `markdown_renderer.dart`).
+
+### Tests (`test/`)
+- `test/image_service_test.dart`: 355-line comprehensive tests covering image pick, compression, DB path serialization, and error pathways (added by teamwork agents).
+
+---
+
+## Current State
+- **Static Analysis**: `flutter analyze` reports **0 issues**.
+- **Unit Tests**: Full suite of **102 tests passing** (100%).
+- **Milestones Complete**: 1 through 6 are fully implemented and clean.
+
+---
+
+## Technical Decisions
+1. **Deprecated API Cleanup**: Replaced all deprecated Flutter 3.18+ APIs: `colorScheme.background → surface`, `surfaceVariant → surfaceContainerHighest`, `onBackground → onSurface`, `withOpacity() → withValues(alpha:)`.
+2. **markdown as Explicit Dependency**: `flutter_markdown` transitively provides `markdown`, but importing it directly in `markdown_renderer.dart` requires declaring it in `pubspec.yaml` to satisfy `depend_on_referenced_packages` lint.
+3. **Streaming Throttle**: `MarkdownRenderer` applies a 100ms throttle during streaming to avoid excessive rebuild calls and unnecessary Markdown re-parsing during token-by-token SSE delivery.
+4. **Image Path Strategy**: Images are stored as relative paths in SQLite; `MessageDao` resolves them to absolute paths at runtime using `path_provider`, making the DB portable across reinstalls.
+
+---
+
+## Next Steps
+- Milestone 7: E2E widget tests for complete chat flow, image sending, and tool calling.
+- Milestone 8: Adversarial hardening (offline/rate-limit/corrupt DB scenarios).
+- Final: `flutter build apk --debug` build validation.
+
+---
+
 # WORK LOG — Milestone 3: SSE Streaming & Chat Network Service (2026-07-12)
 
 ## Files Created/Changed
