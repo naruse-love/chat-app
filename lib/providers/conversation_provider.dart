@@ -27,10 +27,11 @@ class ConversationState {
     Conversation? activeConversation,
     bool? isLoading,
     String? error,
+    bool clearActive = false,
   }) {
     return ConversationState(
       conversations: conversations ?? this.conversations,
-      activeConversation: activeConversation ?? this.activeConversation,
+      activeConversation: clearActive ? null : (activeConversation ?? this.activeConversation),
       isLoading: isLoading ?? this.isLoading,
       error: error,
     );
@@ -116,6 +117,7 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
       if (activeDeleted) {
         state = state.copyWith(
           activeConversation: state.conversations.isNotEmpty ? state.conversations.first : null,
+          clearActive: state.conversations.isEmpty,
           isLoading: false,
         );
       } else {
@@ -127,7 +129,10 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
   }
 
   void setActiveConversation(Conversation? conversation) {
-    state = state.copyWith(activeConversation: conversation);
+    state = state.copyWith(
+      activeConversation: conversation,
+      clearActive: conversation == null,
+    );
   }
 }
 

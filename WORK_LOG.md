@@ -1,3 +1,28 @@
+# WORK LOG — Milestone 7: End-to-End & Widget Testing (2026-07-12)
+
+## Files Created/Changed
+
+### Tests (`test/`)
+- `test/e2e_integration_test.dart`: Added a comprehensive end-to-end provider integration test verifying complete app state, conversation management (CRUD, pinning, archiving), message streaming logic, mock API listing and agent service interactions, database persistence, and cascading deletes.
+
+### State Management & Notifier Fixes (`lib/providers/`)
+- `lib/providers/conversation_provider.dart`: Fixed a bug where `activeConversation` could not be cleared/set to `null` because `copyWith` fell back to `this.activeConversation` when passed `null`. Added a `clearActive` flag to the `copyWith` method and updated `deleteConversation` and `setActiveConversation` to allow correctly resetting active conversation to null.
+
+---
+
+## Current State
+- **Static Analysis**: `flutter analyze` reports **0 issues**.
+- **Unit Tests**: Full suite of **103 tests passing** (100%).
+- **Milestones Complete**: Milestones 1 through 7 are fully implemented and verified clean.
+
+---
+
+## Technical Decisions
+1. **Providers Asynchronous Race Fix**: Discovered and resolved a lazy-loading asynchronous race condition in Riverpod provider integration tests. Since settings and DB loading are asynchronous inside provider constructors and triggered lazily, we pre-trigger provider reading and yield control using `await Future.delayed` to let them finish initialization before making updates and assertions.
+2. **Nullable State Flag**: Avoided breaking the `copyWith` signature in `ConversationState` by introducing a `clearActive` boolean flag to explicitly signal when the state should transition to a null active conversation state.
+
+---
+
 # WORK LOG — Milestone 5 & 6: Image Service, Providers & UI Screens (2026-07-12)
 
 ## Files Created/Changed
