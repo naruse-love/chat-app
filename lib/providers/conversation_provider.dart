@@ -49,8 +49,10 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
     state = state.copyWith(isLoading: true);
     try {
       final list = await _conversationDao.getAll();
+      if (!mounted) return;
       state = state.copyWith(conversations: list, isLoading: false);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -84,8 +86,10 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
       await _conversationDao.update(conversation);
       final active = state.activeConversation?.id == conversation.id ? conversation : state.activeConversation;
       await loadConversations();
+      if (!mounted) return;
       state = state.copyWith(activeConversation: active);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(error: e.toString());
     }
   }

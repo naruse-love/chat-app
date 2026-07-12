@@ -11,7 +11,10 @@ import 'api_config_provider.dart';
 import 'conversation_provider.dart';
 import 'model_provider.dart';
 import 'settings_provider.dart';
+import '../services/image_service.dart';
 import 'agent_provider.dart';
+
+final imageServiceProvider = Provider<ImageService>((ref) => ImageService());
 
 final messageDaoProvider = Provider<MessageDao>((ref) {
   final dbHelper = ref.watch(dbHelperProvider);
@@ -99,6 +102,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
       return;
     }
 
+    if (imagePath != null && !selectedModel.supportsVision) {
+      state = state.copyWith(error: 'The selected model does not support image inputs.');
+      return;
+    }
+
     String targetConvId;
     if (activeConv == null) {
       final title = text.length > 20 ? '${text.substring(0, 20)}...' : text;
@@ -112,12 +120,26 @@ class ChatNotifier extends StateNotifier<ChatState> {
       targetConvId = activeConv.id;
     }
 
+    final messageId = const Uuid().v4();
+    String? finalImagePath;
+    if (imagePath != null) {
+      try {
+        finalImagePath = await _ref.read(imageServiceProvider).compressAndSaveImage(
+          sourcePath: imagePath,
+          messageId: messageId,
+        );
+      } catch (e) {
+        state = state.copyWith(error: 'Failed to process image: $e');
+        return;
+      }
+    }
+
     final userMessage = ChatMessage(
-      id: const Uuid().v4(),
+      id: messageId,
       conversationId: targetConvId,
       role: 'user',
       content: text,
-      imagePath: imagePath,
+      imagePath: finalImagePath,
       timestamp: DateTime.now(),
     );
 
@@ -217,7 +239,27 @@ class ChatNotifier extends StateNotifier<ChatState> {
           state = state.copyWith(isGenerating: false);
         }
       } else {
-        state = state.copyWith(isGenerating: false, error: 'Stream failed: $e');
+        String errorMsg = 'Stream failed: $e';
+        if (e is DioException) {
+          if (e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.sendTimeout ||
+              e.type == DioExceptionType.receiveTimeout ||
+              e.type == DioExceptionType.connectionError) {
+            errorMsg = 'Connection failed. Please check your internet connection or endpoint URL.';
+          } else if (e.type == DioExceptionType.badResponse) {
+            final statusCode = e.response?.statusCode;
+            if (statusCode == 401) {
+              errorMsg = 'API authentication failed. Please check your API Key.';
+            } else if (statusCode == 429) {
+              errorMsg = 'Rate limit exceeded. Please wait a moment and try again.';
+            } else if (statusCode == 404) {
+              errorMsg = 'Endpoint not found. Please verify the URL path.';
+            } else {
+              errorMsg = 'Server returned error status: $statusCode';
+            }
+          }
+        }
+        state = state.copyWith(isGenerating: false, error: errorMsg);
       }
     } finally {
       _cancelToken = null;

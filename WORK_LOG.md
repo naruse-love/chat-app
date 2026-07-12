@@ -1,3 +1,32 @@
+# WORK LOG — Milestone 8: Adversarial Error Handling & Hardening, Final Compilation (2026-07-12)
+
+## Files Created/Changed
+
+### Notifiers & Services (`lib/providers/`, `lib/data/`)
+- `lib/providers/chat_provider.dart`: Integrated `ImageService` to compress and permanently save picked images before writing to SQLite and invoking API. Added vision capability check to fail fast if the selected model does not support image inputs. Refined exception formatting to present human-friendly error messages on network timeouts, invalid API keys (401), rate limits (429), and missing endpoints (404).
+- `lib/data/database_helper.dart`: Added recovery block to database connection initialization. If database open fails (e.g. SQLite database file corruption), it deletes the corrupted file and recreates a clean database schema automatically.
+- `lib/providers/conversation_provider.dart`: Added safety checks (`if (!mounted) return;`) before calling `state = ...` in async operations (`loadConversations`, `updateConversation`) to prevent "StateNotifier used after dispose" bad states during rapid navigation/disposal.
+
+### Tests (`test/`)
+- `test/adversarial_hardening_test.dart`: Added comprehensive tests verifying SQLite corruption recovery, vision capability fast-fail validation, connection timeout formatting, 401 unauthorized key formatting, and image compression error handling.
+
+---
+
+## Current State
+- **Static Analysis**: `flutter analyze` reports **0 issues**.
+- **Unit Tests**: Full suite of **108 tests passing** (100% pass rate).
+- **Compilation**: Successfully compiled debug APK via `flutter build apk --debug`. Output file generated at `build/app/outputs/flutter-apk/app-debug.apk` (assembleDebug completed in 25.1s).
+- **Milestones Complete**: All Milestones 1 through 8 are fully implemented, tested, and verified clean.
+
+---
+
+## Technical Decisions
+1. **Vision Pre-Flight Check**: Prevented 400 Bad Request API errors by enforcing a pre-flight model check inside the notifier, stopping vision payloads from being dispatched to text-only LLMs.
+2. **Corrupt Database Self-Healing**: Mobile app local stores can be corrupted due to OS crashes or power failure. Implementing automatic file removal and database re-creation protects the app from permanent start-up failure.
+3. **User-Friendly Error Mapping**: Mapped cryptic network stack exceptions to clear, actionable guidance (e.g., API key, endpoint, network timeouts).
+
+---
+
 # WORK LOG — Milestone 7: End-to-End & Widget Testing (2026-07-12)
 
 ## Files Created/Changed

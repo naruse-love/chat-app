@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 
 class DatabaseHelper {
@@ -22,13 +23,30 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = '$dbPath/app_database.db';
 
-    return await openDatabase(
-      path,
-      version: 2,
-      onConfigure: _onConfigure,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
+    try {
+      return await openDatabase(
+        path,
+        version: 2,
+        onConfigure: _onConfigure,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+      );
+    } catch (e) {
+      // Recovery logic for database corruption: delete the file and recreate
+      try {
+        final file = File(path);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } catch (_) {}
+      return await openDatabase(
+        path,
+        version: 2,
+        onConfigure: _onConfigure,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+      );
+    }
   }
 
   Future<void> _onConfigure(Database db) async {
