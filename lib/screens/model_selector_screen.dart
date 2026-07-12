@@ -82,7 +82,7 @@ class _ModelSelectorScreenState extends ConsumerState<ModelSelectorScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Select Model'),
+        title: const Text('选择模型'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -100,7 +100,7 @@ class _ModelSelectorScreenState extends ConsumerState<ModelSelectorScreen> {
                   child: TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: 'Search models...',
+                      hintText: '搜索模型...',
                       prefixIcon: const Icon(Icons.search),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -119,7 +119,7 @@ class _ModelSelectorScreenState extends ConsumerState<ModelSelectorScreen> {
                         child: TextField(
                           controller: _customModelController,
                           decoration: InputDecoration(
-                            hintText: 'Enter custom model ID (e.g. openai/gpt-4o)...',
+                            hintText: '输入自定义模型 ID (例如 openai/gpt-4o)...',
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -137,7 +137,7 @@ class _ModelSelectorScreenState extends ConsumerState<ModelSelectorScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text('Add'),
+                        child: const Text('添加'),
                       ),
                     ],
                   ),
@@ -158,7 +158,7 @@ class _ModelSelectorScreenState extends ConsumerState<ModelSelectorScreen> {
                           ),
                         )
                       : filteredModels.isEmpty
-                          ? const Center(child: Text('No models found'))
+                          ? const Center(child: Text('未找到模型'))
                           : ListView.builder(
                               itemCount: providers.length,
                               itemBuilder: (context, providerIdx) {
@@ -204,14 +204,14 @@ class _ModelSelectorScreenState extends ConsumerState<ModelSelectorScreen> {
                                           children: [
                                             if (model.supportsVision)
                                               const Chip(
-                                                label: Text('Vision'),
+                                                label: Text('视觉'),
                                                 labelStyle: TextStyle(fontSize: 10),
                                                 padding: EdgeInsets.zero,
                                                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                               ),
                                             if (model.supportsTools)
                                               const Chip(
-                                                label: Text('Tools'),
+                                                label: Text('工具'),
                                                 labelStyle: TextStyle(fontSize: 10),
                                                 padding: EdgeInsets.zero,
                                                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

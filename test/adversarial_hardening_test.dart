@@ -209,7 +209,7 @@ void main() {
 
       // Assert that sending failed fast and returned the model vision capability mismatch error
       final chatState = container.read(chatProvider);
-      expect(chatState.error, equals('The selected model does not support image inputs.'));
+      expect(chatState.error, equals('所选模型不支持图片输入。'));
       expect(chatState.messages, isEmpty); // No messages sent or saved
     });
 
@@ -288,7 +288,7 @@ void main() {
       final chatState = container.read(chatProvider);
       expect(
         chatState.error,
-        equals('Connection failed. Please check your internet connection or endpoint URL.'),
+        equals('连接失败。请检查您的网络连接或端点 URL。'),
       );
     });
 
@@ -370,7 +370,7 @@ void main() {
       final chatState = container.read(chatProvider);
       expect(
         chatState.error,
-        equals('API authentication failed. Please check your API Key.'),
+        equals('API 身份验证失败。请检查您的 API 密钥。'),
       );
     });
 
@@ -436,7 +436,7 @@ void main() {
       final chatState = container.read(chatProvider);
       expect(
         chatState.error,
-        contains('Failed to process image: File not found'),
+        contains('图片处理失败: File not found'),
       );
       expect(chatState.messages, isEmpty);
     });

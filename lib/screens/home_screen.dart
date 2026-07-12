@@ -74,7 +74,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     Icon(Icons.chat_bubble_outline, size: 48, color: theme.colorScheme.primary),
                     const SizedBox(height: 12),
                     Text(
-                      'AI Agent Chat',
+                      '智能助手聊天',
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -94,7 +94,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   }
                 },
                 icon: const Icon(Icons.add),
-                label: const Text('New Chat'),
+                label: const Text('新建聊天'),
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
                   shape: RoundedRectangleBorder(
@@ -110,7 +110,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   if (pinnedConvs.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      child: Text('Pinned', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.outline)),
+                      child: Text('已置顶', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.outline)),
                     ),
                     ...pinnedConvs.map((c) => _buildConversationTile(c)),
                     const Divider(),
@@ -118,7 +118,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   if (recentConvs.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      child: Text('Recent', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.outline)),
+                      child: Text('最近对话', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.outline)),
                     ),
                     ...recentConvs.map((c) => _buildConversationTile(c)),
                     const Divider(),
@@ -126,7 +126,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   // Archived Collapsible
                   ListTile(
                     title: Text(
-                      'Archived Chats (${archivedConvs.length})',
+                      '归档聊天 (${archivedConvs.length})',
                       style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
                     ),
                     trailing: Icon(
@@ -180,14 +180,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Icon(Icons.forum_outlined, size: 64, color: theme.colorScheme.outlineVariant),
                         const SizedBox(height: 16),
                         Text(
-                          'Start a new conversation',
+                          '开启新的对话',
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: theme.colorScheme.outline,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Type a message or use @search for manual search',
+                          '输入消息，或使用 @search 进行手动搜索',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.outline.withValues(alpha: 0.7),
                           ),
@@ -220,7 +220,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      'Searching: "${agentState.searchQuery}"...',
+                                      '正在搜索: "${agentState.searchQuery}"...',
                                       style: theme.textTheme.bodyMedium?.copyWith(
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -249,7 +249,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: ElevatedButton.icon(
                 onPressed: () => ref.read(chatProvider.notifier).cancelActiveStream(),
                 icon: const Icon(Icons.stop),
-                label: const Text('Stop Generating'),
+                label: const Text('停止生成'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: theme.colorScheme.errorContainer,
                   foregroundColor: theme.colorScheme.onErrorContainer,
@@ -293,7 +293,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   },
                 ),
               Text(
-                modelState.selectedModel?.modelName ?? 'Select Model...',
+                modelState.selectedModel?.modelName ?? '选择模型...',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
@@ -381,15 +381,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           itemBuilder: (context) => [
             PopupMenuItem(
               value: 'pin',
-              child: Text(c.isPinned ? 'Unpin' : 'Pin'),
+              child: Text(c.isPinned ? '取消置顶' : '置顶'),
             ),
             PopupMenuItem(
               value: 'archive',
-              child: Text(c.isArchived ? 'Unarchive' : 'Archive'),
+              child: Text(c.isArchived ? '取消归档' : '归档'),
             ),
             const PopupMenuItem(
               value: 'delete',
-              child: Text('Delete'),
+              child: Text('删除'),
             ),
           ],
         ),

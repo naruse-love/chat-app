@@ -65,7 +65,7 @@ class ModelNotifier extends StateNotifier<ModelState> {
 
       state = ModelState(models: models, selectedModel: selected, isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Failed to fetch models: $e');
+      state = state.copyWith(isLoading: false, error: '获取模型失败: $e');
     }
   }
 

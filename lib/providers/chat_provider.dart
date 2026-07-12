@@ -98,12 +98,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final settings = _ref.read(settingsProvider);
 
     if (activeConfig == null || selectedModel == null) {
-      state = state.copyWith(error: 'Missing API Config or selected Model.');
+      state = state.copyWith(error: '缺少 API 配置或选定的模型。');
       return;
     }
 
     if (imagePath != null && !selectedModel.supportsVision) {
-      state = state.copyWith(error: 'The selected model does not support image inputs.');
+      state = state.copyWith(error: '所选模型不支持图片输入。');
       return;
     }
 
@@ -129,7 +129,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
           messageId: messageId,
         );
       } catch (e) {
-        state = state.copyWith(error: 'Failed to process image: $e');
+        state = state.copyWith(error: '图片处理失败: $e');
         return;
       }
     }
@@ -224,7 +224,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             id: const Uuid().v4(),
             conversationId: targetConvId,
             role: 'assistant',
-            content: '${state.streamContent}\n\n*[Generation stopped by user]*',
+            content: '${state.streamContent}\n\n*[用户已停止生成]*',
             reasoningContent: state.streamReasoning.isNotEmpty ? state.streamReasoning : null,
             timestamp: DateTime.now(),
           );
@@ -239,23 +239,23 @@ class ChatNotifier extends StateNotifier<ChatState> {
           state = state.copyWith(isGenerating: false);
         }
       } else {
-        String errorMsg = 'Stream failed: $e';
+        String errorMsg = '流式传输失败: $e';
         if (e is DioException) {
           if (e.type == DioExceptionType.connectionTimeout ||
               e.type == DioExceptionType.sendTimeout ||
               e.type == DioExceptionType.receiveTimeout ||
               e.type == DioExceptionType.connectionError) {
-            errorMsg = 'Connection failed. Please check your internet connection or endpoint URL.';
+            errorMsg = '连接失败。请检查您的网络连接或端点 URL。';
           } else if (e.type == DioExceptionType.badResponse) {
             final statusCode = e.response?.statusCode;
             if (statusCode == 401) {
-              errorMsg = 'API authentication failed. Please check your API Key.';
+              errorMsg = 'API 身份验证失败。请检查您的 API 密钥。';
             } else if (statusCode == 429) {
-              errorMsg = 'Rate limit exceeded. Please wait a moment and try again.';
+              errorMsg = '请求频率超限。请稍后再试。';
             } else if (statusCode == 404) {
-              errorMsg = 'Endpoint not found. Please verify the URL path.';
+              errorMsg = '未找到端点。请核对 URL 路径。';
             } else {
-              errorMsg = 'Server returned error status: $statusCode';
+              errorMsg = '服务器返回错误状态码: $statusCode';
             }
           }
         }

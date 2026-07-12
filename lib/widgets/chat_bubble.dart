@@ -51,7 +51,7 @@ class _ChatBubbleState extends State<ChatBubble> {
               Padding(
                 padding: const EdgeInsets.only(left: 8.0, bottom: 4.0),
                 child: Text(
-                  'Tool Output: ${widget.message.toolCallId ?? ""}',
+                  '工具输出: ${widget.message.toolCallId ?? ""}',
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.outline,
                     fontFamily: 'monospace',
@@ -225,7 +225,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                   ),
                   const SizedBox(width: 6.0),
                   Text(
-                    'Thinking Process',
+                    '思考过程',
                     style: theme.textTheme.labelMedium?.copyWith(
                       color: theme.colorScheme.outline,
                       fontWeight: FontWeight.bold,

@@ -33,7 +33,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: const Text('设置'),
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12.0),
@@ -42,7 +42,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text(
-              'Appearance',
+              '外观设置',
               style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.bold,
@@ -50,24 +50,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           ListTile(
-            title: const Text('Theme Mode'),
-            subtitle: const Text('Choose light, dark, or system theme'),
+            title: const Text('主题模式'),
+            subtitle: const Text('选择浅色、深色或跟随系统主题'),
             trailing: SegmentedButton<ThemeMode>(
               segments: const [
                 ButtonSegment(
                   value: ThemeMode.light,
                   icon: Icon(Icons.light_mode),
-                  label: Text('Light'),
+                  label: Text('浅色'),
                 ),
                 ButtonSegment(
                   value: ThemeMode.dark,
                   icon: Icon(Icons.dark_mode),
-                  label: Text('Dark'),
+                  label: Text('深色'),
                 ),
                 ButtonSegment(
                   value: ThemeMode.system,
                   icon: Icon(Icons.settings_suggest),
-                  label: Text('System'),
+                  label: Text('系统'),
                 ),
               ],
               selected: {currentTheme},
@@ -83,7 +83,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text(
-              'Web Search Fallback',
+              '网络搜索备用端点',
               style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.bold,
@@ -98,8 +98,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: TextField(
                     controller: _searxngController,
                     decoration: const InputDecoration(
-                      labelText: 'SearXNG Base URL',
-                      hintText: 'e.g. http://localhost:8080',
+                      labelText: 'SearXNG 基础 URL',
+                      hintText: '例如 http://localhost:8080',
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
@@ -117,7 +117,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text(
-              'Configuration Managers',
+              '配置管理',
               style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.bold,
@@ -126,8 +126,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.api),
-            title: const Text('API Configurations'),
-            subtitle: const Text('Manage your endpoints and keys'),
+            title: const Text('API 配置'),
+            subtitle: const Text('管理您的端点和 API 密钥'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.pushNamed(context, '/settings/api_config');
@@ -135,8 +135,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.description),
-            title: const Text('System Prompt Templates'),
-            subtitle: const Text('Configure and apply system instructions'),
+            title: const Text('系统提示词模板'),
+            subtitle: const Text('配置并应用系统提示指令'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.pushNamed(context, '/settings/system_prompts');

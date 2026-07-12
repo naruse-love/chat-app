@@ -61,7 +61,7 @@ class _ChatInputState extends State<ChatInput> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error picking image: $e')),
+          SnackBar(content: Text('选取图片出错: $e')),
         );
       }
     }
@@ -101,7 +101,7 @@ class _ChatInputState extends State<ChatInput> {
           children: [
             ListTile(
               leading: const Icon(Icons.camera_alt),
-              title: const Text('Take Photo (Camera)'),
+              title: const Text('拍照 (相机)'),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(ImageSource.camera);
@@ -109,7 +109,7 @@ class _ChatInputState extends State<ChatInput> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_library),
-              title: const Text('Choose from Gallery (Album)'),
+              title: const Text('从相册选择 (相册)'),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(ImageSource.gallery);
@@ -192,7 +192,7 @@ class _ChatInputState extends State<ChatInput> {
                     color: widget.supportsVision ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
                   ),
                   onPressed: widget.supportsVision ? _showImagePickerOptions : null,
-                  tooltip: widget.supportsVision ? 'Attach Image' : 'Vision not supported by this model',
+                  tooltip: widget.supportsVision ? '添加图片' : '当前模型不支持视觉输入',
                 ),
                 
                 // Text Area
@@ -212,7 +212,7 @@ class _ChatInputState extends State<ChatInput> {
                       maxLines: 5,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
-                        hintText: 'Type a message...',
+                        hintText: '输入消息...',
                         border: InputBorder.none,
                         isDense: true,
                         contentPadding: EdgeInsets.symmetric(vertical: 10.0),

@@ -53,14 +53,14 @@ void main() {
       expect(find.text('This is the final response.'), findsOneWidget);
 
       // Verify thinking process header is displayed
-      expect(find.text('Thinking Process'), findsOneWidget);
+      expect(find.text('思考过程'), findsOneWidget);
       expect(find.byIcon(Icons.psychology), findsOneWidget);
 
       // Verify reasoning content is originally collapsed (hidden by CrossFade)
       expect(find.text('Deep reasoning process here...'), findsOneWidget);
       // Wait, in AnimatedCrossFade the child is in the widget tree but might have size 0. 
       // Let's tap on the thinking process header to verify toggle
-      await tester.tap(find.text('Thinking Process'));
+      await tester.tap(find.text('思考过程'));
       await tester.pumpAndSettle();
     });
 
@@ -82,7 +82,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Tool Output: call_abc123'), findsOneWidget);
+      expect(find.text('工具输出: call_abc123'), findsOneWidget);
     });
   });
 

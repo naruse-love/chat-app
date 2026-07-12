@@ -16,7 +16,7 @@ class SystemPromptScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('System Prompts'),
+        title: const Text('系统提示词'),
       ),
       body: templates.isEmpty
           ? const Center(child: CircularProgressIndicator())
@@ -83,12 +83,12 @@ class SystemPromptScreen extends ConsumerWidget {
                             );
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('System prompt applied successfully!')),
+                                const SnackBar(content: Text('系统提示词应用成功！')),
                               );
                             }
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('No active conversation to apply prompt.')),
+                              const SnackBar(content: Text('当前没有活跃的对话。')),
                             );
                           }
                         } else if (value == 'edit') {
@@ -100,15 +100,15 @@ class SystemPromptScreen extends ConsumerWidget {
                       itemBuilder: (context) => [
                         const PopupMenuItem(
                           value: 'apply',
-                          child: Text('Apply to Current Chat'),
+                          child: Text('应用到当前对话'),
                         ),
                         const PopupMenuItem(
                           value: 'edit',
-                          child: Text('Edit'),
+                          child: Text('编辑'),
                         ),
                         const PopupMenuItem(
                           value: 'delete',
-                          child: Text('Delete'),
+                          child: Text('删除'),
                         ),
                       ],
                     ),
@@ -200,54 +200,64 @@ class _SystemPromptFormDialogState extends ConsumerState<SystemPromptFormDialog>
   Widget build(BuildContext context) {
     final isEdit = widget.template != null;
 
-    return AlertDialog(
-      title: Text(isEdit ? 'Edit System Prompt' : 'Create System Prompt'),
-      content: Form(
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(isEdit ? '编辑系统提示词' : '创建系统提示词'),
+      ),
+      body: Form(
         key: _formKey,
         child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  hintText: 'e.g. Creative Writer',
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    labelText: '标题',
+                    hintText: '例如 创意写作助手',
+                  ),
+                  validator: (val) => val == null || val.trim().isEmpty ? '标题为必填项' : null,
                 ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Title is required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _descController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  hintText: 'e.g. Writes poems, stories...',
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _descController,
+                  decoration: const InputDecoration(
+                    labelText: '描述',
+                    hintText: '例如 擅长写诗和讲故事...',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _contentController,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  labelText: 'System Prompt Content',
-                  hintText: 'You are a professional creative writer...',
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _contentController,
+                  maxLines: 5,
+                  decoration: const InputDecoration(
+                    labelText: '提示词内容',
+                    hintText: '例如 你是一个专业的创意写作助手...',
+                  ),
+                  validator: (val) => val == null || val.trim().isEmpty ? '提示词内容为必填项' : null,
                 ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Prompt content is required' : null,
-              ),
-            ],
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('取消'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _save,
+                      child: const Text('保存'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: _save,
-          child: const Text('Save'),
-        ),
-      ],
     );
   }
 }

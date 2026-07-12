@@ -15,7 +15,7 @@ class ApiConfigScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('API Configurations'),
+        title: const Text('API 配置'),
       ),
       body: state.isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -27,13 +27,13 @@ class ApiConfigScreen extends ConsumerWidget {
                       Icon(Icons.api, size: 64, color: theme.colorScheme.outlineVariant),
                       const SizedBox(height: 16),
                       Text(
-                        'No API configurations yet',
+                        '暂无 API 配置',
                         style: theme.textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       ElevatedButton(
                         onPressed: () => _showFormDialog(context, ref),
-                        child: const Text('Add Configuration'),
+                        child: const Text('添加配置'),
                       ),
                     ],
                   ),
@@ -72,7 +72,7 @@ class ApiConfigScreen extends ConsumerWidget {
                                   border: Border.all(color: theme.colorScheme.primary),
                                 ),
                                 child: Text(
-                                  'Default',
+                                  '默认',
                                   style: theme.textTheme.labelSmall?.copyWith(
                                     color: theme.colorScheme.primary,
                                     fontWeight: FontWeight.bold,
@@ -102,19 +102,19 @@ class ApiConfigScreen extends ConsumerWidget {
                           itemBuilder: (context) => [
                             const PopupMenuItem(
                               value: 'set_active',
-                              child: Text('Select Active'),
+                              child: Text('选为活动配置'),
                             ),
                             const PopupMenuItem(
                               value: 'set_default',
-                              child: Text('Set as Default'),
+                              child: Text('设为默认配置'),
                             ),
                             const PopupMenuItem(
                               value: 'edit',
-                              child: Text('Edit'),
+                              child: Text('编辑'),
                             ),
                             const PopupMenuItem(
                               value: 'delete',
-                              child: Text('Delete'),
+                              child: Text('删除'),
                             ),
                           ],
                         ),
@@ -204,13 +204,13 @@ class _ApiConfigFormDialogState extends ConsumerState<ApiConfigFormDialog> {
       setState(() {
         _isTesting = false;
         _testResultSuccess = true;
-        _testResultMessage = 'Connection successful! ${models.length} models found.';
+        _testResultMessage = '连接成功！找到 ${models.length} 个模型。';
       });
     } catch (e) {
       setState(() {
         _isTesting = false;
         _testResultSuccess = false;
-        _testResultMessage = 'Connection failed: ${e.toString()}';
+        _testResultMessage = '连接失败: ${e.toString()}';
       });
     }
   }
@@ -253,93 +253,103 @@ class _ApiConfigFormDialogState extends ConsumerState<ApiConfigFormDialog> {
     final theme = Theme.of(context);
     final isEdit = widget.config != null;
 
-    return AlertDialog(
-      title: Text(isEdit ? 'Edit API Configuration' : 'Add API Configuration'),
-      content: Form(
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(isEdit ? '编辑 API 配置' : '添加 API 配置'),
+      ),
+      body: Form(
         key: _formKey,
         child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Configuration Name',
-                  hintText: 'e.g. 9Router Global',
-                ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Name is required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _urlController,
-                decoration: const InputDecoration(
-                  labelText: 'Base URL',
-                  hintText: 'https://api.9router.com/v1',
-                ),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Base URL is required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _keyController,
-                obscureText: _obscureKey,
-                decoration: InputDecoration(
-                  labelText: 'API Key',
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscureKey ? Icons.visibility : Icons.visibility_off),
-                    onPressed: () => setState(() => _obscureKey = !_obscureKey),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: '配置名称',
+                    hintText: '例如 9Router Global',
                   ),
+                  validator: (val) => val == null || val.trim().isEmpty ? '名称为必填项' : null,
                 ),
-                validator: (val) {
-                  if (!isEdit && (val == null || val.trim().isEmpty)) {
-                    return 'API Key is required';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  OutlinedButton(
-                    onPressed: _isTesting ? null : _testConnection,
-                    child: _isTesting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Test Connection'),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _urlController,
+                  decoration: const InputDecoration(
+                    labelText: '基础 URL',
+                    hintText: 'https://api.9router.com/v1',
                   ),
-                  if (_testResultSuccess != null)
-                    Icon(
-                      _testResultSuccess! ? Icons.check_circle : Icons.error,
+                  validator: (val) => val == null || val.trim().isEmpty ? '基础 URL 为必填项' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _keyController,
+                  obscureText: _obscureKey,
+                  decoration: InputDecoration(
+                    labelText: 'API 密钥',
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscureKey ? Icons.visibility : Icons.visibility_off),
+                      onPressed: () => setState(() => _obscureKey = !_obscureKey),
+                    ),
+                  ),
+                  validator: (val) {
+                    if (!isEdit && (val == null || val.trim().isEmpty)) {
+                      return 'API 密钥为必填项';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    OutlinedButton(
+                      onPressed: _isTesting ? null : _testConnection,
+                      child: _isTesting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('测试连接'),
+                    ),
+                    if (_testResultSuccess != null)
+                      Icon(
+                        _testResultSuccess! ? Icons.check_circle : Icons.error,
+                        color: _testResultSuccess! ? Colors.green : Colors.red,
+                      ),
+                  ],
+                ),
+                if (_testResultMessage != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _testResultMessage!,
+                    style: theme.textTheme.bodySmall?.copyWith(
                       color: _testResultSuccess! ? Colors.green : Colors.red,
                     ),
-                ],
-              ),
-              if (_testResultMessage != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _testResultMessage!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: _testResultSuccess! ? Colors.green : Colors.red,
                   ),
+                ],
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('取消'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _save,
+                      child: const Text('保存'),
+                    ),
+                  ],
                 ),
               ],
-            ],
+            ),
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: _save,
-          child: const Text('Save'),
-        ),
-      ],
     );
   }
 }
