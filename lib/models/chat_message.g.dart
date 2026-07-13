@@ -18,6 +18,8 @@ ChatMessage _$ChatMessageFromJson(Map<String, dynamic> json) => ChatMessage(
       .toList(),
   toolCallId: json['toolCallId'] as String?,
   timestamp: DateTime.parse(json['timestamp'] as String),
+  promptTokens: (json['promptTokens'] as num?)?.toInt(),
+  completionTokens: (json['completionTokens'] as num?)?.toInt(),
 );
 
 Map<String, dynamic> _$ChatMessageToJson(ChatMessage instance) =>
@@ -31,4 +33,6 @@ Map<String, dynamic> _$ChatMessageToJson(ChatMessage instance) =>
       'toolCalls': instance.toolCalls?.map((e) => e.toJson()).toList(),
       'toolCallId': instance.toolCallId,
       'timestamp': instance.timestamp.toIso8601String(),
+      'promptTokens': instance.promptTokens,
+      'completionTokens': instance.completionTokens,
     };

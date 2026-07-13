@@ -48,39 +48,59 @@ class SearchService {
     required String apiKey,
     String? searxngUrl,
   }) async {
-    // 1. Try 9Router search API
-    try {
-      final cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
-      final url = '$cleanBaseUrl/search';
+    // 1. Try 9Router search API (try both /search and /v1/search)
+    final List<List<String>> searchEndpoints = [
+      ['/search'],
+      ['/v1/search'],
+    ];
 
-      final response = await _dio.post(
-        url,
-        queryParameters: {'q': query},
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $apiKey',
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
+    for (final endpoint in searchEndpoints) {
+      try {
+        final cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+        final url = '$cleanBaseUrl${endpoint[0]}';
 
-      if (response.statusCode == 200) {
-        return _parseSearchResults(response.data);
+        final response = await _dio.post(
+          url,
+          queryParameters: {'q': query},
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'Content-Type': 'application/json',
+            },
+          ),
+        );
+
+        if (response.statusCode == 200) {
+          return _parseSearchResults(response.data);
+        }
+      } catch (e, stackTrace) {
+        developer.log('9Router search failed at $endpoint', error: e, stackTrace: stackTrace, name: 'SearchService');
       }
-    } catch (e, stackTrace) {
-      // Log error and fall through to SearXNG fallback
-      developer.log('9Router search failed, falling back to SearXNG', error: e, stackTrace: stackTrace, name: 'SearchService');
     }
 
     // 2. Fallback to SearXNG if configured
     if (searxngUrl != null && searxngUrl.isNotEmpty) {
       try {
+        // Ensure the SearXNG URL ends with /search
+        var cleanSearxngUrl = searxngUrl.trim();
+        if (cleanSearxngUrl.endsWith('/')) {
+          cleanSearxngUrl = cleanSearxngUrl.substring(0, cleanSearxngUrl.length - 1);
+        }
+        if (!cleanSearxngUrl.endsWith('/search')) {
+          cleanSearxngUrl = '$cleanSearxngUrl/search';
+        }
+
         final response = await _dio.get(
-          searxngUrl,
+          cleanSearxngUrl,
           queryParameters: {
             'q': query,
             'format': 'json',
           },
+          options: Options(
+            headers: {
+              'Accept': 'application/json',
+            },
+          ),
         );
 
         if (response.statusCode == 200) {

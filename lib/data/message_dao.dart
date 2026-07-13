@@ -129,6 +129,38 @@ class MessageDao {
     );
   }
 
+  /// Deletes all messages in a conversation with a timestamp
+  /// after the given [messageId].
+  Future<void> deleteAfter(String conversationId, String messageId) async {
+    final db = await _dbHelper.database;
+    // Get the timestamp of the reference message
+    final List<Map<String, dynamic>> maps = await db.query(
+      'messages',
+      columns: ['timestamp'],
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+    if (maps.isEmpty) return;
+    final timestamp = maps.first['timestamp'] as String;
+
+    await db.delete(
+      'messages',
+      where: 'conversationId = ? AND timestamp > ?',
+      whereArgs: [conversationId, timestamp],
+    );
+  }
+
+  /// Updates the content of an existing message.
+  Future<void> updateContent(String messageId, String newContent) async {
+    final db = await _dbHelper.database;
+    await db.update(
+      'messages',
+      {'content': newContent},
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+  }
+
   Future<void> clearConversation(String conversationId) async {
     final db = await _dbHelper.database;
     await db.delete(

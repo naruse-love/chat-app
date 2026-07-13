@@ -34,6 +34,7 @@ class ChatService {
       'model': model,
       'messages': apiMessages,
       'stream': true,
+      'stream_options': {'include_usage': true},
       if (tools != null && tools.isNotEmpty) 'tools': tools,
     };
 
@@ -116,7 +117,7 @@ class ChatService {
         'role': message.role,
         'content': message.content,
         if (message.toolCalls != null && message.toolCalls!.isNotEmpty)
-          'tool_calls': message.toolCalls!.map((tc) => tc.toJson()).toList(),
+          'tool_calls': message.toolCalls!.map((tc) => tc.toOpenAiJson()).toList(),
         if (message.toolCallId != null) 'tool_call_id': message.toolCallId,
       };
     }
@@ -167,7 +168,7 @@ class ChatService {
       'role': message.role,
       'content': contentParts,
       if (message.toolCalls != null && message.toolCalls!.isNotEmpty)
-        'tool_calls': message.toolCalls!.map((tc) => tc.toJson()).toList(),
+        'tool_calls': message.toolCalls!.map((tc) => tc.toOpenAiJson()).toList(),
       if (message.toolCallId != null) 'tool_call_id': message.toolCallId,
     };
   }

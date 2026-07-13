@@ -234,9 +234,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       }
                       
                       final message = allMessages[index];
+                      final isLastAssistant = message.role == 'assistant' &&
+                          index == allMessages.length - 1;
                       return ChatBubble(
                         message: message,
                         isStreaming: chatState.isGenerating && message.id == 'streaming_msg',
+                        onEdit: message.role == 'user'
+                            ? () => _showEditDialog(context, message)
+                            : null,
+                        onRegenerate: (!chatState.isGenerating &&
+                                message.role == 'assistant' &&
+                                isLastAssistant)
+                            ? () => ref.read(chatProvider.notifier).regenerateLastResponse()
+                            : null,
+                        onRollbackToHere: (!chatState.isGenerating &&
+                                message.role != 'tool')
+                            ? () => _confirmRollback(context, message)
+                            : null,
                       );
                     },
                   ),
@@ -322,6 +336,70 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             )
           : buildChatArea(),
     );
+  }
+
+  void _showEditDialog(BuildContext context, ChatMessage message) {
+    final controller = TextEditingController(text: message.content);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('编辑消息'),
+        content: TextField(
+          controller: controller,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            hintText: '修改您的消息...',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              controller.dispose();
+              Navigator.pop(context);
+            },
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final newText = controller.text.trim();
+              if (newText.isNotEmpty) {
+                controller.dispose();
+                Navigator.pop(context);
+                ref.read(chatProvider.notifier).editAndResendMessage(message.id, newText);
+              }
+            },
+            child: const Text('保存并重新发送'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmRollback(BuildContext context, ChatMessage message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('回退确认'),
+        content: const Text('将删除此消息之后的所有消息，确认回退到此位置吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('确认回退'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      ref.read(chatProvider.notifier).rollbackToMessage(message.id);
+    }
   }
 
   Widget _buildConversationTile(Conversation c) {

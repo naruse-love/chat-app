@@ -14,6 +14,8 @@ class ChatMessage {
   final List<ToolCall>? toolCalls;
   final String? toolCallId;
   final DateTime timestamp;
+  final int? promptTokens;
+  final int? completionTokens;
 
   ChatMessage({
     required this.id,
@@ -25,7 +27,17 @@ class ChatMessage {
     this.toolCalls,
     this.toolCallId,
     required this.timestamp,
+    this.promptTokens,
+    this.completionTokens,
   });
+
+  /// Returns the total token count if available.
+  int? get totalTokens {
+    if (promptTokens != null && completionTokens != null) {
+      return promptTokens! + completionTokens!;
+    }
+    return null;
+  }
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => _$ChatMessageFromJson(json);
   Map<String, dynamic> toJson() => _$ChatMessageToJson(this);
@@ -40,6 +52,8 @@ class ChatMessage {
     List<ToolCall>? toolCalls,
     String? toolCallId,
     DateTime? timestamp,
+    int? promptTokens,
+    int? completionTokens,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -51,6 +65,8 @@ class ChatMessage {
       toolCalls: toolCalls ?? this.toolCalls,
       toolCallId: toolCallId ?? this.toolCallId,
       timestamp: timestamp ?? this.timestamp,
+      promptTokens: promptTokens ?? this.promptTokens,
+      completionTokens: completionTokens ?? this.completionTokens,
     );
   }
 }

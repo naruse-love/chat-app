@@ -26,7 +26,7 @@ class DatabaseHelper {
     try {
       return await openDatabase(
         path,
-        version: 2,
+        version: 3,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -41,7 +41,7 @@ class DatabaseHelper {
       } catch (_) {}
       return await openDatabase(
         path,
-        version: 2,
+        version: 3,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -90,6 +90,8 @@ class DatabaseHelper {
         imagePath TEXT,
         toolCalls TEXT,
         toolCallId TEXT,
+        promptTokens INTEGER,
+        completionTokens INTEGER,
         timestamp TEXT NOT NULL,
         FOREIGN KEY (conversationId) REFERENCES conversations (id) ON DELETE CASCADE
       )
@@ -129,6 +131,10 @@ class DatabaseHelper {
       await db.execute('CREATE INDEX IF NOT EXISTS idx_conversations_pinned_updated ON conversations (isPinned DESC, updatedAt DESC);');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_conversations_api_config_id ON conversations (apiConfigId);');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_messages_conversation_timestamp ON messages (conversationId, timestamp ASC);');
+    }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE messages ADD COLUMN promptTokens INTEGER');
+      await db.execute('ALTER TABLE messages ADD COLUMN completionTokens INTEGER');
     }
   }
 

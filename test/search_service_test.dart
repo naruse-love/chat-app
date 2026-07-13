@@ -78,9 +78,8 @@ void main() {
       int requestCount = 0;
       mockAdapter.handler = (options) {
         requestCount++;
-        if (requestCount == 1) {
-          // First request should be to 9Router, we fail it with 404
-          expect(options.path, endsWith('/search'));
+        if (requestCount <= 2) {
+          // First two requests should be to 9Router (/search and /v1/search), fail both
           return ResponseBody.fromString(
             'Not Found',
             404,
@@ -89,8 +88,8 @@ void main() {
             },
           );
         } else {
-          // Second request should fall back to SearXNG
-          expect(options.path, 'https://searxng.local');
+          // Third request should fall back to SearXNG with /search appended
+          expect(options.path, 'https://searxng.local/search');
           expect(options.method, 'GET');
           expect(options.queryParameters['q'], 'flutter agent');
           expect(options.queryParameters['format'], 'json');
@@ -122,7 +121,7 @@ void main() {
         searxngUrl: 'https://searxng.local',
       );
 
-      expect(requestCount, 2);
+      expect(requestCount, 3);
       expect(results, hasLength(1));
       expect(results[0].title, 'SearXNG Results');
       expect(results[0].url, 'https://searxng.org');

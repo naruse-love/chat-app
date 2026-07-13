@@ -7,12 +7,18 @@ class ChatBubble extends StatefulWidget {
   final ChatMessage message;
   final VoidCallback? onImageTap;
   final bool isStreaming;
+  final VoidCallback? onEdit;
+  final VoidCallback? onRegenerate;
+  final VoidCallback? onRollbackToHere;
 
   const ChatBubble({
     super.key,
     required this.message,
     this.onImageTap,
     this.isStreaming = false,
+    this.onEdit,
+    this.onRegenerate,
+    this.onRollbackToHere,
   });
 
   @override
@@ -21,6 +27,54 @@ class ChatBubble extends StatefulWidget {
 
 class _ChatBubbleState extends State<ChatBubble> {
   bool _isReasoningExpanded = false;
+
+  void _showMessageActions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            if (widget.message.role == 'user' && widget.onEdit != null)
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('编辑消息'),
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.onEdit!();
+                },
+              ),
+            if (widget.message.role == 'assistant' && widget.onRegenerate != null)
+              ListTile(
+                leading: const Icon(Icons.refresh),
+                title: const Text('重新回答'),
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.onRegenerate!();
+                },
+              ),
+            if (widget.message.role == 'assistant' && widget.onRollbackToHere != null)
+              ListTile(
+                leading: const Icon(Icons.undo),
+                title: const Text('从此处回退（删除后续消息）'),
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.onRollbackToHere!();
+                },
+              ),
+            if (widget.message.role == 'user' && widget.onRollbackToHere != null)
+              ListTile(
+                leading: const Icon(Icons.undo),
+                title: const Text('从此处回退（删除后续消息）'),
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.onRollbackToHere!();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,10 +90,12 @@ class _ChatBubbleState extends State<ChatBubble> {
             : theme.colorScheme.surfaceContainerHighest);
     final textColor = isUser ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 12.0),
-      alignment: alignment,
-      child: ConstrainedBox(
+    return GestureDetector(
+      onLongPress: _showMessageActions,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 12.0),
+        alignment: alignment,
+        child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.82,
         ),
@@ -101,8 +157,22 @@ class _ChatBubbleState extends State<ChatBubble> {
               ),
             ),
             
+            // Token usage display
+            if (widget.message.role == 'assistant' &&
+                (widget.message.promptTokens != null || widget.message.completionTokens != null))
+              Padding(
+                padding: const EdgeInsets.only(top: 2.0, left: 8.0, right: 8.0),
+                child: Text(
+                  '🪙 ${widget.message.promptTokens ?? "?"}↑ / ${widget.message.completionTokens ?? "?"}↓',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+
             Padding(
-              padding: const EdgeInsets.only(top: 4.0, left: 8.0, right: 8.0),
+              padding: const EdgeInsets.only(top: 2.0, left: 8.0, right: 8.0),
               child: Text(
                 _formatTimestamp(widget.message.timestamp),
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -113,6 +183,7 @@ class _ChatBubbleState extends State<ChatBubble> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

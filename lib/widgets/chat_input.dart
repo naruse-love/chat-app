@@ -185,14 +185,22 @@ class _ChatInputState extends State<ChatInput> {
             // Input Controls row
             Row(
               children: [
-                // Media Picker Button (conditionally active based on supportsVision)
+                // Media Picker Button (always active, validation occurs at send time)
                 IconButton(
                   icon: Icon(
                     Icons.add_photo_alternate_outlined,
-                    color: widget.supportsVision ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
+                    color: widget.supportsVision ? theme.colorScheme.primary : theme.colorScheme.outline,
                   ),
-                  onPressed: widget.supportsVision ? _showImagePickerOptions : null,
-                  tooltip: widget.supportsVision ? '添加图片' : '当前模型不支持视觉输入',
+                  onPressed: () {
+                    if (!widget.supportsVision) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('当前模型不支持图片输入，请选择支持 Vision 的模型。')),
+                      );
+                      return;
+                    }
+                    _showImagePickerOptions();
+                  },
+                  tooltip: '添加图片',
                 ),
                 
                 // Text Area

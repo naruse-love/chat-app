@@ -68,6 +68,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
   
   CancelToken? _cancelToken;
+  bool _sendingInProgress = false;
 
   ChatNotifier(this._messageDao, this._agentService, this._apiConfigDao, this._ref) : super(ChatState());
 
@@ -76,6 +77,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   Future<void> loadMessages(String conversationId) async {
+    // Do not reload messages while a send is in progress to avoid
+    // overwriting the newly added user message.
+    if (_sendingInProgress) return;
     state = state.copyWith(isGenerating: false, error: null);
     try {
       final messages = await _messageDao.getMessagesForConversation(conversationId);
@@ -95,7 +99,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final activeConv = _ref.read(conversationProvider).activeConversation;
     final activeConfig = _ref.read(apiConfigProvider).activeConfig;
     final selectedModel = _ref.read(modelProvider).selectedModel;
-    final settings = _ref.read(settingsProvider);
 
     if (activeConfig == null || selectedModel == null) {
       state = state.copyWith(error: '缺少 API 配置或选定的模型。');
@@ -107,6 +110,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       return;
     }
 
+    _sendingInProgress = true;
     String targetConvId;
     if (activeConv == null) {
       final title = text.length > 20 ? '${text.substring(0, 20)}...' : text;
@@ -158,10 +162,108 @@ class ChatNotifier extends StateNotifier<ChatState> {
       );
     }
 
+    // Start streaming the API call
+    await _startStreaming(targetConvId);
+  }
+
+  /// Edits a user message and resends the conversation from that point.
+  Future<void> editAndResendMessage(String messageId, String newText) async {
+    if (state.isGenerating) return;
+    _sendingInProgress = true;
+
+    try {
+      // Update the message content in DB
+      await _messageDao.updateContent(messageId, newText);
+
+      // Update in local state
+      final updatedMessages = state.messages.map((m) {
+        if (m.id == messageId) {
+          return m.copyWith(content: newText);
+        }
+        return m;
+      }).toList();
+      state = state.copyWith(messages: updatedMessages);
+
+      // Delete all messages after the edited message
+      final activeConv = _ref.read(conversationProvider).activeConversation;
+      if (activeConv != null) {
+        await _messageDao.deleteAfter(activeConv.id, messageId);
+      }
+
+      // Reload messages from DB to ensure consistency
+      if (activeConv != null) {
+        final freshMessages = await _messageDao.getMessagesForConversation(activeConv.id);
+        state = state.copyWith(messages: freshMessages);
+      }
+
+      // Start streaming from this point
+      if (activeConv != null) {
+        await _startStreaming(activeConv.id);
+      }
+    } finally {
+      _sendingInProgress = false;
+    }
+  }
+
+  /// Deletes the last AI response and resends the API call with the same context.
+  Future<void> regenerateLastResponse() async {
+    if (state.isGenerating) return;
+    if (state.messages.isEmpty) return;
+
+    final activeConv = _ref.read(conversationProvider).activeConversation;
+    if (activeConv == null) return;
+
+    // Find the last user message
+    final lastUserMsgIndex = state.messages.lastIndexWhere((m) => m.role == 'user');
+    if (lastUserMsgIndex < 0) return;
+
+    final lastUserMsg = state.messages[lastUserMsgIndex];
+
+    // Delete all messages after the last user message
+    await _messageDao.deleteAfter(activeConv.id, lastUserMsg.id);
+
+    // Reload fresh messages
+    final freshMessages = await _messageDao.getMessagesForConversation(activeConv.id);
+    state = state.copyWith(messages: freshMessages);
+
+    // Start streaming
+    await _startStreaming(activeConv.id);
+  }
+
+  /// Deletes all messages after the specified message (rollback).
+  Future<void> rollbackToMessage(String messageId) async {
+    if (state.isGenerating) return;
+
+    final activeConv = _ref.read(conversationProvider).activeConversation;
+    if (activeConv == null) return;
+
+    await _messageDao.deleteAfter(activeConv.id, messageId);
+
+    // Reload fresh messages
+    final freshMessages = await _messageDao.getMessagesForConversation(activeConv.id);
+    state = state.copyWith(messages: freshMessages, error: null);
+  }
+
+  /// Core streaming logic shared by sendMessage, editAndResend, regenerateLastResponse.
+  Future<void> _startStreaming(String conversationId) async {
+    final activeConfig = _ref.read(apiConfigProvider).activeConfig;
+    final selectedModel = _ref.read(modelProvider).selectedModel;
+    final settings = _ref.read(settingsProvider);
+
+    if (activeConfig == null || selectedModel == null) {
+      state = state.copyWith(error: '缺少 API 配置或选定的模型。', isGenerating: false);
+      return;
+    }
+
     final apiKey = await _apiConfigDao.getApiKey(activeConfig.apiKeyRef) ?? '';
     _cancelToken = CancelToken();
 
-    final history = await _messageDao.getMessagesForConversation(targetConvId);
+    final history = await _messageDao.getMessagesForConversation(conversationId);
+
+    state = state.copyWith(isGenerating: true, streamContent: '', streamReasoning: '', error: null);
+
+    int? pendingPromptTokens;
+    int? pendingCompletionTokens;
 
     try {
       final stream = _agentService.chatAndSearchStream(
@@ -195,17 +297,22 @@ class ChatNotifier extends StateNotifier<ChatState> {
             streamReasoning: '',
           );
           _ref.read(agentProvider.notifier).reset();
+        } else if (event is UsageEvent) {
+          pendingPromptTokens = event.promptTokens;
+          pendingCompletionTokens = event.completionTokens;
         }
       }
 
       if (state.streamContent.isNotEmpty || state.streamReasoning.isNotEmpty) {
         final assistantMessage = ChatMessage(
           id: const Uuid().v4(),
-          conversationId: targetConvId,
+          conversationId: conversationId,
           role: 'assistant',
           content: state.streamContent,
           reasoningContent: state.streamReasoning.isNotEmpty ? state.streamReasoning : null,
           timestamp: DateTime.now(),
+          promptTokens: pendingPromptTokens,
+          completionTokens: pendingCompletionTokens,
         );
         await _messageDao.insert(assistantMessage);
         state = state.copyWith(
@@ -222,11 +329,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
         if (state.streamContent.isNotEmpty || state.streamReasoning.isNotEmpty) {
           final cancelledMsg = ChatMessage(
             id: const Uuid().v4(),
-            conversationId: targetConvId,
+            conversationId: conversationId,
             role: 'assistant',
             content: '${state.streamContent}\n\n*[用户已停止生成]*',
             reasoningContent: state.streamReasoning.isNotEmpty ? state.streamReasoning : null,
             timestamp: DateTime.now(),
+            promptTokens: pendingPromptTokens,
+            completionTokens: pendingCompletionTokens,
           );
           await _messageDao.insert(cancelledMsg);
           state = state.copyWith(
@@ -301,6 +410,15 @@ final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
     (previous, next) {
       if (next != null) {
         notifier.loadMessages(next.id);
+        // Restore the model used for this conversation
+        final modelState = ref.read(modelProvider);
+        final matchingModels = modelState.models.where((m) => m.id == next.modelId);
+        if (matchingModels.isNotEmpty) {
+          ref.read(modelProvider.notifier).selectModel(matchingModels.first);
+        } else {
+          // Model not found in list, try adding as custom model
+          ref.read(modelProvider.notifier).addCustomModel(next.modelId);
+        }
       } else {
         notifier.clearChat();
       }

@@ -44,6 +44,13 @@ class ToolCallExecutedMessageEvent extends AgentStreamEvent {
   const ToolCallExecutedMessageEvent(this.assistantMessage, this.toolMessages);
 }
 
+/// Yielded when token usage information is available from the API response.
+class UsageEvent extends AgentStreamEvent {
+  final int promptTokens;
+  final int completionTokens;
+  const UsageEvent(this.promptTokens, this.completionTokens);
+}
+
 class _ToolCallAccumulator {
   String id = '';
   String name = '';
@@ -170,6 +177,9 @@ class AgentService {
       final contentBuffer = StringBuffer();
       final reasoningBuffer = StringBuffer();
 
+      int? mainPromptTokens;
+      int? mainCompletionTokens;
+
       await for (final chunk in _chatService.chatCompletionsStream(
         baseUrl: baseUrl,
         apiKey: apiKey,
@@ -178,6 +188,13 @@ class AgentService {
         tools: [webSearchTool],
         cancelToken: cancelToken,
       )) {
+        // Capture usage from chunks where choices is empty
+        if (chunk.containsKey('usage') && chunk['usage'] is Map) {
+          final usage = chunk['usage'] as Map<String, dynamic>;
+          mainPromptTokens = usage['prompt_tokens'] as int? ?? usage['promptTokens'] as int?;
+          mainCompletionTokens = usage['completion_tokens'] as int? ?? usage['completionTokens'] as int?;
+        }
+
         final choices = chunk['choices'] as List<dynamic>?;
         if (choices != null && choices.isNotEmpty) {
           final delta = choices[0]['delta'] as Map<String, dynamic>?;
@@ -220,6 +237,13 @@ class AgentService {
             }
           }
         }
+      }
+
+      // Yield usage from the first API call if tool calls were not triggered
+      if (accumulatedToolCalls.isEmpty &&
+          mainPromptTokens != null &&
+          mainCompletionTokens != null) {
+        yield UsageEvent(mainPromptTokens, mainCompletionTokens);
       }
 
       if (accumulatedToolCalls.isNotEmpty) {
@@ -278,6 +302,8 @@ class AgentService {
             arguments: acc.argumentsBuffer.toString(),
           )).toList(),
           timestamp: DateTime.now(),
+          promptTokens: mainPromptTokens,
+          completionTokens: mainCompletionTokens,
         );
 
         yield ToolCallExecutedMessageEvent(assistantMessage, toolMessages);
@@ -306,6 +332,9 @@ class AgentService {
     required List<ChatMessage> messages,
     CancelToken? cancelToken,
   }) async* {
+    int? promptTokens;
+    int? completionTokens;
+
     await for (final chunk in _chatService.chatCompletionsStream(
       baseUrl: baseUrl,
       apiKey: apiKey,
@@ -313,6 +342,13 @@ class AgentService {
       messages: messages,
       cancelToken: cancelToken,
     )) {
+      // Capture usage from chunks where choices is empty
+      if (chunk.containsKey('usage') && chunk['usage'] is Map) {
+        final usage = chunk['usage'] as Map<String, dynamic>;
+        promptTokens = usage['prompt_tokens'] as int? ?? usage['promptTokens'] as int?;
+        completionTokens = usage['completion_tokens'] as int? ?? usage['completionTokens'] as int?;
+      }
+
       final choices = chunk['choices'] as List<dynamic>?;
       if (choices != null && choices.isNotEmpty) {
         final delta = choices[0]['delta'] as Map<String, dynamic>?;
@@ -328,6 +364,11 @@ class AgentService {
           }
         }
       }
+    }
+
+    // Yield usage info if available
+    if (promptTokens != null && completionTokens != null) {
+      yield UsageEvent(promptTokens, completionTokens);
     }
   }
 

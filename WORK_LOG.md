@@ -1,3 +1,28 @@
+# WORK LOG — Milestone 9: Bug Fixes & Feature Enhancements (2026-07-13)
+
+## Files Changed
+
+### Bug Fixes
+- `lib/services/search_service.dart`: Now tries both `/search` and `/v1/search` for 9Router; auto-appends `/search` path to SearXNG URL.
+- `lib/providers/chat_provider.dart`: Added `_sendingInProgress` flag to prevent `loadMessages` listener from overwriting state during first message send. Added conversation listener logic to restore selected model from conversation's `modelId`. Extracted streaming logic into reusable `_startStreaming()` method.
+- `lib/services/chat_service.dart`: Fixed tool_calls JSON format — changed from `toJson()` (wrong: `functionName`) to `toOpenAiJson()` (correct: `function.name`). Added `stream_options: {"include_usage": true}` to API requests.
+- `lib/widgets/chat_input.dart`: Image picker button now always pressable; shows SnackBar hint when model doesn't support vision.
+- `test/search_service_test.dart`: Updated test to match new 3-request fallback flow (2 9Router endpoints + SearXNG).
+
+### New Features
+- **Message Editing/Resend**: `lib/data/message_dao.dart` added `updateContent()` and `deleteAfter()` methods. `lib/providers/chat_provider.dart` added `editAndResendMessage()`. `lib/screens/home_screen.dart` added edit dialog.
+- **Token Usage Statistics**: `lib/models/chat_message.dart` added `promptTokens`/`completionTokens` fields. `lib/services/agent_service.dart` added `UsageEvent` class and usage tracking in streams. `lib/widgets/chat_bubble.dart` displays token counts. DB schema updated to v3 with new columns.
+- **Conversation Rollback/Regenerate**: `lib/providers/chat_provider.dart` added `regenerateLastResponse()` and `rollbackToMessage()`. `lib/screens/home_screen.dart` added rollback confirmation dialog. `lib/widgets/chat_bubble.dart` added long-press action menu (编辑/重新回答/从此处回退).
+- `lib/data/database_helper.dart`: Updated to v3 with `promptTokens`/`completionTokens` columns and migration path.
+- `lib/data/message_dao.dart`: Added `updateContent()` and `deleteAfter()` for message editing and rollback.
+
+### Technical Decisions
+1. **`toOpenAiJson()` vs `toJson()`**: ToolCall's `toJson()` uses json_serializable which outputs `{id, type, functionName, arguments}` — incompatible with OpenAI API. The dedicated `toOpenAiJson()` outputs `{id, type, function: {name, arguments}}` which matches OpenAI spec.
+2. **Stream extraction**: Extracted `_startStreaming()` from `sendMessage()` to enable reuse by `editAndResendMessage()` and `regenerateLastResponse()` without duplicating streaming logic.
+3. **Token tracking via `stream_options`**: Added `stream_options: {"include_usage": true}` to API requests to request token usage from compatible providers; captured via `UsageEvent` in the agent stream.
+
+---
+
 # WORK LOG — Milestone 8: Adversarial Error Handling & Hardening, Final Compilation (2026-07-12)
 
 ## Files Created/Changed
