@@ -56,3 +56,50 @@ The agent team must implement and run:
 
 The user has requested to pause the project after the current milestone (Milestone 2) is completed and verified CLEAN. Halt spawning any subagents for Milestone 3 (or any subsequent milestones) once Milestone 2 is successfully finalized, and pause/cancel the monitoring crons.
 
+## Follow-up — 2026-07-12T08:51:43Z
+
+An Android AI Agent mobile app (Flutter) connected to 9Router with support for multi-API config, local SQLite history, web search tool calling, and image inputs.
+
+Working directory: d:\work\chat
+Integrity mode: benchmark
+
+## Background & Current State
+The project has successfully implemented and verified:
+- **Milestone 1**: Data models and serialization tests.
+- **Milestone 2**: Local Database (SQLite) and secure credential storage (SecureStorageService) with atomic transaction rollbacks.
+- **Milestone 3**: SSE stream decoding (`SseDecoder`, `SseParser`) and network API connectivity (`ChatService`).
+- **Milestone 4**: Web Search and agent tool scheduling (`SearchService` and `AgentService`).
+Currently, 85 unit tests are in the `test/` directory, all of which pass 100% cleanly. `lib/main.dart` is clean.
+
+## Requirements
+
+The teamwork subagent team must complete the remaining Milestones to deliver the full application:
+
+### R1. Complete Milestone 5: Image Service & Image UI
+- Implement an image service to pick images (camera and gallery), compress them under 1MB (max 1024px width/height), save them to the local application directory (database storing the path), and encode them to Base64 data URIs for OpenAI Vision-compatible requests.
+- Integrate image selection preview and removal into the chat input interface.
+
+### R2. Complete Milestone 6: Providers & UI Screens
+- Set up state management using Riverpod with separate providers for conversations, chat sessions, API configurations, active models, tool calling/agent status, themes, and general settings.
+- Implement the user interface:
+  - **Home Screen**: Chat history sidebar drawer (with pin/archive options), top configuration/model switcher, message bubbles with collapsible reasoning foldouts for models like DeepSeek-R1, and a responsive input area with a "Stop Generating" cancel button.
+  - **Settings Screen**: Fields for SearXNG URL, API settings, and theme options.
+  - **API Config Screen**: Add/Edit/Delete API configurations with a connection test function.
+  - **Model Selector Screenened**: View available models grouped by provider with capability tags (Vision/Tools).
+  - **System Prompt Templates Screen**: Selection and custom editing of prompt templates.
+
+### R3. Complete Milestone 7: End-to-End & Widget Testing
+- Add thorough widget and integration tests covering user message flow, model switching, image sending, search tool triggering, and conversation pinning/archiving.
+- Ensure all new features are backed by high-quality test coverage.
+
+### R4. Complete Milestone 8: Adversarial Error Handling & Hardening
+- Gracefully handle issues like lost internet connections, invalid endpoints, API rate limits, model capability mismatches (e.g. sending images to non-vision models), and corrupted database files.
+
+## Acceptance Criteria
+
+### Technical Requirements
+- [ ] No static analysis errors: running `flutter analyze` reports 0 warnings/errors.
+- [ ] Complete test pass: running `flutter test` executes all test cases (both existing and new) successfully (100% pass rate).
+- [ ] Compile verification: running `flutter build apk --debug` completes with 0 errors and generates the debug APK file successfully.
+- [ ] All technical decisions, changes, and progress updates must be documented in `WORK_LOG.md`.
+

@@ -1,30 +1,32 @@
-# BRIEFING — 2026-07-12T11:41:45+08:00
+# BRIEFING — 2026-07-12T08:51:43Z
 
 ## Mission
-Start the Project Orchestrator to implement Web Search & Agent Core (Milestone 4) and run sentinel crons.
+Start the Project Orchestrator to implement Milestones 5, 6, 7, and 8, and set up sentinel crons.
 
 ## 🔒 My Identity
 - Archetype: sentinel
 - Working directory: d:\work\chat\.agents\sentinel
-- Orchestrator: 621df711-a4d6-4e6c-8da0-c9c6850fbc2f
-- Victory Auditor: 32ce14f0-9ba1-4ed1-824d-71529d263e4f
+- Orchestrator: 10338a91-21f8-473e-9b48-6884a31b4305
+- Victory Auditor: TBD
 
 ## 🔒 Key Constraints
 - No technical decisions — relay only
 - Victory Audit is MANDATORY before reporting completion
+- Integrity mode: benchmark
 
 ## User Context
-- **Last user request**: Implement R1 Web Search & Agent Core (Milestone 4) and R2 Quality & Tests.
+- **Last user request**: Complete Milestones 5 (Image), 6 (Riverpod & UI), 7 (E2E & Widget Testing), and 8 (Hardening).
 - **Pending clarifications**: none
-- **Delivered results**: Milestone 2, 3, and 4 completed and verified CLEAN.
+- **Delivered results**: Milestones 1-4 completed and verified.
 
 ## Project Status
-- **Phase**: complete
+- **Phase**: in progress
 
 ## Victory Audit Status
-- **Triggered**: yes
-- **Verdict**: VICTORY CONFIRMED
+- **Triggered**: no
+- **Verdict**: pending
 - **Retry count**: 0
 
 ## Artifact Index
-- d:\work\chat\ORIGINAL_REQUEST.md — Verbatim user request
+- d:\work\chat\ORIGINAL_REQUEST.md — Verbatim user request log
+- d:\work\chat\.agents\ORIGINAL_REQUEST.md — Verbatim user request log (agent copy)
