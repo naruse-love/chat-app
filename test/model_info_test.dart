@@ -30,12 +30,18 @@ void main() {
         'openai/gpt-4o',
         'openai/gpt-4o-mini',
         'openai/gpt-4-vision-preview',
+        'openai/gpt-5-preview',
         'anthropic/claude-3-5-sonnet',
+        'anthropic/claude-4-opus',
         'google/gemini-1.5-flash',
+        'google/gemini-2.0-pro',
         'meta/llama-3.2-11b',
         'custom/some-vl-model',
+        'custom/qwen2.5-vl',
         'custom/pixtral-12b',
         'custom/paligemma-3b',
+        'custom/glm-4v',
+        'custom/gemma-3-27b',
       ];
 
       for (final id in visionModels) {
@@ -47,6 +53,7 @@ void main() {
         'openai/gpt-3.5-turbo',
         'deepseek/deepseek-chat',
         'meta/llama-3-8b',
+        'google/gemini-embedding-001',
       ];
 
       for (final id in nonVisionModels) {
@@ -101,6 +108,30 @@ void main() {
       });
       expect(model2.supportsVision, isFalse);
       expect(model2.supportsTools, isTrue);
+
+      // Architecture modalities
+      final model3 = ModelInfo.fromApiResponse({
+        'id': 'custom/arch-model',
+        'architecture': {
+          'input_modalities': ['text', 'image'],
+        },
+      });
+      expect(model3.supportsVision, isTrue);
+
+      final model4 = ModelInfo.fromApiResponse({
+        'id': 'custom/arch-model-2',
+        'architecture': {
+          'modality': 'text+image->text',
+        },
+      });
+      expect(model4.supportsVision, isTrue);
+
+      // Top level modalities
+      final model5 = ModelInfo.fromApiResponse({
+        'id': 'custom/top-modal',
+        'modalities': ['text', 'image'],
+      });
+      expect(model5.supportsVision, isTrue);
     });
 
     test('should serialize to and from JSON correctly', () {

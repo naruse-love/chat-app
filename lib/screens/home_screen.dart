@@ -236,15 +236,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       final message = allMessages[index];
                       final isLastAssistant = message.role == 'assistant' &&
                           index == allMessages.length - 1;
+                      final isLastUser = message.role == 'user' &&
+                          index == allMessages.length - 1;
                       return ChatBubble(
+                        key: ValueKey(message.id),
                         message: message,
                         isStreaming: chatState.isGenerating && message.id == 'streaming_msg',
                         onEdit: message.role == 'user'
                             ? () => _showEditDialog(context, message)
                             : null,
                         onRegenerate: (!chatState.isGenerating &&
-                                message.role == 'assistant' &&
-                                isLastAssistant)
+                                ((message.role == 'assistant' && isLastAssistant) ||
+                                 (message.role == 'user' && isLastUser)))
                             ? () => ref.read(chatProvider.notifier).regenerateLastResponse()
                             : null,
                         onRollbackToHere: (!chatState.isGenerating &&
@@ -255,6 +258,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     },
                   ),
           ),
+
+          // Regenerate button when the last message is a user message
+          if (!chatState.isGenerating &&
+              allMessages.isNotEmpty &&
+              allMessages.last.role == 'user')
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: ElevatedButton.icon(
+                onPressed: () => ref.read(chatProvider.notifier).regenerateLastResponse(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('重新生成回答'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                  foregroundColor: theme.colorScheme.onSecondaryContainer,
+                ),
+              ),
+            ),
 
           // Stop generating indicator overlay
           if (chatState.isGenerating)
@@ -398,6 +418,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
     if (confirmed == true) {
+      // Ensure dialog close animation completes before modifying state
+      await Future.microtask(() {});
+      if (!context.mounted) return;
       ref.read(chatProvider.notifier).rollbackToMessage(message.id);
     }
   }

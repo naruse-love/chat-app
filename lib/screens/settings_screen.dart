@@ -13,6 +13,12 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _searxngController;
 
+  void _syncSearxngIfNeeded(String url) {
+    if (_searxngController.text.isEmpty && url.isNotEmpty) {
+      _searxngController.text = url;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -28,8 +34,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(settingsProvider);
+
+    ref.listen<AppSettings>(settingsProvider, (prev, next) {
+      _syncSearxngIfNeeded(next.searxngUrl);
+    });
+
+    _syncSearxngIfNeeded(settings.searxngUrl);
+
     final currentTheme = ref.watch(themeProvider);
     final theme = Theme.of(context);
+    final notifier = ref.read(settingsProvider.notifier);
 
     return Scaffold(
       appBar: AppBar(
@@ -104,7 +119,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       isDense: true,
                     ),
                     onChanged: (val) {
-                      ref.read(settingsProvider.notifier).updateSearxngUrl(val.trim());
+                      notifier.updateSearxngUrl(val.trim());
                     },
                   ),
                 ),

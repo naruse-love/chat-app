@@ -35,6 +35,8 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _systemPromptKey = 'default_system_prompt';
   static const _autoSearchKey = 'enable_auto_search';
 
+  bool isLoaded = false;
+
   SettingsNotifier() : super(AppSettings()) {
     _loadSettings();
   }
@@ -42,12 +44,15 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   Future<void> _loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      isLoaded = true;
       state = AppSettings(
         searxngUrl: prefs.getString(_searxngKey) ?? '',
         defaultSystemPrompt: prefs.getString(_systemPromptKey) ?? 'You are a helpful assistant.',
         enableAutoSearch: prefs.getBool(_autoSearchKey) ?? true,
       );
-    } catch (_) {}
+    } catch (_) {
+      isLoaded = true;
+    }
   }
 
   Future<void> updateSearxngUrl(String url) async {

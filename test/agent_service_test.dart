@@ -341,6 +341,122 @@ void main() {
       expect(chatMessages[2], execEvent.toolMessages[0]);
     });
 
+    test('SearchException is caught and returns Chinese error message (manual search)', () async {
+      final chatService = MockChatService();
+      final searchService = MockSearchService();
+      final agentService = AgentService(chatService: chatService, searchService: searchService);
+
+      chatService.chatCompletionsStreamHandler = ({
+        required String baseUrl,
+        required String apiKey,
+        required String model,
+        required List<ChatMessage> messages,
+        List<Map<String, dynamic>>? tools,
+        CancelToken? cancelToken,
+      }) {
+        return Stream.fromIterable([
+          {'choices': [{'delta': {'content': 'Reply'}}]}
+        ]);
+      };
+
+      searchService.searchHandler = ({
+        required String query,
+        required String baseUrl,
+        required String apiKey,
+        String? searxngUrl,
+      }) async {
+        throw SearchException(message: '拒绝了 JSON 格式', source: 'MockSearch');
+      };
+
+      final messages = [
+        ChatMessage(
+          id: '1',
+          conversationId: 'c1',
+          role: 'user',
+          content: '@search test error',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final stream = agentService.chatAndSearchStream(
+        baseUrl: 'http://api.com',
+        apiKey: 'key',
+        model: 'model',
+        messages: messages,
+      );
+
+      final events = await stream.toList();
+      final execEvent = events[2] as ToolCallExecutedMessageEvent;
+      expect(execEvent.toolMessages[0].content, '搜索失败：拒绝了 JSON 格式');
+    });
+
+    test('SearchException is caught and returns Chinese error message (auto tool call)', () async {
+      final chatService = MockChatService();
+      final searchService = MockSearchService();
+      final agentService = AgentService(chatService: chatService, searchService: searchService);
+
+      chatService.chatCompletionsStreamHandler = ({
+        required String baseUrl,
+        required String apiKey,
+        required String model,
+        required List<ChatMessage> messages,
+        List<Map<String, dynamic>>? tools,
+        CancelToken? cancelToken,
+      }) {
+        return Stream.fromIterable([
+          {
+            'choices': [
+              {
+                'delta': {
+                  'tool_calls': [
+                    {
+                      'index': 0,
+                      'id': 'call_err',
+                      'function': {
+                        'name': 'web_search',
+                        'arguments': '{"query": "error test"}'
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]);
+      };
+
+      searchService.searchHandler = ({
+        required String query,
+        required String baseUrl,
+        required String apiKey,
+        String? searxngUrl,
+      }) async {
+        throw SearchException(message: '网络连接超时', source: 'MockSearch');
+      };
+
+      final messages = [
+        ChatMessage(
+          id: '1',
+          conversationId: 'c1',
+          role: 'user',
+          content: 'Search for error',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final stream = agentService.chatAndSearchStream(
+        baseUrl: 'http://api.com',
+        apiKey: 'key',
+        model: 'model',
+        messages: messages,
+      );
+
+      final events = await stream.toList();
+      final execEvent = events[2] as ToolCallExecutedMessageEvent;
+      // Tool message content should contain the search error
+      expect(execEvent.toolMessages[0].content, '搜索失败：网络连接超时');
+    });
+
     test('Cancellation propagation (Dio cancellation)', () async {
       final cancelToken = CancelToken();
       final chatService = MockChatService();
@@ -1236,6 +1352,148 @@ void main() {
         ).toList(),
         throwsA(isA<ArgumentError>().having((e) => e.message, 'message', 'Search query cannot be empty')),
       );
+    });
+
+    test('SearchException is caught and returns Chinese empty results message (manual search)', () async {
+      final chatService = MockChatService();
+      final searchService = MockSearchService();
+      final agentService = AgentService(chatService: chatService, searchService: searchService);
+
+      chatService.chatCompletionsStreamHandler = ({
+        required String baseUrl,
+        required String apiKey,
+        required String model,
+        required List<ChatMessage> messages,
+        List<Map<String, dynamic>>? tools,
+        CancelToken? cancelToken,
+      }) {
+        return Stream.fromIterable([
+          {
+            'choices': [
+              {
+                'delta': {'content': '搜索失败后的回复'}
+              }
+            ]
+          }
+        ]);
+      };
+
+      searchService.searchHandler = ({
+        required String query,
+        required String baseUrl,
+        required String apiKey,
+        String? searxngUrl,
+      }) async {
+        throw SearchException(
+          source: 'SearXNG',
+          statusCode: 403,
+          message: 'SearXNG 拒绝了 JSON 接口（HTTP 403）。请在服务器 settings.yml 中启用 formats 的 json。',
+        );
+      };
+
+      final messages = [
+        ChatMessage(
+          id: '1',
+          conversationId: 'c1',
+          role: 'user',
+          content: '@search flutter',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final events = await agentService.chatAndSearchStream(
+        baseUrl: 'http://api.com',
+        apiKey: 'key',
+        model: 'model',
+        messages: messages,
+      ).toList();
+
+      // Should produce ToolCallStarted, ToolCallCompleted, ToolCallExecutedMessage, then streaming
+      expect(events, hasLength(4));
+      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter'));
+      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter'));
+
+      final execEvent = events[2] as ToolCallExecutedMessageEvent;
+      // Tool message content should contain the search error
+      expect(execEvent.toolMessages[0].content, '搜索失败：SearXNG 拒绝了 JSON 接口（HTTP 403）。请在服务器 settings.yml 中启用 formats 的 json。');
+
+      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', '搜索失败后的回复'));
+    });
+
+    test('SearchException is caught and returns Chinese empty results message (auto tool call)', () async {
+      final chatService = MockChatService();
+      final searchService = MockSearchService();
+      final agentService = AgentService(chatService: chatService, searchService: searchService);
+
+      chatService.chatCompletionsStreamHandler = ({
+        required String baseUrl,
+        required String apiKey,
+        required String model,
+        required List<ChatMessage> messages,
+        List<Map<String, dynamic>>? tools,
+        CancelToken? cancelToken,
+      }) {
+        // First call: tool calls triggered
+        return Stream.fromIterable([
+          {
+            'choices': [
+              {
+                'delta': {
+                  'tool_calls': [
+                    {
+                      'index': 0,
+                      'id': 'call_abc',
+                      'type': 'function',
+                      'function': {
+                        'name': 'web_search',
+                        'arguments': '{"query":"flutter"}'
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]);
+      };
+
+      searchService.searchHandler = ({
+        required String query,
+        required String baseUrl,
+        required String apiKey,
+        String? searxngUrl,
+      }) async {
+        throw SearchException(
+          source: 'SearXNG',
+          statusCode: 403,
+          message: 'SearXNG 拒绝了 JSON 接口（HTTP 403）。',
+        );
+      };
+
+      final messages = [
+        ChatMessage(
+          id: '1',
+          conversationId: 'c1',
+          role: 'user',
+          content: '搜索一下',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final events = await agentService.chatAndSearchStream(
+        baseUrl: 'http://api.com',
+        apiKey: 'key',
+        model: 'model',
+        messages: messages,
+      ).toList();
+
+      expect(events, hasLength(3));
+      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter'));
+      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter'));
+
+      final execEvent = events[2] as ToolCallExecutedMessageEvent;
+      // Tool message content should contain the search error
+      expect(execEvent.toolMessages[0].content, '搜索失败：SearXNG 拒绝了 JSON 接口（HTTP 403）。');
     });
   });
 }

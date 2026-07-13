@@ -1,3 +1,31 @@
+## 2026-07-13 修复记录
+
+### 修复内容
+1. **搜索功能增强**：定义 `SearchException` 统一处理搜索异常；针对 SearXNG JSON 格式 403 错误增加明确的中文提示；修正搜索结果错误地写入 tool message 的问题。
+2. **回退稳定性修复**：引入 `ValueKey` 优化列表项渲染；修复 `MarkdownBody` 在流式输出时 `selectable=false` 导致的崩溃；优化 dialog 关闭后的 rollback 触发时机。
+3. **重新生成功能**：在用户消息长按菜单中增加“重新回答”选项，并提供底部快捷按钮触发最后一条响应的重新生成。
+4. **SearXNG URL 状态同步**：通过 `isLoaded` 状态位配合 `post-frame` 回调，确保 `TextEditingController` 在 URL 加载后正确回显。
+5. **Vision 能力识别**：通过检查模型配置中的 `architecture` 和 `input_modalities` 字段，并结合模型名称启发式匹配，增强对视觉能力支持的识别准确度。
+
+### 变更文件
+- `lib/services/search_service.dart`
+- `lib/providers/chat_provider.dart`
+- `lib/widgets/chat_bubble.dart`
+- `lib/widgets/chat_input.dart`
+- `lib/screens/settings_screen.dart`
+- `lib/models/model_info.dart`
+
+### 状态
+- **测试结果**：`flutter test` 117 个测试用例全部通过。
+- **静态分析**：`flutter analyze` 0 issues。
+
+### 技术决策
+- 使用 `ValueKey` 强制 Flutter 在回退删除消息后重新构建 Widget 树，避免旧状态残留。
+- 针对 `MarkdownBody` 的 `selectable` 属性，在流式传输期间禁用选择功能，以规避底层渲染引擎在文本快速变动时的索引失效崩溃。
+- 采用 `WidgetsBinding.instance.addPostFrameCallback` 处理 URL 回显，确保在 UI 框架完成当前帧布局后再操作 Controller，避免在 `build` 过程中触发状态更新。
+
+---
+
 # WORK LOG — Milestone 9: Bug Fixes & Feature Enhancements (2026-07-13)
 
 ## Files Changed

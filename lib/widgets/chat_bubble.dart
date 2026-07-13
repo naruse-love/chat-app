@@ -43,10 +43,11 @@ class _ChatBubbleState extends State<ChatBubble> {
                   widget.onEdit!();
                 },
               ),
-            if (widget.message.role == 'assistant' && widget.onRegenerate != null)
+            if (widget.onRegenerate != null &&
+                (widget.message.role == 'assistant' || widget.message.role == 'user'))
               ListTile(
                 leading: const Icon(Icons.refresh),
-                title: const Text('重新回答'),
+                title: const Text('重新生成回答'),
                 onTap: () {
                   Navigator.pop(context);
                   widget.onRegenerate!();

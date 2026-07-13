@@ -31,9 +31,45 @@ class ModelInfo {
     final provider = parts.length > 1 ? parts[0] : 'unknown';
     final modelName = parts.length > 1 ? parts.sublist(1).join('/') : id;
 
-    final supportsVision = json['supports_vision'] as bool? ??
-        json['supportsVision'] as bool? ??
-        _inferVisionSupport(provider, modelName);
+    bool? explicitVision;
+    if (json['supports_vision'] is bool) {
+      explicitVision = json['supports_vision'];
+    } else if (json['supportsVision'] is bool) {
+      explicitVision = json['supportsVision'];
+    } else if (json['vision'] is bool) {
+      explicitVision = json['vision'];
+    }
+
+    bool visionSupport = explicitVision ?? false;
+    if (explicitVision == null) {
+      // 检查 architecture 字段
+      final architecture = json['architecture'] as Map<String, dynamic>?;
+      if (architecture != null) {
+        final modality = architecture['modality'] as String?;
+        if (modality != null && (modality.contains('image') || modality.contains('vision'))) {
+          visionSupport = true;
+        }
+        final inputModalities = architecture['input_modalities'] as List?;
+        if (inputModalities != null && inputModalities.any((m) => m.toString().contains('image') || m.toString().contains('vision'))) {
+          visionSupport = true;
+        }
+      }
+
+      // 检查顶层 modalities 字段
+      final modalities = json['modalities'] as List?;
+      if (modalities != null && modalities.any((m) => m.toString().contains('image') || m.toString().contains('vision'))) {
+        visionSupport = true;
+      }
+      final inputModalities = json['input_modalities'] as List?;
+      if (inputModalities != null && inputModalities.any((m) => m.toString().contains('image') || m.toString().contains('vision'))) {
+        visionSupport = true;
+      }
+
+      // 如果上述字段都没有明确指示，则使用启发式推理
+      if (!visionSupport) {
+        visionSupport = _inferVisionSupport(provider, modelName);
+      }
+    }
 
     final supportsTools = json['supports_tools'] as bool? ??
         json['supportsTools'] as bool? ??
@@ -43,7 +79,7 @@ class ModelInfo {
       id: id,
       provider: provider,
       modelName: modelName,
-      supportsVision: supportsVision,
+      supportsVision: visionSupport,
       supportsTools: supportsTools,
       ownedBy: ownedBy,
     );
@@ -55,27 +91,39 @@ class ModelInfo {
     // Explicit indicators in name
     if (nameLower.contains('vision') || 
         nameLower.contains('vl') || 
+        nameLower.contains('vlm') || 
         nameLower.contains('pixtral') || 
         nameLower.contains('llava') || 
-        nameLower.contains('paligemma')) {
+        nameLower.contains('paligemma') ||
+        nameLower.contains('glm-4v') ||
+        nameLower.contains('qwen-vl') ||
+        nameLower.contains('internvl') ||
+        nameLower.contains('minicpm-v')) {
       return true;
     }
     
     // Known models/families
     if (nameLower.startsWith('gpt-4o') || 
+        nameLower.startsWith('gpt-4.1') ||
+        nameLower.startsWith('gpt-5') ||
         nameLower.startsWith('gpt-4-vision')) {
       return true;
     }
-    if (nameLower.startsWith('claude-3')) {
+    if (nameLower.startsWith('claude-3') || 
+        nameLower.startsWith('claude-4') || 
+        nameLower.contains('claude-sonnet') || 
+        nameLower.contains('claude-opus') || 
+        nameLower.contains('claude-haiku')) {
       return true;
     }
-    if (nameLower.startsWith('gemini-1.5') || 
-        nameLower.startsWith('gemini-2.0') || 
-        nameLower.startsWith('gemini-2.5')) {
+    if (nameLower.startsWith('gemini') && !nameLower.contains('embedding')) {
       return true;
     }
     if (nameLower.startsWith('llama-3.2-11b') || 
         nameLower.startsWith('llama-3.2-90b')) {
+      return true;
+    }
+    if (nameLower.contains('gemma-3')) {
       return true;
     }
     

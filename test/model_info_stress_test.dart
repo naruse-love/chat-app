@@ -79,12 +79,13 @@ void main() {
     });
 
     group('Edge Case: Corrupted JSON Responses', () {
-      test('should throw TypeError when supports_vision is not a boolean (string)', () {
+      test('should not throw TypeError when supports_vision is not a boolean (string) and should infer based on model ID', () {
         final json = {
           'id': 'openai/gpt-4o',
           'supports_vision': 'true',
         };
-        expect(() => ModelInfo.fromApiResponse(json), throwsA(isA<TypeError>()));
+        final model = ModelInfo.fromApiResponse(json);
+        expect(model.supportsVision, isTrue);
       });
 
       test('should throw TypeError when supports_tools is not a boolean (int)', () {

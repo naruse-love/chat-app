@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 import 'package:uuid/uuid.dart';
 import '../models/chat_message.dart';
@@ -114,18 +115,28 @@ class AgentService {
 
       yield ToolCallStartedEvent(query);
 
-      final results = await _searchService.search(
-        query: query,
-        baseUrl: baseUrl,
-        apiKey: apiKey,
-        searxngUrl: searxngUrl,
-      );
+      List<SearchResult> results;
+      String? searchError;
+      try {
+        results = await _searchService.search(
+          query: query,
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          searxngUrl: searxngUrl,
+        );
+      } on SearchException catch (e) {
+        results = [];
+        searchError = e.message;
+        developer.log('Manual search failed: ${e.message}', name: 'AgentService');
+      }
 
       _checkCancellation(cancelToken);
 
       yield ToolCallCompletedEvent(query, results);
 
-      final formattedResults = _searchService.formatSearchResultsForContext(results);
+      final formattedResults = searchError != null
+          ? '搜索失败：$searchError'
+          : _searchService.formatSearchResultsForContext(results);
 
       final cleanUserMessage = lastMessage.copyWith(content: query);
 
@@ -262,18 +273,28 @@ class AgentService {
 
           yield ToolCallStartedEvent(query);
 
-          final results = await _searchService.search(
-            query: query,
-            baseUrl: baseUrl,
-            apiKey: apiKey,
-            searxngUrl: searxngUrl,
-          );
+          List<SearchResult> results;
+          String? searchError;
+          try {
+            results = await _searchService.search(
+              query: query,
+              baseUrl: baseUrl,
+              apiKey: apiKey,
+              searxngUrl: searxngUrl,
+            );
+          } on SearchException catch (e) {
+            results = [];
+            searchError = e.message;
+            developer.log('Auto search failed: ${e.message}', name: 'AgentService');
+          }
 
           _checkCancellation(cancelToken);
 
           yield ToolCallCompletedEvent(query, results);
 
-          final formattedResults = _searchService.formatSearchResultsForContext(results);
+          final formattedResults = searchError != null
+              ? '搜索失败：$searchError'
+              : _searchService.formatSearchResultsForContext(results);
 
           final conversationId = messages.last.conversationId;
 

@@ -83,7 +83,7 @@ class _MarkdownRendererState extends State<MarkdownRenderer> {
 
     return MarkdownBody(
       data: _displayData,
-      selectable: true,
+      selectable: !widget.isStreaming,
       shrinkWrap: true,
       styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
         p: textStyle,
