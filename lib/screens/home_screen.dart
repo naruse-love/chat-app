@@ -293,7 +293,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           // Chat Input panel
           ChatInput(
-            supportsVision: modelState.selectedModel?.supportsVision ?? true,
             onSend: (text, imagePath) {
               ref.read(chatProvider.notifier).sendMessage(text, imagePath: imagePath);
             },
@@ -358,9 +357,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  void _showEditDialog(BuildContext context, ChatMessage message) {
+  void _showEditDialog(BuildContext context, ChatMessage message) async {
     final controller = TextEditingController(text: message.content);
-    showDialog(
+    final newText = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('编辑消息'),
@@ -374,19 +373,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              controller.dispose();
-              Navigator.pop(context);
-            },
+            onPressed: () => Navigator.pop(context),
             child: const Text('取消'),
           ),
           FilledButton(
             onPressed: () {
-              final newText = controller.text.trim();
-              if (newText.isNotEmpty) {
-                controller.dispose();
-                Navigator.pop(context);
-                ref.read(chatProvider.notifier).editAndResendMessage(message.id, newText);
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                Navigator.pop(context, text);
               }
             },
             child: const Text('保存并重新发送'),
@@ -394,6 +388,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
     );
+    // dialog 完全关闭后再释放 controller
+    controller.dispose();
+    if (newText == null || newText.isEmpty) return;
+    if (!context.mounted) return;
+    await Future.microtask(() {});
+    if (!context.mounted) return;
+    await ref.read(chatProvider.notifier).editAndResendMessage(message.id, newText);
   }
 
   Future<void> _confirmRollback(BuildContext context, ChatMessage message) async {

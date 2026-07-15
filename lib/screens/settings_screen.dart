@@ -94,11 +94,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const Divider(),
 
-          // SearXNG Search Section
+          // Search Backend Section
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text(
-              '网络搜索备用端点',
+              '网络搜索 (SearXNG)',
               style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.bold,
@@ -107,25 +107,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searxngController,
-                    decoration: const InputDecoration(
-                      labelText: 'SearXNG 基础 URL',
-                      hintText: '例如 http://localhost:8080',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    onChanged: (val) {
-                      notifier.updateSearxngUrl(val.trim());
-                    },
+                Text(
+                  '搜索后端',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
                   ),
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'searxng',
+                      label: Text('SearXNG'),
+                    ),
+                    ButtonSegment(
+                      value: 'bing',
+                      label: Text('Bing（实验）'),
+                    ),
+                  ],
+                  selected: {settings.searchBackend},
+                  onSelectionChanged: (selection) {
+                    notifier.updateSearchBackend(selection.first);
+                  },
+                  showSelectedIcon: false,
                 ),
               ],
             ),
           ),
+          if (settings.searchBackend == 'searxng')
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searxngController,
+                      decoration: const InputDecoration(
+                        labelText: 'SearXNG 基础 URL',
+                        hintText: '例如 http://localhost:8080',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: (val) {
+                        notifier.updateSearxngUrl(val.trim());
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const Divider(),
 
           // Configuration Managers Section

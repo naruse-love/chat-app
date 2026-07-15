@@ -1,3 +1,31 @@
+## 2026-07-15 修复记录
+
+### 修复内容
+1. **搜索后端重构**：停用 9Router 内置搜索接口（`/search`、`/v1/search`），统一走 SearXNG JSON API；SearXNG 作为唯一稳定主路径。
+2. **实验性 Bing 搜索**：新增 `_searchBing()` 方法，直接请求 `https://www.bing.com/search` 并用 `html` 包解析结果页面；在 `SettingsScreen` 暴露 `searchBackend` 切换项（`searxng` / `bing`），用户可自选。`SettingsProvider` 持久化该选项。
+3. **编辑消息再发送崩溃修复**：在 `HomeScreen` 的编辑 dialog 中，将 `TextEditingController.dispose()` 移至 `showDialog` 完全返回之后执行（原 `showDialog` 是 async，在 controller 仍被 `TextField` 持有时调用 `dispose()`，触发 `_dependents.isEmpty` 断言失败）。新增 `context.mounted` 守卫 + `Future.microtask` 让 dialog 关闭动画跑完再触发 `editAndResendMessage`。
+4. **移除 Vision 本地预检**：`chat_provider` 删除 `supportsVision` 拦截与 fast-fail 逻辑，允许向任何模型发送图片；服务端返回 400 时由既有错误映射统一提示。`chat_input` 中"模型不支持视觉"提示保留，但不再阻塞发送。
+
+### 变更文件
+- `lib/services/search_service.dart`：删除 9Router 分支；新增 `_searchBing()` + `_parseBingResults()`；`search()` 通过 `searchBackend` 参数路由。
+- `lib/services/agent_service.dart`：透传 `searchBackend` 到 `SearchService.search`。
+- `lib/providers/settings_provider.dart`：新增 `searchBackend` 字段、持久化键 `search_backend`、`updateSearchBackend()`。
+- `lib/screens/settings_screen.dart`：在搜索设置卡片加入 `searchBackend` 单选切换（`searxng` 默认 / `bing` 实验性）。
+- `lib/screens/home_screen.dart`：编辑 dialog `controller.dispose()` 移至 `showDialog` 之后；`editAndResendMessage` 调用前加 `context.mounted` + `Future.microtask`。
+- `lib/providers/chat_provider.dart`：移除 `supportsVision` 校验分支，仅保留通用异常格式化。
+
+### 状态
+- **测试结果**：`flutter test` 全部 120 个测试用例通过。
+- **静态分析**：`flutter analyze` 0 issues。
+
+### 技术决策
+- **Bing 标注为实验性**：Bing 搜索依赖 HTML 解析，DOM 结构与反爬策略易变，可能频繁出现空结果或被拦截；为此在 `SearchException` 中把 `source: 'Bing'` 单独标记，并在 UI 切换项上提示"实验性"，默认仍为 SearXNG。
+- **SearXNG 为主**：自部署 SearXNG 输出稳定 JSON、403/400 可在服务端 `settings.yml` 启用 `formats: [html, json]` 解决，是可控路径；因此作为唯一默认 backend。
+- **Dialog 资源释放时机**：`TextEditingController` 必须等 `TextField`（其 `_TextFieldState` 的 `_dependents`）真正解除依赖后才能 `dispose()`；`showDialog` 返回后再 dispose 是 Flutter 社区惯用做法，配合 `mounted` 守卫进一步降低重建过程中被回收的风险。
+- **Vision 拦截上移**：原 fast-fail 把"是否支持视觉"放在客户端判断，依赖模型 `architecture` / `input_modalities` / 名称启发式，误判率高；改为统一交给后端返回错误，由既有"400 / 401 / 404 / 429"映射处理，降低维护成本。
+
+---
+
 ## 2026-07-13 修复记录
 
 ### 修复内容

@@ -43,25 +43,22 @@ class MockSearchService extends SearchService {
   int searchCallCount = 0;
   Future<List<SearchResult>> Function({
     required String query,
-    required String baseUrl,
-    required String apiKey,
     String? searxngUrl,
+    required String searchBackend,
   })? searchHandler;
 
   @override
   Future<List<SearchResult>> search({
     required String query,
-    required String baseUrl,
-    required String apiKey,
     String? searxngUrl,
+    String searchBackend = 'searxng',
   }) {
     searchCallCount++;
     if (searchHandler != null) {
       return searchHandler!(
         query: query,
-        baseUrl: baseUrl,
-        apiKey: apiKey,
         searxngUrl: searxngUrl,
+        searchBackend: searchBackend,
       );
     }
     return Future.value([]);
@@ -206,9 +203,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         expect(query, 'flutter agent');
         return [SearchResult(title: 'Flutter Agent', url: 'https://flutter.dev', content: 'Agent details')];
@@ -291,9 +287,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         expect(query, 'flutter components');
         return [SearchResult(title: 'Components', url: 'https://flutter.dev', content: 'Flutter UI components')];
@@ -361,9 +356,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         throw SearchException(message: '拒绝了 JSON 格式', source: 'MockSearch');
       };
@@ -427,9 +421,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         throw SearchException(message: '网络连接超时', source: 'MockSearch');
       };
@@ -581,9 +574,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         cancelToken.cancel();
         await Future.delayed(const Duration(milliseconds: 10));
@@ -670,9 +662,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         // Query falls back to raw buffer since JSON is incomplete
         expect(query, '{"query": "flutter');
@@ -740,9 +731,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         // TypeError falls back to raw buffer
         expect(query, '{"query": 123}');
@@ -808,9 +798,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         // Decodes successfully, query is null, falls back to ''
         expect(query, '');
@@ -908,9 +897,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         cancelToken.cancel(); // cancel during search execution
         return [SearchResult(title: 'Flutter', url: 'https://flutter.dev', content: 'Flutter info')];
@@ -1143,9 +1131,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         return [SearchResult(title: 'Weather', url: 'https://weather.com', content: 'Sunny')];
       };
@@ -1249,9 +1236,8 @@ void main() {
       final queriesSearched = <String>[];
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         queriesSearched.add(query);
         if (query == 'flutter docs') {
@@ -1380,9 +1366,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         throw SearchException(
           source: 'SearXNG',
@@ -1459,9 +1444,8 @@ void main() {
 
       searchService.searchHandler = ({
         required String query,
-        required String baseUrl,
-        required String apiKey,
         String? searxngUrl,
+        required String searchBackend,
       }) async {
         throw SearchException(
           source: 'SearXNG',

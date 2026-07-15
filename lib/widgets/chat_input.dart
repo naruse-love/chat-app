@@ -7,14 +7,12 @@ class ChatInput extends StatefulWidget {
   final Function(String text, String? imagePath) onSend;
   final VoidCallback? onTyping;
   final ImageService? imageService;
-  final bool supportsVision;
 
   const ChatInput({
     super.key,
     required this.onSend,
     this.onTyping,
     this.imageService,
-    this.supportsVision = true,
   });
 
   @override
@@ -185,21 +183,13 @@ class _ChatInputState extends State<ChatInput> {
             // Input Controls row
             Row(
               children: [
-                // Media Picker Button (always active, validation occurs at send time)
+                // Media Picker Button (always active, validation occurs at API level)
                 IconButton(
                   icon: Icon(
                     Icons.add_photo_alternate_outlined,
-                    color: widget.supportsVision ? theme.colorScheme.primary : theme.colorScheme.outline,
+                    color: theme.colorScheme.primary,
                   ),
-                  onPressed: () {
-                    if (!widget.supportsVision) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('当前模型不支持图片输入，请选择支持 Vision 的模型。')),
-                      );
-                      return;
-                    }
-                    _showImagePickerOptions();
-                  },
+                  onPressed: _showImagePickerOptions,
                   tooltip: '添加图片',
                 ),
                 

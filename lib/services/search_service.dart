@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
+import 'package:html/parser.dart' as html_parser;
+import 'package:html/dom.dart' as html_dom;
 
-/// Represents a single search result returned from 9Router or SearXNG.
+/// Represents a single search result returned from SearXNG or Bing.
 class SearchResult {
   final String title;
   final String url;
@@ -36,7 +38,7 @@ class SearchException implements Exception {
   /// User-facing message in Chinese.
   final String message;
 
-  /// Which search source produced the error: '9Router', 'SearXNG', or 'combined'.
+  /// Which search source produced the error: 'SearXNG', 'Bing', or 'combined'.
   final String source;
 
   /// HTTP status code if the error came from an HTTP response.
@@ -57,9 +59,7 @@ class SearchException implements Exception {
 }
 
 /// Service class for performing web searches.
-/// Implements a dual-mode fallback search flow:
-/// 1. Queries 9Router's search API.
-/// 2. Falls back to SearXNG if the 9Router endpoint fails or returns a 404/not supported.
+/// Supports SearXNG (default) and Bing (experimental) backends.
 class SearchService {
   final Dio _dio;
 
@@ -69,123 +69,199 @@ class SearchService {
     'Accept': 'application/json, text/plain, */*',
   };
 
+  static const Map<String, String> _browserHeaders = {
+    'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'zh-Hans,zh;q=0.9,en;q=0.8',
+  };
+
   SearchService({Dio? dio}) : _dio = dio ?? Dio();
 
   /// Performs the search, returning a list of parsed [SearchResult]s.
   ///
-  /// Throws [SearchException] when all search sources fail with a detectable error.
-  /// Returns an empty list only when searches succeeded but yielded no results.
+  /// Throws [SearchException] when the configured search source fails.
+  /// Returns an empty list only when the search succeeded but yielded no results.
+  ///
+  /// [searchBackend] can be `'searxng'` (default) or `'bing'` (experimental).
   Future<List<SearchResult>> search({
     required String query,
-    required String baseUrl,
-    required String apiKey,
     String? searxngUrl,
+    String searchBackend = 'searxng',
   }) async {
-    // Accumulate non-fatal error messages for reporting if all sources fail.
+    switch (searchBackend) {
+      case 'bing':
+        return _searchBing(query);
+      case 'searxng':
+      default:
+        return _searchSearxng(query, searxngUrl);
+    }
+  }
+
+  /// Searches via SearXNG JSON API.
+  Future<List<SearchResult>> _searchSearxng(String query, String? searxngUrl) async {
+    if (searxngUrl == null || searxngUrl.trim().isEmpty) {
+      throw SearchException(
+        source: 'SearXNG',
+        message: '未配置 SearXNG 地址。请在设置中填写 SearXNG 基础 URL。',
+      );
+    }
+
     final List<String> errorDetails = [];
 
-    // 1. Try 9Router search API (try both /search and /v1/search)
-    final List<List<String>> searchEndpoints = [
-      ['/search'],
-      ['/v1/search'],
-    ];
+    try {
+      // Normalize SearXNG URL: strip trailing slash, ensure ends with /search
+      var cleanSearxngUrl = searxngUrl.trim();
+      while (cleanSearxngUrl.endsWith('/')) {
+        cleanSearxngUrl = cleanSearxngUrl.substring(0, cleanSearxngUrl.length - 1);
+      }
+      if (!cleanSearxngUrl.endsWith('/search')) {
+        cleanSearxngUrl = '$cleanSearxngUrl/search';
+      }
 
-    for (final endpoint in searchEndpoints) {
       try {
-        final cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
-        final url = '$cleanBaseUrl${endpoint[0]}';
-
-        final response = await _dio.post(
-          url,
-          queryParameters: {'q': query},
+        final response = await _dio.get(
+          cleanSearxngUrl,
+          queryParameters: {
+            'q': query,
+            'format': 'json',
+          },
           options: Options(
-            headers: {
-              ..._commonHeaders,
-              'Authorization': 'Bearer $apiKey',
-              'Content-Type': 'application/json',
-            },
+            headers: {..._commonHeaders},
           ),
         );
 
         if (response.statusCode == 200) {
-          return _parseSearchResults(response.data);
+          final results = _parseSearchResults(response.data);
+          return results;
         } else {
-          errorDetails.add('9Router${endpoint[0]} 返回状态码 ${response.statusCode}');
+          errorDetails.add('SearXNG 返回状态码 ${response.statusCode}');
         }
-      } catch (e, stackTrace) {
-        developer.log('9Router search failed at $endpoint', error: e, stackTrace: stackTrace, name: 'SearchService');
-        errorDetails.add('9Router${endpoint[0]}: ${_extractErrorMessage(e)}');
-      }
-    }
-
-    // 2. Fallback to SearXNG if configured
-    if (searxngUrl != null && searxngUrl.isNotEmpty) {
-      try {
-        // Normalize SearXNG URL: strip trailing slash, ensure ends with /search
-        var cleanSearxngUrl = searxngUrl.trim();
-        // Remove trailing slash(es)
-        while (cleanSearxngUrl.endsWith('/')) {
-          cleanSearxngUrl = cleanSearxngUrl.substring(0, cleanSearxngUrl.length - 1);
-        }
-        // If the resulting URL does not end with /search, append it
-        if (!cleanSearxngUrl.endsWith('/search')) {
-          cleanSearxngUrl = '$cleanSearxngUrl/search';
-        }
-
-        try {
-          final response = await _dio.get(
-            cleanSearxngUrl,
-            queryParameters: {
-              'q': query,
-              'format': 'json',
-            },
-            options: Options(
-              headers: {
-                ..._commonHeaders,
-              },
-            ),
+      } on DioException catch (e) {
+        final statusCode = e.response?.statusCode;
+        if (statusCode == 403 || statusCode == 400) {
+          final body = _safeResponseBody(e.response?.data);
+          throw SearchException(
+            source: 'SearXNG',
+            statusCode: statusCode,
+            message:
+                'SearXNG 拒绝了 JSON 接口（HTTP $statusCode）。请在服务器 settings.yml 中启用 formats 的 json，例如 formats: [html, json]。',
+            details: body,
           );
-
-          if (response.statusCode == 200) {
-            return _parseSearchResults(response.data);
-          } else {
-            errorDetails.add('SearXNG 返回状态码 ${response.statusCode}');
-          }
-        } on DioException catch (e) {
-          // Dio throws for non-2xx status codes by default.
-          final statusCode = e.response?.statusCode;
-          if (statusCode == 403 || statusCode == 400) {
-            // Typical SearXNG behavior when JSON format is disabled.
-            final body = _safeResponseBody(e.response?.data);
-            throw SearchException(
-              source: 'SearXNG',
-              statusCode: statusCode,
-              message:
-                  'SearXNG 拒绝了 JSON 接口（HTTP $statusCode）。请在服务器 settings.yml 中启用 formats 的 json，例如 formats: [html, json]。',
-              details: body,
-            );
-          }
-          errorDetails.add('SearXNG: ${_extractErrorMessage(e)}');
         }
-      } on SearchException {
-        rethrow;
-      } catch (e, stackTrace) {
-        developer.log('SearXNG search failed', error: e, stackTrace: stackTrace, name: 'SearchService');
         errorDetails.add('SearXNG: ${_extractErrorMessage(e)}');
       }
+    } on SearchException {
+      rethrow;
+    } catch (e, stackTrace) {
+      developer.log('SearXNG search failed', error: e, stackTrace: stackTrace, name: 'SearchService');
+      errorDetails.add('SearXNG: ${_extractErrorMessage(e)}');
     }
 
-    // If we recorded any errors, throw a combined SearchException.
     if (errorDetails.isNotEmpty) {
       throw SearchException(
-        source: 'combined',
-        message: '所有搜索引擎均搜索失败:\n${errorDetails.join('\n')}',
+        source: 'SearXNG',
+        message: 'SearXNG 搜索失败:\n${errorDetails.join('\n')}',
         details: errorDetails.join('; '),
       );
     }
 
-    // No errors, but also no results — return empty list.
     return [];
+  }
+
+  /// Searches via Bing (experimental) — scrapes the HTML search results page.
+  Future<List<SearchResult>> _searchBing(String query) async {
+    try {
+      final response = await _dio.get(
+        'https://www.bing.com/search',
+        queryParameters: {
+          'q': query,
+          'setlang': 'zh-Hans',
+        },
+        options: Options(
+          headers: {..._browserHeaders},
+        ),
+      );
+
+      if (response.statusCode != 200) {
+        throw SearchException(
+          source: 'Bing',
+          statusCode: response.statusCode,
+          message: 'Bing 搜索失败（可能被反爬拦截）。建议改用 SearXNG。',
+        );
+      }
+
+      final body = response.data is String ? response.data as String : json.encode(response.data);
+      final document = html_parser.parse(body);
+      final results = _parseBingResults(document);
+
+      if (results.isEmpty) {
+        throw SearchException(
+          source: 'Bing',
+          message: 'Bing 搜索失败（可能被反爬拦截）。建议改用 SearXNG。',
+        );
+      }
+
+      return results;
+    } on DioException catch (e) {
+      throw SearchException(
+        source: 'Bing',
+        statusCode: e.response?.statusCode,
+        message: 'Bing 搜索失败（可能被反爬拦截）。建议改用 SearXNG。',
+        details: _extractErrorMessage(e),
+      );
+    } on SearchException {
+      rethrow;
+    } catch (e, stackTrace) {
+      developer.log('Bing search failed', error: e, stackTrace: stackTrace, name: 'SearchService');
+      throw SearchException(
+        source: 'Bing',
+        message: 'Bing 搜索失败（可能被反爬拦截）。建议改用 SearXNG。',
+        details: e.toString(),
+      );
+    }
+  }
+
+  /// Parses Bing HTML search results page.
+  List<SearchResult> _parseBingResults(html_dom.Document document) {
+    final results = <SearchResult>[];
+
+    // Bing common structure: li.b_algo > h2 > a, .b_caption p, .b_algoSlug
+    final items = document.querySelectorAll('li.b_algo');
+    for (final item in items) {
+      try {
+        // Title and URL from <h2><a>
+        final heading = item.querySelector('h2');
+        final link = heading?.querySelector('a');
+        final title = link?.text.trim() ?? '';
+        final url = link?.attributes['href']?.trim() ?? '';
+
+        if (title.isEmpty || url.isEmpty) continue;
+
+        // Snippet from .b_caption p or .b_algoSlug
+        String snippet = '';
+        final caption = item.querySelector('.b_caption p');
+        if (caption != null) {
+          snippet = caption.text.trim();
+        }
+        if (snippet.isEmpty) {
+          final slug = item.querySelector('.b_algoSlug');
+          if (slug != null) {
+            snippet = slug.text.trim();
+          }
+        }
+
+        results.add(SearchResult(
+          title: title,
+          url: url,
+          content: snippet,
+        ));
+      } catch (_) {
+        // Skip malformed items
+      }
+    }
+
+    return results;
   }
 
   /// Formats a list of [SearchResult]s into a markdown-like text structure

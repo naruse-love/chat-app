@@ -36,18 +36,21 @@ void main() {
       searchService = SearchService(dio: dio);
     });
 
-    test('9Router search succeeds', () async {
+    // ===================== SearXNG Tests =====================
+
+    test('SearXNG search succeeds', () async {
       mockAdapter.handler = (options) {
-        expect(options.path, endsWith('/search'));
-        expect(options.method, 'POST');
+        expect(options.path, 'https://searxng.local/search');
+        expect(options.method, 'GET');
         expect(options.queryParameters['q'], 'flutter agent');
+        expect(options.queryParameters['format'], 'json');
 
         final mockResponse = {
           'results': [
             {
-              'title': '9Router Guide',
-              'url': 'https://9router.com',
-              'content': 'Guide about 9Router',
+              'title': 'SearXNG Result',
+              'url': 'https://example.com',
+              'content': 'SearXNG search result content',
             }
           ]
         };
@@ -63,70 +66,208 @@ void main() {
 
       final results = await searchService.search(
         query: 'flutter agent',
-        baseUrl: 'https://api.9router.com/v1',
-        apiKey: 'test-key',
         searxngUrl: 'https://searxng.local',
+        searchBackend: 'searxng',
       );
 
       expect(results, hasLength(1));
-      expect(results[0].title, '9Router Guide');
-      expect(results[0].url, 'https://9router.com');
-      expect(results[0].content, 'Guide about 9Router');
+      expect(results[0].title, 'SearXNG Result');
+      expect(results[0].url, 'https://example.com');
+      expect(results[0].content, 'SearXNG search result content');
     });
 
-    test('9Router search fails, falls back to SearXNG', () async {
-      int requestCount = 0;
+    test('SearXNG empty URL throws SearchException', () async {
+      try {
+        await searchService.search(
+          query: 'test',
+          searxngUrl: '',
+          searchBackend: 'searxng',
+        );
+        fail('Expected SearchException was not thrown');
+      } on SearchException catch (e) {
+        expect(e.source, 'SearXNG');
+        expect(e.message, contains('未配置 SearXNG 地址'));
+      }
+    });
+
+    test('SearXNG null URL throws SearchException', () async {
+      try {
+        await searchService.search(
+          query: 'test',
+          searxngUrl: null,
+          searchBackend: 'searxng',
+        );
+        fail('Expected SearchException was not thrown');
+      } on SearchException catch (e) {
+        expect(e.source, 'SearXNG');
+        expect(e.message, contains('未配置 SearXNG 地址'));
+      }
+    });
+
+    test('SearXNG 403 throws SearchException with JSON format hint', () async {
       mockAdapter.handler = (options) {
-        requestCount++;
-        if (requestCount <= 2) {
-          // First two requests should be to 9Router (/search and /v1/search), fail both
-          return ResponseBody.fromString(
-            'Not Found',
-            404,
-            headers: {
-              Headers.contentTypeHeader: [Headers.textPlainContentType],
-            },
-          );
-        } else {
-          // Third request should fall back to SearXNG with /search appended
-          expect(options.path, 'https://searxng.local/search');
-          expect(options.method, 'GET');
-          expect(options.queryParameters['q'], 'flutter agent');
-          expect(options.queryParameters['format'], 'json');
+        expect(options.queryParameters['format'], 'json');
+        return ResponseBody.fromString(
+          '403 Forbidden - Invalid search format',
+          403,
+          headers: {
+            Headers.contentTypeHeader: [Headers.textPlainContentType],
+          },
+        );
+      };
 
-          final mockResponse = {
-            'results': [
-              {
-                'title': 'SearXNG Results',
-                'url': 'https://searxng.org',
-                'content': 'Fallback SearXNG search result',
-              }
-            ]
-          };
+      try {
+        await searchService.search(
+          query: 'test',
+          searxngUrl: 'https://searxng.local',
+          searchBackend: 'searxng',
+        );
+        fail('Expected SearchException was not thrown');
+      } on SearchException catch (e) {
+        expect(e.source, 'SearXNG');
+        expect(e.statusCode, 403);
+        expect(e.message, contains('SearXNG 拒绝了 JSON 接口'));
+        expect(e.message, contains('formats: [html, json]'));
+      }
+    });
 
-          return ResponseBody.fromString(
-            json.encode(mockResponse),
-            200,
-            headers: {
-              Headers.contentTypeHeader: [Headers.jsonContentType],
-            },
-          );
-        }
+    test('SearXNG returns empty results', () async {
+      mockAdapter.handler = (options) {
+        return ResponseBody.fromString(
+          json.encode({'results': []}),
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        );
       };
 
       final results = await searchService.search(
         query: 'flutter agent',
-        baseUrl: 'https://api.9router.com/v1',
-        apiKey: 'test-key',
         searxngUrl: 'https://searxng.local',
+        searchBackend: 'searxng',
       );
 
-      expect(requestCount, 3);
-      expect(results, hasLength(1));
-      expect(results[0].title, 'SearXNG Results');
-      expect(results[0].url, 'https://searxng.org');
-      expect(results[0].content, 'Fallback SearXNG search result');
+      expect(results, isEmpty);
     });
+
+    test('SearXNG URL normalization works', () async {
+      mockAdapter.handler = (options) {
+        // Expect normalized URL with trailing slash removed and /search appended
+        expect(options.path, 'https://searxng.local/search');
+        return ResponseBody.fromString(
+          json.encode({'results': []}),
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        );
+      };
+
+      final results = await searchService.search(
+        query: 'test',
+        searxngUrl: 'https://searxng.local/',
+        searchBackend: 'searxng',
+      );
+
+      expect(results, isEmpty);
+    });
+
+    // ===================== Bing Tests =====================
+
+    test('Bing search succeeds with valid HTML', () async {
+      mockAdapter.handler = (options) {
+        expect(options.path, 'https://www.bing.com/search');
+        expect(options.queryParameters['q'], 'flutter');
+        expect(options.queryParameters['setlang'], 'zh-Hans');
+
+        const mockHtml = '''
+<html>
+<body>
+<ol id="b_results">
+  <li class="b_algo">
+    <h2><a href="https://flutter.dev">Flutter Official</a></h2>
+    <div class="b_caption"><p>Build apps for any screen with Flutter.</p></div>
+  </li>
+  <li class="b_algo">
+    <h2><a href="https://dart.dev">Dart Programming</a></h2>
+    <div class="b_caption"><p>A client-optimized language for fast apps.</p></div>
+  </li>
+</ol>
+</body>
+</html>
+''';
+        return ResponseBody.fromString(
+          mockHtml,
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['text/html'],
+          },
+        );
+      };
+
+      final results = await searchService.search(
+        query: 'flutter',
+        searchBackend: 'bing',
+      );
+
+      expect(results, hasLength(2));
+      expect(results[0].title, 'Flutter Official');
+      expect(results[0].url, 'https://flutter.dev');
+      expect(results[0].content, 'Build apps for any screen with Flutter.');
+      expect(results[1].title, 'Dart Programming');
+      expect(results[1].url, 'https://dart.dev');
+    });
+
+    test('Bing search returns empty results for no-match HTML', () async {
+      mockAdapter.handler = (options) {
+        const mockHtml = '<html><body><ol id="b_results"></ol></body></html>';
+        return ResponseBody.fromString(
+          mockHtml,
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['text/html'],
+          },
+        );
+      };
+
+      try {
+        await searchService.search(
+          query: 'asdfghjklzxcvbnm',
+          searchBackend: 'bing',
+        );
+        fail('Expected SearchException was not thrown');
+      } on SearchException catch (e) {
+        expect(e.source, 'Bing');
+        expect(e.message, contains('Bing 搜索失败'));
+        expect(e.message, contains('建议改用 SearXNG'));
+      }
+    });
+
+    test('Bing search HTTP error throws SearchException', () async {
+      mockAdapter.handler = (options) {
+        return ResponseBody.fromString(
+          'Service Unavailable',
+          503,
+          headers: {
+            Headers.contentTypeHeader: [Headers.textPlainContentType],
+          },
+        );
+      };
+
+      try {
+        await searchService.search(
+          query: 'test',
+          searchBackend: 'bing',
+        );
+        fail('Expected SearchException was not thrown');
+      } on SearchException catch (e) {
+        expect(e.source, 'Bing');
+        expect(e.message, contains('Bing 搜索失败'));
+      }
+    });
+
+    // ===================== Common Tests =====================
 
     test('Formatting context string works correctly (Chinese)', () {
       final results = [
@@ -145,117 +286,6 @@ void main() {
     test('Empty results formatting returns Chinese message', () {
       final context = searchService.formatSearchResultsForContext([]);
       expect(context, '未找到相关网络搜索结果。');
-    });
-
-    test('SearXNG 403 throws SearchException with JSON format hint', () async {
-      mockAdapter.handler = (options) {
-        // Fail 9Router endpoints first
-        if (options.method == 'POST') {
-          return ResponseBody.fromString(
-            'Not Found',
-            404,
-            headers: {
-              Headers.contentTypeHeader: [Headers.textPlainContentType],
-            },
-          );
-        }
-        // SearXNG returns 403 Forbidden (JSON format disabled)
-        expect(options.queryParameters['format'], 'json');
-        return ResponseBody.fromString(
-          '403 Forbidden - Invalid search format',
-          403,
-          headers: {
-            Headers.contentTypeHeader: [Headers.textPlainContentType],
-          },
-        );
-      };
-
-      try {
-        await searchService.search(
-          query: 'test',
-          baseUrl: 'https://api.9router.com/v1',
-          apiKey: 'test-key',
-          searxngUrl: 'https://searxng.local',
-        );
-        fail('Expected SearchException was not thrown');
-      } on SearchException catch (e) {
-        expect(e.source, 'SearXNG');
-        expect(e.statusCode, 403);
-        expect(e.message, contains('SearXNG 拒绝了 JSON 接口'));
-        expect(e.message, contains('formats: [html, json]'));
-      }
-    });
-
-    test('All sources fail throws combined SearchException', () async {
-      mockAdapter.handler = (options) {
-        return ResponseBody.fromString(
-          'Service Unavailable',
-          503,
-          headers: {
-            Headers.contentTypeHeader: [Headers.textPlainContentType],
-          },
-        );
-      };
-
-      try {
-        await searchService.search(
-          query: 'test',
-          baseUrl: 'https://api.9router.com/v1',
-          apiKey: 'test-key',
-          searxngUrl: 'https://searxng.local',
-        );
-        fail('Expected SearchException was not thrown');
-      } on SearchException catch (e) {
-        expect(e.source, 'combined');
-        expect(e.message, contains('所有搜索引擎均搜索失败'));
-      }
-    });
-
-    test('No searxngUrl, all 9Router endpoints fail throws SearchException', () async {
-      mockAdapter.handler = (options) {
-        return ResponseBody.fromString(
-          'Not Found',
-          404,
-          headers: {
-            Headers.contentTypeHeader: [Headers.textPlainContentType],
-          },
-        );
-      };
-
-      try {
-        await searchService.search(
-          query: 'test',
-          baseUrl: 'https://api.9router.com/v1',
-          apiKey: 'test-key',
-        );
-        fail('Expected SearchException was not thrown');
-      } on SearchException catch (e) {
-        expect(e.source, 'combined');
-        expect(e.message, contains('所有搜索引擎均搜索失败'));
-      }
-    });
-
-    test('9Router returns empty results', () async {
-      mockAdapter.handler = (options) {
-        expect(options.method, 'POST');
-        expect(options.queryParameters['q'], 'flutter agent');
-
-        return ResponseBody.fromString(
-          json.encode({'results': []}),
-          200,
-          headers: {
-            Headers.contentTypeHeader: [Headers.jsonContentType],
-          },
-        );
-      };
-
-      final results = await searchService.search(
-        query: 'flutter agent',
-        baseUrl: 'https://api.9router.com/v1',
-        apiKey: 'test-key',
-      );
-
-      expect(results, isEmpty);
     });
   });
 }

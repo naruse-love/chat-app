@@ -151,6 +151,7 @@ void main() {
       final mockChatService = MockChatService();
       final mockSearchService = MockSearchService();
       final mockSecureStorageService = SecureStorageService(storage: mockSecureStorage);
+      final mockImageService = MockImageService();
 
       final container = ProviderContainer(
         overrides: [
@@ -158,6 +159,7 @@ void main() {
           chatServiceProvider.overrideWithValue(mockChatService),
           searchServiceProvider.overrideWithValue(mockSearchService),
           secureStorageServiceProvider.overrideWithValue(mockSecureStorageService),
+          imageServiceProvider.overrideWithValue(mockImageService),
         ],
       );
       addTearDown(container.dispose);
@@ -204,13 +206,33 @@ void main() {
       final chatNotifier = container.read(chatProvider.notifier);
       await chatNotifier.loadMessages(conversation.id);
 
-      // Try to send a message with an image
+      // Track whether the chat service stream was invoked
+      var streamInvoked = false;
+      mockChatService.chatCompletionsStreamHandler = ({
+        required String baseUrl,
+        required String apiKey,
+        required String model,
+        required List<ChatMessage> messages,
+        List<Map<String, dynamic>>? tools,
+        CancelToken? cancelToken,
+      }) {
+        streamInvoked = true;
+        return const Stream.empty();
+      };
+
+      // Send a message with an image. Local precheck is intentionally absent:
+      // the request proceeds and the API itself is responsible for any vision
+      // capability error.
       await chatNotifier.sendMessage('Identify this object', imagePath: 'temp/photo.jpg');
 
-      // Assert that sending failed fast and returned the model vision capability mismatch error
+      // The local precheck must NOT have blocked the request: the user
+      // message should be in state and the chat service should have been
+      // invoked (i.e. the send pipeline ran).
       final chatState = container.read(chatProvider);
-      expect(chatState.error, equals('所选模型不支持图片输入。'));
-      expect(chatState.messages, isEmpty); // No messages sent or saved
+      expect(chatState.error, isNot(equals('所选模型不支持图片输入。')));
+      expect(chatState.messages, isNotEmpty);
+      expect(chatState.messages.first.role, equals('user'));
+      expect(streamInvoked, isTrue);
     });
 
     test('3. Network Connection Failure Error Formatting', () async {

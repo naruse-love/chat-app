@@ -75,9 +75,8 @@ class MockSearchService extends SearchService {
   @override
   Future<List<SearchResult>> search({
     required String query,
-    required String baseUrl,
-    required String apiKey,
     String? searxngUrl,
+    String searchBackend = 'searxng',
   }) async {
     if (searchHandler != null) {
       return searchHandler!(query);

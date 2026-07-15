@@ -97,6 +97,7 @@ class AgentService {
     required String model,
     required List<ChatMessage> messages,
     String? searxngUrl,
+    String searchBackend = 'searxng',
     CancelToken? cancelToken,
   }) async* {
     if (messages.isEmpty) return;
@@ -120,9 +121,8 @@ class AgentService {
       try {
         results = await _searchService.search(
           query: query,
-          baseUrl: baseUrl,
-          apiKey: apiKey,
           searxngUrl: searxngUrl,
+          searchBackend: searchBackend,
         );
       } on SearchException catch (e) {
         results = [];
@@ -278,9 +278,8 @@ class AgentService {
           try {
             results = await _searchService.search(
               query: query,
-              baseUrl: baseUrl,
-              apiKey: apiKey,
               searxngUrl: searxngUrl,
+              searchBackend: searchBackend,
             );
           } on SearchException catch (e) {
             results = [];

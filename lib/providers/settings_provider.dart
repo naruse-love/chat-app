@@ -10,22 +10,26 @@ class AppSettings {
   final String searxngUrl;
   final String defaultSystemPrompt;
   final bool enableAutoSearch;
+  final String searchBackend;
 
   AppSettings({
     this.searxngUrl = '',
     this.defaultSystemPrompt = 'You are a helpful assistant.',
     this.enableAutoSearch = true,
+    this.searchBackend = 'searxng',
   });
 
   AppSettings copyWith({
     String? searxngUrl,
     String? defaultSystemPrompt,
     bool? enableAutoSearch,
+    String? searchBackend,
   }) {
     return AppSettings(
       searxngUrl: searxngUrl ?? this.searxngUrl,
       defaultSystemPrompt: defaultSystemPrompt ?? this.defaultSystemPrompt,
       enableAutoSearch: enableAutoSearch ?? this.enableAutoSearch,
+      searchBackend: searchBackend ?? this.searchBackend,
     );
   }
 }
@@ -34,6 +38,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _searxngKey = 'searxng_url';
   static const _systemPromptKey = 'default_system_prompt';
   static const _autoSearchKey = 'enable_auto_search';
+  static const _searchBackendKey = 'search_backend';
 
   bool isLoaded = false;
 
@@ -49,6 +54,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         searxngUrl: prefs.getString(_searxngKey) ?? '',
         defaultSystemPrompt: prefs.getString(_systemPromptKey) ?? 'You are a helpful assistant.',
         enableAutoSearch: prefs.getBool(_autoSearchKey) ?? true,
+        searchBackend: prefs.getString(_searchBackendKey) ?? 'searxng',
       );
     } catch (_) {
       isLoaded = true;
@@ -76,6 +82,14 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_autoSearchKey, enabled);
+    } catch (_) {}
+  }
+
+  Future<void> updateSearchBackend(String backend) async {
+    state = state.copyWith(searchBackend: backend);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_searchBackendKey, backend);
     } catch (_) {}
   }
 }

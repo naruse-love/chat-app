@@ -105,11 +105,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
       return;
     }
 
-    if (imagePath != null && !selectedModel.supportsVision) {
-      state = state.copyWith(error: '所选模型不支持图片输入。');
-      return;
-    }
-
     _sendingInProgress = true;
     String targetConvId;
     if (activeConv == null) {
@@ -175,6 +170,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
       // Update the message content in DB
       await _messageDao.updateContent(messageId, newText);
 
+      // Yield once so the dialog exit animation and any pending
+      // MarkdownBody/SelectableText element teardown can settle
+      // before we mutate the messages list and rebuild.
+      await Future.microtask(() {});
+
+      if (!mounted) return;
+
       // Update in local state
       final updatedMessages = state.messages.map((m) {
         if (m.id == messageId) {
@@ -193,6 +195,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       // Reload messages from DB to ensure consistency
       if (activeConv != null) {
         final freshMessages = await _messageDao.getMessagesForConversation(activeConv.id);
+        if (!mounted) return;
         state = state.copyWith(messages: freshMessages);
       }
 
@@ -272,6 +275,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         model: selectedModel.id,
         messages: history,
         searxngUrl: settings.searxngUrl.isNotEmpty ? settings.searxngUrl : null,
+        searchBackend: settings.searchBackend,
         cancelToken: _cancelToken,
       );
 

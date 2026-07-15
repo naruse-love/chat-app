@@ -53,6 +53,7 @@ class _MarkdownRendererState extends State<MarkdownRenderer> {
   }
 
   void _applyThrottle() {
+    if (!mounted) return;
     _isThrottleActive = true;
     setState(() {
       if (_pendingData != null) {
