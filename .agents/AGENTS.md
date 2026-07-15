@@ -15,7 +15,7 @@
 
 ### 1. 测试必须 100% 通过
 - 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat test`
-- **所有 108 个测试用例必须全部通过**（0 failures）
+- **所有 127 个测试用例必须全部通过**（0 failures）
 - 每次代码变更后必须重跑测试，严禁提交带测试失败的代码
 
 ### 2. 静态分析必须 0 问题
@@ -82,7 +82,7 @@
 1. **读取 `context.md`**（`D:\work\chat\.agents\context.md`）
 2. **读取 `WORK_LOG.md`**（`D:\work\chat\WORK_LOG.md`）了解最近的开发日志
 3. 运行 `flutter analyze` 确认 0 issues
-4. 运行 `flutter test` 确认 108/108 通过
+4. 运行 `flutter test` 确认 127/127 通过
 5. 确认任务目标后，再开始修改代码
 
 ---

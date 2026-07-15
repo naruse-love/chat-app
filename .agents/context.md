@@ -1,5 +1,5 @@
 # 项目接手上下文（Context）
-> 最后更新：2026-07-13
+> 最后更新：2026-07-15
 
 ---
 
@@ -9,8 +9,8 @@
 
 - **工作目录**：`D:\work\chat`
 - **Flutter SDK**：`D:\work\flutter-sdk\flutter\bin\flutter.bat`
-- **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支）
-- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过，`flutter analyze` 必须 0 问题
+- **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支，HEAD `fc9a35f`）
+- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（127/127），`flutter analyze` 必须 0 issues
 
 ---
 
@@ -24,12 +24,13 @@
 | 4 | 网络搜索与 Agent 调度（SearchService、AgentService） | ✅ 完成 |
 | 5 | 图片服务（ImageService：压缩 / 选取 / Base64 编码）| ✅ 完成 |
 | 6 | Riverpod 状态管理（7 个 Provider）+ 全套 UI 页面 | ✅ 完成 |
-| 7 | E2E 集成测试（103 个测试用例） | ✅ 完成 |
+| 7 | E2E 集成测试（127 个测试用例） | ✅ 完成 |
 | 8 | 对抗性异常加固（DB 损坏自愈、Vision 预检、网络错误分类） | ✅ 完成 |
 | 汉化 | 全界面中文本地化（UI 文字、错误提示、SnackBar） | ✅ 完成 |
 | 最终编译 | `flutter build apk --debug` 编译成功，产物位于 `build/app/outputs/flutter-apk/app-debug.apk` | ✅ 完成 |
+| **9 / 维护迭代** | 消息编辑/重发、Token 统计、会话回退/重新生成；搜索迁移到 SearXNG 主路径 + 实验性 Bing（移除 9Router 内置搜索）；多轮 tool calling + 伪 XML `<tool_call>` 兜底；Vision 本地预检移除（发图交由 API 报错）；SearXNG URL 回显、Vision 能力解析增强；思考内容可选中/复制；主界面系统提示词入口 + 注入 API system 消息；编辑/回退崩溃加固（2026-07-13 ~ 2026-07-15） | ✅ 完成 |
 
-**当前测试状态：108 / 108 测试用例全部通过，`flutter analyze` 0 issues。**
+**当前测试状态：127 / 127 测试用例全部通过，`flutter analyze` 0 issues。**
 
 ---
 
@@ -38,72 +39,91 @@
 ```
 lib/
 ├── main.dart                     # App 入口，路由注册，Riverpod ProviderScope
+├── app.dart                      # MaterialApp 根（含主题、Provider 注入）
+│
 ├── models/                       # 数据模型
 │   ├── api_config.dart           # API 配置（name, baseUrl, apiKeyRef, isDefault）
-│   ├── chat_message.dart         # 消息模型（含 reasoningContent, imagePath, toolCallId）
-│   ├── conversation.dart         # 对话模型（含 isPinned, isArchived）
+│   ├── chat_message.dart         # 消息模型（reasoningContent, imagePath, toolCallId, promptTokens, completionTokens）
+│   ├── conversation.dart         # 对话模型（isPinned, isArchived, systemPrompt）
 │   ├── model_info.dart           # 模型元数据（supportsVision, supportsTools）
 │   ├── search_result.dart        # 搜索结果
 │   ├── system_prompt_template.dart
 │   └── tool_call.dart
 │
 ├── data/                         # SQLite 数据访问层
-│   ├── database_helper.dart      # 单例 SQLite 管理器（含损坏自愈逻辑）
+│   ├── database_helper.dart      # 单例 SQLite 管理器（损坏自愈 + schema v3 迁移）
 │   ├── api_config_dao.dart       # API 配置 CRUD（含安全存储集成）
-│   ├── conversation_dao.dart     # 对话 CRUD（含 pin/archive/sort）
-│   └── message_dao.dart          # 消息 CRUD（含绝对/相对路径映射）
+│   ├── conversation_dao.dart     # 对话 CRUD（pin/archive/sort + systemPrompt）
+│   └── message_dao.dart          # 消息 CRUD（绝对/相对路径映射 + token 字段）
 │
 ├── services/                     # 业务服务层
 │   ├── chat_service.dart         # Dio HTTP 客户端，/v1/chat/completions SSE 流
-│   ├── search_service.dart       # 9Router 搜索 + SearXNG 降级双模式
-│   ├── agent_service.dart        # Tool Call 调度，chatAndSearchStream 流
+│   ├── search_service.dart       # SearXNG 主路径 + 实验性 Bing（9Router 内置搜索已停用）
+│   ├── agent_service.dart        # 多轮 tool calling，伪 XML tool_call 兜底，systemPrompt 注入
 │   ├── image_service.dart        # 图片选取 / 压缩 / Base64 编码
 │   └── secure_storage_service.dart  # flutter_secure_storage 封装
 │
 ├── providers/                    # Riverpod 状态管理
 │   ├── theme_provider.dart       # ThemeMode（light/dark/system）
 │   ├── api_config_provider.dart  # API 配置列表、活跃配置
-│   ├── model_provider.dart       # 模型列表、选中模型
-│   ├── conversation_provider.dart # 对话列表、活跃对话（含 clearActive bug 修复）
-│   ├── chat_provider.dart        # 消息列表、流式生成、错误处理
+│   ├── model_provider.dart       # 模型列表、选中模型（Vision 能力解析增强）
+│   ├── conversation_provider.dart # 对话列表、活跃对话（clearActive 修复）
+│   ├── chat_provider.dart        # 消息列表、流式生成、editAndResend / regenerate / rollback / _startStreaming，mounted 守卫覆盖异步路径
 │   ├── agent_provider.dart       # 工具调用状态（isSearching, searchQuery）
-│   └── settings_provider.dart   # SearXNG URL、系统提示词模板
+│   └── settings_provider.dart    # searxngUrl, searchBackend, defaultSystemPrompt
 │
 ├── screens/                      # 页面
-│   ├── home_screen.dart          # 主聊天页（侧边栏对话列表、消息气泡）
+│   ├── home_screen.dart          # 主聊天页（系统提示词入口、回退/编辑/重新生成 UI、侧边栏对话列表、消息气泡）
 │   ├── settings_screen.dart      # 设置页
 │   ├── api_config_screen.dart    # API 配置管理页（测试连接功能）
 │   ├── model_selector_screen.dart # 模型选择页（按 provider 分组，带 Vision/Tools 标签）
 │   └── system_prompt_screen.dart # 系统提示词模板管理页
 │
 └── widgets/                      # 可复用 Widget
-    ├── chat_bubble.dart          # 消息气泡（Markdown、可折叠思考过程、图片预览）
+    ├── chat_bubble.dart          # 消息气泡（Markdown 长期 selectable:false，思考区独立 SelectableText + 复制按钮，图片预览）
     └── chat_input.dart           # 输入区（图片附件、发送、多行文本）
 
 test/
 ├── unit tests (模型、服务、DAO)
 ├── widgets_test.dart             # ChatBubble、ChatInput Widget 测试
 ├── e2e_integration_test.dart     # Provider E2E 集成测试（主题、API、对话、流式消息）
-└── adversarial_hardening_test.dart # 对抗性异常测试（DB 损坏、Vision 预检、网络错误）
+├── adversarial_hardening_test.dart # 对抗性异常测试（DB 损坏、Vision 预检、网络错误）
+├── database_*.dart               # 数据库注入/并发/升级/压力/EXPLAIN 测试
+├── agent_service_test.dart       # 多轮 tool calling / 伪 XML 兜底 / systemPrompt 注入
+├── chat_service_test.dart        # SSE 解析与多轮流
+├── search_service_test.dart      # SearXNG / Bing 切换
+├── model_info_test.dart + model_info_stress_test.dart
+├── models_serialization_stress_test.dart
+├── image_service_test.dart
+├── sse_parser_test.dart
+└── challenger_empirical_test.dart # 端到端稳健性挑战测试
 ```
 
 ---
 
 ## 🔑 关键技术决策
 
-1. **SQLite 损坏自愈**：`DatabaseHelper._initDatabase()` 用 try-catch 包裹 `openDatabase`，失败时自动删除损坏文件并重建数据库。
+1. **SQLite 损坏自愈 + schema v3 迁移**：`DatabaseHelper._initDatabase()` 用 try-catch 包裹 `openDatabase`，失败时自动删除损坏文件并重建；v3 新增 `prompt_tokens` / `completion_tokens` 字段用于 Token 统计。
 
-2. **Vision 预检拦截**：`ChatNotifier.sendMessage()` 在发送带图片的消息前，检查 `selectedModel.supportsVision`，不支持则立即报错，防止 API 400。
+2. **Vision 预检已移除**：不再在客户端拦截图片消息，由 API 侧报错（`400` 等）；模型选择页仍保留「视觉」标签以便用户辨识能力。
 
-3. **Riverpod mounted 保护**：`ConversationNotifier` 所有异步方法在 `await` 后均检查 `if (!mounted) return;`，防止 dispose 后写入状态抛出异常。
+3. **Riverpod mounted 保护**：`ChatNotifier` 的异步路径（流式接收、回退/编辑/重新生成）均检查 `if (!mounted) return;`，防止 dispose 后写状态崩溃。
 
 4. **copyWith clearActive**：`ConversationState.copyWith` 增加 `clearActive` 布尔参数，解决 Riverpod 中 `activeConversation` 无法设置为 null 的 Bug。
 
-5. **图片永久路径存储**：`ImageService.compressAndSaveImage()` 将临时缓存图片压缩后复制到 `getApplicationDocumentsDirectory()`，SQLite 只存永久路径，防止系统清理缓存后图片丢失。
+5. **图片永久路径**：`ImageService.compressAndSaveImage()` 将临时缓存图片压缩后复制到 `getApplicationDocumentsDirectory()`，SQLite 只存永久路径，防止系统清理缓存后图片丢失。
 
-6. **双模式搜索降级**：`SearchService` 先调用 9Router 搜索 API，如失败则降级调用用户配置的 SearXNG 实例。
+6. **搜索：SearXNG 为主，实验性 Bing 可选**：9Router 内置搜索已停用；`settings_provider` 暴露 `searxngUrl` 与 `searchBackend` 切换后端。
 
-7. **SSE 流解析**：`SseParser` 处理 `data: ` 前缀、`[DONE]` 终止符及跨块 JSON 拼接，兼容 OpenAI 流式格式。
+7. **SSE 流解析**：`SseParser` 处理 `data: ` 前缀、`[DONE]` 终止符及跨块 JSON 拼接，兼容 OpenAI 流式格式；多轮 tool calling 时持续透传 `tools` 参数到后续 completion。
+
+8. **多轮 tool calling + 伪 XML 兜底**：当模型不返回标准 `tool_calls` 而输出伪 XML `<tool_call>{...}</tool_call>` 时，Agent 解析为工具调用并执行；执行结果回传继续下一轮 completion。
+
+9. **MarkdownBody 长期 `selectable:false`**：避免在 `ListView` 销毁时引发选区崩溃；思考区（`reasoningContent`）单独使用 `SelectableText` + 复制按钮，保证可选择/复制。
+
+10. **系统提示词注入**：`ChatNotifier` 启动流式生成时，优先使用当前会话的 `systemPrompt`，否则使用 `settings_provider` 的 `defaultSystemPrompt`；最终以 `role: system` 注入到 messages 最前。
+
+11. **回退/编辑时序**：`showDialog` 关闭后 `await Future.delayed(Duration(milliseconds: 50))` 再配合 `mounted` 检查后改 state，避免动画/构建期状态写入导致崩溃。
 
 ---
 
@@ -115,7 +135,7 @@ test/
 - **文件导出功能**：对话历史导出为 Markdown / JSON。
 - **语音输入**：集成 `speech_to_text` 插件实现语音转文字输入。
 - **Agent 插件系统**：让用户自定义 Tool Call 扩展（除内置搜索外）。
-- **Release APK 签名打包**：目前只有 Debug APK，需要配置 keystore 进行 Release 签名。
+- **Release APK 签名打包**：目前以 Debug APK 为主，需要配置 keystore 进行 Release 签名。
 - **通知支持**：长时间生成时后台推送通知。
 
 ---
@@ -126,6 +146,8 @@ test/
 |------|------|
 | [WORK_LOG.md](../WORK_LOG.md) | 详细的开发日志，按 Milestone 记录所有变更与技术决策 |
 | [implementation_plan.md](../implementation_plan.md) | 系统架构设计与各模块规划文档 |
+| [context.md](context.md) | 当前接手上下文（每次重大迭代更新） |
+| [AGENTS.md](AGENTS.md) | Agent 协作约定与角色说明 |
 | [build/app/outputs/flutter-apk/app-debug.apk](../build/app/outputs/flutter-apk/app-debug.apk) | 最新编译的 Debug APK |
 
 ---
@@ -136,7 +158,7 @@ test/
 # 静态分析（必须 0 issues）
 D:\work\flutter-sdk\flutter\bin\flutter.bat analyze
 
-# 运行全部测试（必须 108/108 通过）
+# 运行全部测试（必须 127/127 通过）
 D:\work\flutter-sdk\flutter\bin\flutter.bat test
 
 # 编译 Debug APK
