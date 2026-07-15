@@ -6,6 +6,7 @@ import '../providers/conversation_provider.dart';
 import '../providers/model_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/agent_provider.dart';
+import '../providers/settings_provider.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/chat_input.dart';
 import '../models/chat_message.dart';
@@ -336,6 +337,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.psychology_outlined),
+            tooltip: '系统提示词',
+            onPressed: () => _showSystemPromptEditor(context),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => Navigator.pushNamed(context, '/settings'),
           ),
@@ -355,6 +361,149 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             )
           : buildChatArea(),
     );
+  }
+
+  void _showSystemPromptEditor(BuildContext context) {
+    final settings = ref.read(settingsProvider);
+    final activeConv = ref.read(conversationProvider).activeConversation;
+
+    // Initial value: conversation-level > default
+    final initialText = (activeConv?.systemPrompt?.trim().isNotEmpty == true)
+        ? activeConv!.systemPrompt!
+        : settings.defaultSystemPrompt;
+
+    final controller = TextEditingController(text: initialText);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.psychology_outlined, color: Theme.of(sheetContext).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    '系统提示词',
+                    style: Theme.of(sheetContext).textTheme.titleLarge,
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(sheetContext),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '系统提示词用于设定 AI 助⼿的⾏为和⻛格，会随每条消息发送给 API。',
+                style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(sheetContext).colorScheme.outline,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                maxLines: 8,
+                minLines: 4,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: '输入系统提示词…',
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Template selection
+              Consumer(
+                builder: (context, watchRef, _) {
+                  final templates = watchRef.watch(systemPromptsProvider);
+                  if (templates.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '从模板选择',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 40,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: templates.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (_, i) {
+                            final t = templates[i];
+                            return ActionChip(
+                              label: Text(t.title),
+                              onPressed: () {
+                                controller.text = t.content;
+                                controller.selection = TextSelection.fromPosition(
+                                  TextPosition(offset: controller.text.length),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  );
+                },
+              ),
+              Row(
+                children: [
+                  OutlinedButton(
+                    onPressed: () {
+                      controller.text = settings.defaultSystemPrompt;
+                      controller.selection = TextSelection.fromPosition(
+                        TextPosition(offset: controller.text.length),
+                      );
+                    },
+                    child: const Text('使用默认'),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () async {
+                        final text = controller.text.trim();
+                        if (activeConv != null) {
+                          await ref.read(conversationProvider.notifier).updateConversation(
+                            activeConv.copyWith(
+                              systemPrompt: text.isEmpty ? null : text,
+                            ),
+                          );
+                        } else {
+                          await ref.read(settingsProvider.notifier).updateDefaultSystemPrompt(
+                            text.isEmpty ? 'You are a helpful assistant.' : text,
+                          );
+                        }
+                        if (sheetContext.mounted) Navigator.pop(sheetContext);
+                      },
+                      child: const Text('保存'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    ).then((_) => controller.dispose());
   }
 
   void _showEditDialog(BuildContext context, ChatMessage message) async {
@@ -392,7 +541,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     controller.dispose();
     if (newText == null || newText.isEmpty) return;
     if (!context.mounted) return;
-    await Future.microtask(() {});
+    await Future.delayed(const Duration(milliseconds: 50));
     if (!context.mounted) return;
     await ref.read(chatProvider.notifier).editAndResendMessage(message.id, newText);
   }
@@ -420,7 +569,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     if (confirmed == true) {
       // Ensure dialog close animation completes before modifying state
-      await Future.microtask(() {});
+      await Future.delayed(const Duration(milliseconds: 50));
       if (!context.mounted) return;
       ref.read(chatProvider.notifier).rollbackToMessage(message.id);
     }

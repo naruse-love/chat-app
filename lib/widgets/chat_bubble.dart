@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/chat_message.dart';
 import 'markdown_renderer.dart';
 
@@ -279,45 +280,72 @@ class _ChatBubbleState extends State<ChatBubble> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
-            onTap: () {
-              setState(() {
-                _isReasoningExpanded = !_isReasoningExpanded;
-              });
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.psychology,
-                    size: 16.0,
-                    color: theme.colorScheme.outline,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _isReasoningExpanded = !_isReasoningExpanded;
+                    });
+                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.psychology,
+                        size: 16.0,
+                        color: theme.colorScheme.outline,
+                      ),
+                      const SizedBox(width: 6.0),
+                      Text(
+                        '思考过程',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.outline,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 4.0),
+                      Icon(
+                        _isReasoningExpanded ? Icons.expand_less : Icons.expand_more,
+                        size: 16.0,
+                        color: theme.colorScheme.outline,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 6.0),
-                  Text(
-                    '思考过程',
-                    style: theme.textTheme.labelMedium?.copyWith(
+                ),
+                const Spacer(),
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: Icon(
+                      Icons.copy,
+                      size: 16.0,
                       color: theme.colorScheme.outline,
-                      fontWeight: FontWeight.bold,
                     ),
+                    tooltip: '复制思考内容',
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: widget.message.reasoningContent!));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('已复制思考内容'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
                   ),
-                  const SizedBox(width: 4.0),
-                  Icon(
-                    _isReasoningExpanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16.0,
-                    color: theme.colorScheme.outline,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           AnimatedCrossFade(
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
               padding: const EdgeInsets.fromLTRB(8.0, 0.0, 8.0, 8.0),
-              child: Text(
+              child: SelectableText(
                 widget.message.reasoningContent!,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontStyle: FontStyle.italic,

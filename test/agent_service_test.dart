@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:chat/services/agent_service.dart';
@@ -123,6 +124,123 @@ void main() {
       expect(searchService.searchCallCount, 0);
     });
 
+    test('System Prompt is injected as first system message and replaces existing system messages', () async {
+      final chatService = MockChatService();
+      final searchService = MockSearchService();
+      final agentService = AgentService(chatService: chatService, searchService: searchService);
+
+      List<ChatMessage>? capturedMessages;
+
+      chatService.chatCompletionsStreamHandler = ({
+        required String baseUrl,
+        required String apiKey,
+        required String model,
+        required List<ChatMessage> messages,
+        List<Map<String, dynamic>>? tools,
+        CancelToken? cancelToken,
+      }) {
+        capturedMessages = messages;
+        return Stream.fromIterable([
+          {
+            'choices': [
+              {
+                'delta': {'content': 'OK'}
+              }
+            ]
+          }
+        ]);
+      };
+
+      // Messages already contain an old system message
+      final messages = [
+        ChatMessage(
+          id: 'sys_old',
+          conversationId: 'c1',
+          role: 'system',
+          content: 'Old system prompt',
+          timestamp: DateTime.now(),
+        ),
+        ChatMessage(
+          id: '1',
+          conversationId: 'c1',
+          role: 'user',
+          content: 'Hi',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final stream = agentService.chatAndSearchStream(
+        baseUrl: 'http://api.com',
+        apiKey: 'key',
+        model: 'model',
+        messages: messages,
+        systemPrompt: 'New system prompt',
+      );
+
+      await stream.toList();
+
+      expect(capturedMessages, isNotNull);
+      // First message should be the new system prompt
+      expect(capturedMessages!.first.role, 'system');
+      expect(capturedMessages!.first.content, 'New system prompt');
+      // Old system message should be removed (replaced)
+      expect(capturedMessages!.where((m) => m.role == 'system'), hasLength(1));
+      // User message should still be there
+      expect(capturedMessages!.last.role, 'user');
+      expect(capturedMessages!.last.content, 'Hi');
+    });
+
+    test('System Prompt is null, no injection happens', () async {
+      final chatService = MockChatService();
+      final searchService = MockSearchService();
+      final agentService = AgentService(chatService: chatService, searchService: searchService);
+
+      List<ChatMessage>? capturedMessages;
+
+      chatService.chatCompletionsStreamHandler = ({
+        required String baseUrl,
+        required String apiKey,
+        required String model,
+        required List<ChatMessage> messages,
+        List<Map<String, dynamic>>? tools,
+        CancelToken? cancelToken,
+      }) {
+        capturedMessages = messages;
+        return Stream.fromIterable([
+          {
+            'choices': [
+              {
+                'delta': {'content': 'OK'}
+              }
+            ]
+          }
+        ]);
+      };
+
+      final messages = [
+        ChatMessage(
+          id: '1',
+          conversationId: 'c1',
+          role: 'user',
+          content: 'Hi',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final stream = agentService.chatAndSearchStream(
+        baseUrl: 'http://api.com',
+        apiKey: 'key',
+        model: 'model',
+        messages: messages,
+      );
+
+      await stream.toList();
+
+      expect(capturedMessages, isNotNull);
+      expect(capturedMessages!.length, 1);
+      expect(capturedMessages!.first.role, 'user');
+    });
+
     test('Automatic Tool Calling (Search Execution & Follow-up Chat)', () async {
       final chatService = MockChatService();
       final searchService = MockSearchService();
@@ -180,7 +298,7 @@ void main() {
             }
           ]);
         } else {
-          expect(tools, isNull);
+          expect(tools, isNotNull);
           secondCallMessages = messages;
           return Stream.fromIterable([
             {
@@ -229,7 +347,8 @@ void main() {
 
       final events = await stream.toList();
 
-      expect(events, hasLength(5));
+      // Follow-up content is buffered and yielded as a single event when tools are active
+      expect(events, hasLength(4));
       expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter agent'));
       expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter agent'));
 
@@ -245,8 +364,8 @@ void main() {
       expect(execEvent.toolMessages[0].toolCallId, 'call_abc');
       expect(execEvent.toolMessages[0].content, contains('Flutter Agent'));
 
-      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Search shows'));
-      expect(events[4], isA<ContentDeltaEvent>().having((e) => e.content, 'content', ' that...'));
+      // Content is buffered into a single event when tools are active
+      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Search shows that...'));
 
       expect(completionsCallCount, 2);
       expect(secondCallMessages, hasLength(3));
@@ -272,7 +391,7 @@ void main() {
         CancelToken? cancelToken,
       }) {
         completionsCallCount++;
-        expect(tools, isNull);
+        expect(tools, isNotNull);
         chatMessages = messages;
         return Stream.fromIterable([
           {
@@ -629,6 +748,7 @@ void main() {
       final searchService = MockSearchService();
       final agentService = AgentService(chatService: chatService, searchService: searchService);
 
+      int callCount = 0;
       chatService.chatCompletionsStreamHandler = ({
         required String baseUrl,
         required String apiKey,
@@ -637,27 +757,41 @@ void main() {
         List<Map<String, dynamic>>? tools,
         CancelToken? cancelToken,
       }) {
-        return Stream.fromIterable([
-          {
-            'choices': [
-              {
-                'delta': {
-                  'tool_calls': [
-                    {
-                      'index': 0,
-                      'id': 'call_abc',
-                      'type': 'function',
-                      'function': {
-                        'name': 'web_search',
-                        'arguments': '{"query": "flutter'
+        callCount++;
+        if (callCount == 1) {
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {
+                    'tool_calls': [
+                      {
+                        'index': 0,
+                        'id': 'call_abc',
+                        'type': 'function',
+                        'function': {
+                          'name': 'web_search',
+                          'arguments': '{"query": "flutter'
+                        }
                       }
-                    }
-                  ]
+                    ]
+                  }
                 }
-              }
-            ]
-          }
-        ]);
+              ]
+            }
+          ]);
+        } else {
+          // Follow-up returns content to avoid infinite loop
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {'content': 'Follow-up response'}
+                }
+              ]
+            }
+          ]);
+        }
       };
 
       searchService.searchHandler = ({
@@ -687,10 +821,12 @@ void main() {
         messages: messages,
       ).toList();
 
-      expect(events, hasLength(3));
+      // Follow-up content is buffered as a single event when tools are active
+      expect(events, hasLength(4));
       expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', '{"query": "flutter'));
       expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', '{"query": "flutter'));
       expect(events[2], isA<ToolCallExecutedMessageEvent>());
+      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
     });
 
     test('Malformed Tool Call Arguments - Invalid Type (TypeError)', () async {
@@ -698,6 +834,7 @@ void main() {
       final searchService = MockSearchService();
       final agentService = AgentService(chatService: chatService, searchService: searchService);
 
+      int callCount = 0;
       chatService.chatCompletionsStreamHandler = ({
         required String baseUrl,
         required String apiKey,
@@ -706,27 +843,40 @@ void main() {
         List<Map<String, dynamic>>? tools,
         CancelToken? cancelToken,
       }) {
-        return Stream.fromIterable([
-          {
-            'choices': [
-              {
-                'delta': {
-                  'tool_calls': [
-                    {
-                      'index': 0,
-                      'id': 'call_abc',
-                      'type': 'function',
-                      'function': {
-                        'name': 'web_search',
-                        'arguments': '{"query": 123}'
+        callCount++;
+        if (callCount == 1) {
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {
+                    'tool_calls': [
+                      {
+                        'index': 0,
+                        'id': 'call_abc',
+                        'type': 'function',
+                        'function': {
+                          'name': 'web_search',
+                          'arguments': '{"query": 123}'
+                        }
                       }
-                    }
-                  ]
+                    ]
+                  }
                 }
-              }
-            ]
-          }
-        ]);
+              ]
+            }
+          ]);
+        } else {
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {'content': 'Follow-up response'}
+                }
+              ]
+            }
+          ]);
+        }
       };
 
       searchService.searchHandler = ({
@@ -756,8 +906,9 @@ void main() {
         messages: messages,
       ).toList();
 
-      expect(events, hasLength(3));
+      expect(events, hasLength(4));
       expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', '{"query": 123}'));
+      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
     });
 
     test('Malformed Tool Call Arguments - Missing Query Property', () async {
@@ -765,6 +916,7 @@ void main() {
       final searchService = MockSearchService();
       final agentService = AgentService(chatService: chatService, searchService: searchService);
 
+      int callCount = 0;
       chatService.chatCompletionsStreamHandler = ({
         required String baseUrl,
         required String apiKey,
@@ -773,27 +925,40 @@ void main() {
         List<Map<String, dynamic>>? tools,
         CancelToken? cancelToken,
       }) {
-        return Stream.fromIterable([
-          {
-            'choices': [
-              {
-                'delta': {
-                  'tool_calls': [
-                    {
-                      'index': 0,
-                      'id': 'call_abc',
-                      'type': 'function',
-                      'function': {
-                        'name': 'web_search',
-                        'arguments': '{}'
+        callCount++;
+        if (callCount == 1) {
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {
+                    'tool_calls': [
+                      {
+                        'index': 0,
+                        'id': 'call_abc',
+                        'type': 'function',
+                        'function': {
+                          'name': 'web_search',
+                          'arguments': '{}'
+                        }
                       }
-                    }
-                  ]
+                    ]
+                  }
                 }
-              }
-            ]
-          }
-        ]);
+              ]
+            }
+          ]);
+        } else {
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {'content': 'Follow-up response'}
+                }
+              ]
+            }
+          ]);
+        }
       };
 
       searchService.searchHandler = ({
@@ -823,8 +988,9 @@ void main() {
         messages: messages,
       ).toList();
 
-      expect(events, hasLength(3));
+      expect(events, hasLength(4));
       expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', ''));
+      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
     });
 
     test('Immediate Cancellation - Before Listening (Manual)', () async {
@@ -1410,6 +1576,7 @@ void main() {
       final searchService = MockSearchService();
       final agentService = AgentService(chatService: chatService, searchService: searchService);
 
+      int callCount = 0;
       chatService.chatCompletionsStreamHandler = ({
         required String baseUrl,
         required String apiKey,
@@ -1418,28 +1585,41 @@ void main() {
         List<Map<String, dynamic>>? tools,
         CancelToken? cancelToken,
       }) {
-        // First call: tool calls triggered
-        return Stream.fromIterable([
-          {
-            'choices': [
-              {
-                'delta': {
-                  'tool_calls': [
-                    {
-                      'index': 0,
-                      'id': 'call_abc',
-                      'type': 'function',
-                      'function': {
-                        'name': 'web_search',
-                        'arguments': '{"query":"flutter"}'
+        callCount++;
+        if (callCount == 1) {
+          // First call: tool calls triggered
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {
+                    'tool_calls': [
+                      {
+                        'index': 0,
+                        'id': 'call_abc',
+                        'type': 'function',
+                        'function': {
+                          'name': 'web_search',
+                          'arguments': '{"query":"flutter"}'
+                        }
                       }
-                    }
-                  ]
+                    ]
+                  }
                 }
-              }
-            ]
-          }
-        ]);
+              ]
+            }
+          ]);
+        } else {
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {'content': 'Follow-up response'}
+                }
+              ]
+            }
+          ]);
+        }
       };
 
       searchService.searchHandler = ({
@@ -1471,13 +1651,494 @@ void main() {
         messages: messages,
       ).toList();
 
-      expect(events, hasLength(3));
+      expect(events, hasLength(4));
       expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter'));
       expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter'));
 
       final execEvent = events[2] as ToolCallExecutedMessageEvent;
       // Tool message content should contain the search error
       expect(execEvent.toolMessages[0].content, '搜索失败：SearXNG 拒绝了 JSON 接口（HTTP 403）。');
+      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
+    });
+
+    test('Multi-round tool calling (standard tool_calls in follow-up)', () async {
+      final chatService = MockChatService();
+      final searchService = MockSearchService();
+      final agentService = AgentService(chatService: chatService, searchService: searchService);
+
+      int completionsCallCount = 0;
+      int searchCallCount = 0;
+
+      chatService.chatCompletionsStreamHandler = ({
+        required String baseUrl,
+        required String apiKey,
+        required String model,
+        required List<ChatMessage> messages,
+        List<Map<String, dynamic>>? tools,
+        CancelToken? cancelToken,
+      }) {
+        completionsCallCount++;
+        // Every round has tools passed
+        expect(tools, isNotNull);
+        if (completionsCallCount <= 2) {
+          // Round 1 and 2: return tool_calls
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {
+                    'tool_calls': [
+                      {
+                        'index': 0,
+                        'id': 'call_$completionsCallCount',
+                        'type': 'function',
+                        'function': {
+                          'name': 'web_search',
+                          'arguments': '{"query": "round $completionsCallCount search"}'
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]);
+        } else {
+          // Round 3: return final content
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {'content': 'Final answer after two searches.'}
+                }
+              ]
+            }
+          ]);
+        }
+      };
+
+      searchService.searchHandler = ({
+        required String query,
+        String? searxngUrl,
+        required String searchBackend,
+      }) async {
+        searchCallCount++;
+        return [SearchResult(title: 'Result $searchCallCount', url: 'https://example.com', content: 'Content for $query')];
+      };
+
+      final messages = [
+        ChatMessage(
+          id: '1',
+          conversationId: 'c1',
+          role: 'user',
+          content: 'Search multiple times',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final events = await agentService.chatAndSearchStream(
+        baseUrl: 'http://api.com',
+        apiKey: 'key',
+        model: 'model',
+        messages: messages,
+      ).toList();
+
+      // Expect: ToolCallStarted(1), ToolCallCompleted(1), ToolCallExecutedMessage(1),
+      //         ToolCallStarted(2), ToolCallCompleted(2), ToolCallExecutedMessage(2),
+      //         ContentDelta (final answer)
+      // = 7 events
+      expect(events, hasLength(7));
+
+      // First round
+      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'round 1 search'));
+      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'round 1 search'));
+      expect(events[2], isA<ToolCallExecutedMessageEvent>());
+      final exec1 = events[2] as ToolCallExecutedMessageEvent;
+      expect(exec1.assistantMessage.toolCalls, hasLength(1));
+      expect(exec1.assistantMessage.toolCalls![0].id, 'call_1');
+
+      // Second round
+      expect(events[3], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'round 2 search'));
+      expect(events[4], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'round 2 search'));
+      expect(events[5], isA<ToolCallExecutedMessageEvent>());
+      final exec2 = events[5] as ToolCallExecutedMessageEvent;
+      expect(exec2.assistantMessage.toolCalls, hasLength(1));
+      expect(exec2.assistantMessage.toolCalls![0].id, 'call_2');
+
+      // Final content
+      expect(events[6], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Final answer after two searches.'));
+
+      expect(completionsCallCount, 3);
+      expect(searchCallCount, 2);
+    });
+
+    test('Pseudo-XML tool_call fallback in follow-up', () async {
+      final chatService = MockChatService();
+      final searchService = MockSearchService();
+      final agentService = AgentService(chatService: chatService, searchService: searchService);
+
+      int completionsCallCount = 0;
+
+      chatService.chatCompletionsStreamHandler = ({
+        required String baseUrl,
+        required String apiKey,
+        required String model,
+        required List<ChatMessage> messages,
+        List<Map<String, dynamic>>? tools,
+        CancelToken? cancelToken,
+      }) {
+        completionsCallCount++;
+        if (completionsCallCount == 1) {
+          // First call: auto-tool with proper tool_calls
+          expect(tools, isNotNull);
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {
+                    'tool_calls': [
+                      {
+                        'index': 0,
+                        'id': 'call_first',
+                        'type': 'function',
+                        'function': {
+                          'name': 'web_search',
+                          'arguments': '{"query": "first search"}'
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]);
+        } else if (completionsCallCount == 2) {
+          // Second call: model outputs pseudo-XML instead of proper tool_calls (with tools still passed)
+          expect(tools, isNotNull);
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {
+                    'content': '<tool_call>\n<function=web_search>\n<parameter=query>second search from XML</parameter>\n</function>\n</tool_call>'
+                  }
+                }
+              ]
+            }
+          ]);
+        } else {
+          // Third call: final content
+          expect(tools, isNotNull);
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {'content': 'Final answer after pseudo-XML fallback.'}
+                }
+              ]
+            }
+          ]);
+        }
+      };
+
+      searchService.searchHandler = ({
+        required String query,
+        String? searxngUrl,
+        required String searchBackend,
+      }) async {
+        return [SearchResult(title: 'Search Result', url: 'https://example.com', content: 'Content for $query')];
+      };
+
+      final messages = [
+        ChatMessage(
+          id: '1',
+          conversationId: 'c1',
+          role: 'user',
+          content: 'Search something',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final events = await agentService.chatAndSearchStream(
+        baseUrl: 'http://api.com',
+        apiKey: 'key',
+        model: 'model',
+        messages: messages,
+      ).toList();
+
+      // Events (pseudo-XML content is NOT yielded as ContentDeltaEvent because tools are active):
+      // 0: ToolCallStarted (first search)
+      // 1: ToolCallCompleted (first search)
+      // 2: ToolCallExecutedMessage (first)
+      // 3: ToolCallStarted (pseudo-XML search)
+      // 4: ToolCallCompleted (pseudo-XML search)
+      // 5: ToolCallExecutedMessage (pseudo-XML)
+      // 6: ContentDelta (final answer)
+      expect(events, hasLength(7));
+
+      // First round: standard tool_calls
+      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'first search'));
+      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'first search'));
+      expect(events[2], isA<ToolCallExecutedMessageEvent>());
+      final exec1 = events[2] as ToolCallExecutedMessageEvent;
+      expect(exec1.assistantMessage.toolCalls![0].id, 'call_first');
+
+      // Second round: pseudo-XML detected and executed (no ContentDeltaEvent for the XML)
+      expect(events[3], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'second search from XML'));
+      expect(events[4], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'second search from XML'));
+      expect(events[5], isA<ToolCallExecutedMessageEvent>());
+      final exec2 = events[5] as ToolCallExecutedMessageEvent;
+      // The assistant message should have cleaned content (empty since only XML was output)
+      expect(exec2.assistantMessage.content, isEmpty);
+      // Should have a pseudo-XML generated tool call
+      expect(exec2.assistantMessage.toolCalls, hasLength(1));
+      expect(exec2.assistantMessage.toolCalls![0].functionName, 'web_search');
+      final parsedArgs = json.decode(exec2.assistantMessage.toolCalls![0].arguments) as Map<String, dynamic>;
+      expect(parsedArgs['query'], 'second search from XML');
+      expect(exec2.assistantMessage.toolCalls![0].id, startsWith('pseudo_'));
+
+      // Third round: final content
+      expect(events[6], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Final answer after pseudo-XML fallback.'));
+
+      expect(completionsCallCount, 3);
+    });
+
+    test('Pseudo-XML tool_call with multiple blocks and mixed content', () async {
+      final chatService = MockChatService();
+      final searchService = MockSearchService();
+      final agentService = AgentService(chatService: chatService, searchService: searchService);
+
+      int completionsCallCount = 0;
+
+      chatService.chatCompletionsStreamHandler = ({
+        required String baseUrl,
+        required String apiKey,
+        required String model,
+        required List<ChatMessage> messages,
+        List<Map<String, dynamic>>? tools,
+        CancelToken? cancelToken,
+      }) {
+        completionsCallCount++;
+        if (completionsCallCount == 1) {
+          // First call: auto-tool
+          expect(tools, isNotNull);
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {
+                    'tool_calls': [
+                      {
+                        'index': 0,
+                        'id': 'call_first',
+                        'type': 'function',
+                        'function': {
+                          'name': 'web_search',
+                          'arguments': '{"query": "initial query"}'
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]);
+        } else if (completionsCallCount == 2) {
+          // Second call: mixed content with pseudo-XML
+          expect(tools, isNotNull);
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {
+                    'content': 'Let me search for that. <tool_call>\n<function=web_search>\n<parameter=query>specific topic</parameter>\n</function>\n</tool_call>'
+                  }
+                }
+              ]
+            }
+          ]);
+        } else {
+          // Third call: final answer
+          expect(tools, isNotNull);
+          return Stream.fromIterable([
+            {
+              'choices': [
+                {
+                  'delta': {'content': 'Here is the answer about specific topic.'}
+                }
+              ]
+            }
+          ]);
+        }
+      };
+
+      searchService.searchHandler = ({
+        required String query,
+        String? searxngUrl,
+        required String searchBackend,
+      }) async {
+        return [SearchResult(title: 'Result', url: 'https://example.com', content: 'Details for $query')];
+      };
+
+      final messages = [
+        ChatMessage(
+          id: '1',
+          conversationId: 'c1',
+          role: 'user',
+          content: 'Find info',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final events = await agentService.chatAndSearchStream(
+        baseUrl: 'http://api.com',
+        apiKey: 'key',
+        model: 'model',
+        messages: messages,
+      ).toList();
+
+      expect(events, hasLength(7));
+
+      // First round
+      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'initial query'));
+      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'initial query'));
+      expect(events[2], isA<ToolCallExecutedMessageEvent>());
+
+      // Second round: pseudo-XML with mixed content (no ContentDeltaEvent for the XML because tools are active)
+      expect(events[3], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'specific topic'));
+      expect(events[4], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'specific topic'));
+      expect(events[5], isA<ToolCallExecutedMessageEvent>());
+      final exec2 = events[5] as ToolCallExecutedMessageEvent;
+      // Assistant content should have the XML stripped, leaving only "Let me search for that."
+      expect(exec2.assistantMessage.content, 'Let me search for that.');
+      expect(exec2.assistantMessage.toolCalls, hasLength(1));
+      expect(exec2.assistantMessage.toolCalls![0].functionName, 'web_search');
+
+      // Third round: final content
+      expect(events[6], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Here is the answer about specific topic.'));
+      expect(completionsCallCount, 3);
+    });
+
+    test('Max tool rounds (5) prevents infinite loop', () async {
+      final chatService = MockChatService();
+      final searchService = MockSearchService();
+      final agentService = AgentService(chatService: chatService, searchService: searchService);
+
+      int completionsCallCount = 0;
+
+      chatService.chatCompletionsStreamHandler = ({
+        required String baseUrl,
+        required String apiKey,
+        required String model,
+        required List<ChatMessage> messages,
+        List<Map<String, dynamic>>? tools,
+        CancelToken? cancelToken,
+      }) async* {
+        completionsCallCount++;
+        // Always return tool_calls to test the max rounds limit
+        yield {
+          'choices': [
+            {
+              'delta': {
+                'tool_calls': [
+                  {
+                    'index': 0,
+                    'id': 'call_$completionsCallCount',
+                    'type': 'function',
+                    'function': {
+                      'name': 'web_search',
+                      'arguments': '{"query": "search $completionsCallCount"}'
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        };
+      };
+
+      searchService.searchHandler = ({
+        required String query,
+        String? searxngUrl,
+        required String searchBackend,
+      }) async {
+        return [SearchResult(title: 'Result', url: 'https://example.com', content: 'Data for $query')];
+      };
+
+      final messages = [
+        ChatMessage(
+          id: '1',
+          conversationId: 'c1',
+          role: 'user',
+          content: 'Search repeatedly',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final events = await agentService.chatAndSearchStream(
+        baseUrl: 'http://api.com',
+        apiKey: 'key',
+        model: 'model',
+        messages: messages,
+      ).toList();
+
+      // Max 5 total tool rounds: 1 from chatAndSearchStream + 4 from _streamCompletionsLoop
+      // Each round yields 3 events (ToolCallStarted, ToolCallCompleted, ToolCallExecutedMessage)
+      // Total = 5 * 3 = 15 events
+      expect(events, hasLength(15));
+
+      // Check that 5 rounds of tool calls happened
+      final toolCallIds = <String>{};
+      for (final event in events) {
+        if (event is ToolCallExecutedMessageEvent) {
+          for (final tc in event.assistantMessage.toolCalls ?? []) {
+            toolCallIds.add(tc.id);
+          }
+        }
+      }
+      expect(toolCallIds, hasLength(5));
+
+      // Total completions calls: 5 rounds = 5 API calls
+      // (the 6th call is never made because toolRound >= 4 guard returns early)
+      expect(completionsCallCount, 5);
+    });
+
+    test('parsePseudoXmlToolCalls unit test', () async {
+      // Test the static parsing method directly
+      // Single tool_call
+      final singleResult = AgentService.parsePseudoXmlToolCalls(
+        '<tool_call>\n<function=web_search>\n<parameter=query>今日新闻</parameter>\n</function>\n</tool_call>'
+      );
+      expect(singleResult, hasLength(1));
+      expect(singleResult[0]['name'], 'web_search');
+      expect((singleResult[0]['params'] as Map)['query'], '今日新闻');
+
+      // Multiple tool_calls
+      final multiResult = AgentService.parsePseudoXmlToolCalls(
+        '<tool_call>\n<function=web_search>\n<parameter=query>query1</parameter>\n</function>\n</tool_call>\n'
+        '<tool_call>\n<function=web_search>\n<parameter=query>query2</parameter>\n</function>\n</tool_call>'
+      );
+      expect(multiResult, hasLength(2));
+      expect(multiResult[0]['name'], 'web_search');
+      expect((multiResult[0]['params'] as Map)['query'], 'query1');
+      expect(multiResult[1]['name'], 'web_search');
+      expect((multiResult[1]['params'] as Map)['query'], 'query2');
+
+      // No match
+      final noResult = AgentService.parsePseudoXmlToolCalls('Normal text without XML');
+      expect(noResult, isEmpty);
+
+      // stripPseudoXmlToolCalls
+      final stripped = AgentService.stripPseudoXmlToolCalls(
+        'Some text <tool_call>\n<function=web_search>\n<parameter=query>test</parameter>\n</function>\n</tool_call> more text'
+      );
+      expect(stripped, 'Some text more text');
+
+      // Empty after stripping
+      final emptyStripped = AgentService.stripPseudoXmlToolCalls(
+        '<tool_call>\n<function=web_search>\n<parameter=query>test</parameter>\n</function>\n</tool_call>'
+      );
+      expect(emptyStripped, isEmpty);
     });
   });
 }

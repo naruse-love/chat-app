@@ -90,19 +90,66 @@ class AgentService {
     },
   };
 
+  /// Regex for matching pseudo-XML tool_call blocks like:
+  /// <tool_call>\n<function=web_search>\n<parameter=query>...</parameter>\n</function>\n</tool_call>
+  static final RegExp _pseudoXmlToolCallRegex = RegExp(
+    r'<tool_call>\s*<function=(\w+)>\s*(?:<parameter=(\w+)>([\s\S]*?)</parameter>\s*)?</function>\s*</tool_call>',
+    multiLine: true,
+  );
+
+  /// Extracts pseudo-XML tool calls from [content].
+  /// Returns a list of maps with 'name' (String) and 'params' (Map<String, String>).
+  static List<Map<String, dynamic>> parsePseudoXmlToolCalls(String content) {
+    final results = <Map<String, dynamic>>[];
+    for (final match in _pseudoXmlToolCallRegex.allMatches(content)) {
+      final name = match.group(1) ?? '';
+      final paramName = match.group(2) ?? '';
+      final paramValue = match.group(3)?.trim() ?? '';
+      results.add({
+        'name': name,
+        'params': {paramName: paramValue},
+      });
+    }
+    return results;
+  }
+
+  /// Removes pseudo-XML tool_call blocks from [content].
+  static String stripPseudoXmlToolCalls(String content) {
+    return content.replaceAll(_pseudoXmlToolCallRegex, '').replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
   /// Main entry point coordinating completion streaming, tool execution, and manual trigger.
   Stream<AgentStreamEvent> chatAndSearchStream({
     required String baseUrl,
     required String apiKey,
     required String model,
     required List<ChatMessage> messages,
+    String? systemPrompt,
     String? searxngUrl,
     String searchBackend = 'searxng',
     CancelToken? cancelToken,
   }) async* {
-    if (messages.isEmpty) return;
+    // Inject system prompt if provided (prepend after removing any existing system messages)
+    List<ChatMessage> effectiveMessages;
+    if (systemPrompt != null && systemPrompt.trim().isNotEmpty) {
+      final conversationId = messages.isNotEmpty ? messages.first.conversationId : '';
+      effectiveMessages = [
+        ChatMessage(
+          id: _uuid.v4(),
+          conversationId: conversationId,
+          role: 'system',
+          content: systemPrompt,
+          timestamp: DateTime.now(),
+        ),
+        ...messages.where((m) => m.role != 'system'),
+      ];
+    } else {
+      effectiveMessages = messages;
+    }
 
-    final lastMessage = messages.last;
+    if (effectiveMessages.isEmpty) return;
+
+    final lastMessage = effectiveMessages.last;
     final isManualSearch = lastMessage.role == 'user' &&
         lastMessage.content.trim().startsWith('@search');
 
@@ -170,7 +217,7 @@ class AgentService {
       yield ToolCallExecutedMessageEvent(assistantMessage, [toolMessage]);
 
       final nextMessages = [
-        ...messages.sublist(0, messages.length - 1),
+        ...effectiveMessages.sublist(0, effectiveMessages.length - 1),
         cleanUserMessage,
         assistantMessage,
         toolMessage,
@@ -181,6 +228,9 @@ class AgentService {
         apiKey: apiKey,
         model: model,
         messages: nextMessages,
+        tools: [webSearchTool],
+        searxngUrl: searxngUrl,
+        searchBackend: searchBackend,
         cancelToken: cancelToken,
       );
     } else {
@@ -195,7 +245,7 @@ class AgentService {
         baseUrl: baseUrl,
         apiKey: apiKey,
         model: model,
-        messages: messages,
+        messages: effectiveMessages,
         tools: [webSearchTool],
         cancelToken: cancelToken,
       )) {
@@ -295,7 +345,7 @@ class AgentService {
               ? '搜索失败：$searchError'
               : _searchService.formatSearchResultsForContext(results);
 
-          final conversationId = messages.last.conversationId;
+          final conversationId = effectiveMessages.last.conversationId;
 
           toolMessages.add(ChatMessage(
             id: _uuid.v4(),
@@ -307,7 +357,7 @@ class AgentService {
           ));
         }
 
-        final conversationId = messages.last.conversationId;
+        final conversationId = effectiveMessages.last.conversationId;
 
         final assistantMessage = ChatMessage(
           id: _uuid.v4(),
@@ -329,7 +379,7 @@ class AgentService {
         yield ToolCallExecutedMessageEvent(assistantMessage, toolMessages);
 
         final nextMessages = [
-          ...messages,
+          ...effectiveMessages,
           assistantMessage,
           ...toolMessages,
         ];
@@ -339,19 +389,59 @@ class AgentService {
           apiKey: apiKey,
           model: model,
           messages: nextMessages,
+          tools: [webSearchTool],
+          searxngUrl: searxngUrl,
+          searchBackend: searchBackend,
           cancelToken: cancelToken,
         );
       }
     }
   }
 
+  /// Follow-up streaming with multi-turn tool calling support.
+  /// Accumulates tool_calls, executes searches, and loops up to 5 rounds.
+  /// Falls back to pseudo-XML parsing when the model emits XML instead of proper tool_calls.
   Stream<AgentStreamEvent> _streamCompletions({
     required String baseUrl,
     required String apiKey,
     required String model,
     required List<ChatMessage> messages,
+    List<Map<String, dynamic>>? tools,
+    String? searxngUrl,
+    String searchBackend = 'searxng',
     CancelToken? cancelToken,
   }) async* {
+    yield* _streamCompletionsLoop(
+      baseUrl: baseUrl,
+      apiKey: apiKey,
+      model: model,
+      messages: messages,
+      tools: tools,
+      searxngUrl: searxngUrl,
+      searchBackend: searchBackend,
+      cancelToken: cancelToken,
+      toolRound: 0,
+    );
+  }
+
+  /// Internal recursive loop that handles one round of streaming + tool execution.
+  Stream<AgentStreamEvent> _streamCompletionsLoop({
+    required String baseUrl,
+    required String apiKey,
+    required String model,
+    required List<ChatMessage> messages,
+    List<Map<String, dynamic>>? tools,
+    String? searxngUrl,
+    String searchBackend = 'searxng',
+    CancelToken? cancelToken,
+    int toolRound = 0,
+  }) async* {
+    // Max 5 total tool rounds: 1 from chatAndSearchStream + 4 follow-up rounds
+    if (toolRound >= 4) return;
+
+    final accumulatedToolCalls = <int, _ToolCallAccumulator>{};
+    final contentBuffer = StringBuffer();
+    final reasoningBuffer = StringBuffer();
     int? promptTokens;
     int? completionTokens;
 
@@ -360,6 +450,7 @@ class AgentService {
       apiKey: apiKey,
       model: model,
       messages: messages,
+      tools: tools,
       cancelToken: cancelToken,
     )) {
       // Capture usage from chunks where choices is empty
@@ -375,20 +466,241 @@ class AgentService {
         if (delta != null) {
           final reasoning = delta['reasoning_content'] as String? ?? delta['reasoning'] as String?;
           if (reasoning != null && reasoning.isNotEmpty) {
+            reasoningBuffer.write(reasoning);
             yield ReasoningDeltaEvent(reasoning);
           }
 
           final content = delta['content'] as String?;
           if (content != null && content.isNotEmpty) {
-            yield ContentDeltaEvent(content);
+            contentBuffer.write(content);
+            // Delay yielding content if tools are configured (might be pseudo-XML to strip)
+            if (tools == null || tools.isEmpty) {
+              yield ContentDeltaEvent(content);
+            }
+          }
+
+          final toolCalls = delta['tool_calls'] as List<dynamic>?;
+          if (toolCalls != null) {
+            for (final tc in toolCalls) {
+              if (tc is Map<String, dynamic>) {
+                final index = tc['index'] as int? ?? 0;
+                final acc = accumulatedToolCalls.putIfAbsent(index, () => _ToolCallAccumulator());
+
+                final id = tc['id'] as String?;
+                if (id != null) acc.id = id;
+
+                final type = tc['type'] as String?;
+                if (type != null) acc.type = type;
+
+                final functionObj = tc['function'];
+                if (functionObj is Map<String, dynamic>) {
+                  final name = functionObj['name'] as String?;
+                  if (name != null) acc.name = name;
+
+                  final arguments = functionObj['arguments'] as String?;
+                  if (arguments != null) acc.argumentsBuffer.write(arguments);
+                }
+              }
+            }
           }
         }
       }
     }
 
-    // Yield usage info if available
-    if (promptTokens != null && completionTokens != null) {
+    // Yield usage from this API call if no tool calls were triggered
+    if (accumulatedToolCalls.isEmpty &&
+        promptTokens != null &&
+        completionTokens != null) {
       yield UsageEvent(promptTokens, completionTokens);
+    }
+
+    if (accumulatedToolCalls.isNotEmpty) {
+      // --- Standard tool_calls detected: execute search and loop ---
+      final conversationId = messages.last.conversationId;
+      final toolMessages = <ChatMessage>[];
+
+      for (final entry in accumulatedToolCalls.values) {
+        String query = '';
+        try {
+          final parsedArgs = json.decode(entry.argumentsBuffer.toString()) as Map<String, dynamic>;
+          query = parsedArgs['query'] as String? ?? '';
+        } catch (_) {
+          query = entry.argumentsBuffer.toString();
+        }
+
+        _checkCancellation(cancelToken);
+
+        yield ToolCallStartedEvent(query);
+
+        List<SearchResult> results;
+        String? searchError;
+        try {
+          results = await _searchService.search(
+            query: query,
+            searxngUrl: searxngUrl,
+            searchBackend: searchBackend,
+          );
+        } on SearchException catch (e) {
+          results = [];
+          searchError = e.message;
+          developer.log('Auto search (follow-up) failed: ${e.message}', name: 'AgentService');
+        }
+
+        _checkCancellation(cancelToken);
+
+        yield ToolCallCompletedEvent(query, results);
+
+        final formattedResults = searchError != null
+            ? '搜索失败：$searchError'
+            : _searchService.formatSearchResultsForContext(results);
+
+        toolMessages.add(ChatMessage(
+          id: _uuid.v4(),
+          conversationId: conversationId,
+          role: 'tool',
+          toolCallId: entry.id,
+          content: formattedResults,
+          timestamp: DateTime.now(),
+        ));
+      }
+
+      final assistantMessage = ChatMessage(
+        id: _uuid.v4(),
+        conversationId: conversationId,
+        role: 'assistant',
+        content: contentBuffer.toString(),
+        reasoningContent: reasoningBuffer.isNotEmpty ? reasoningBuffer.toString() : null,
+        toolCalls: accumulatedToolCalls.values.map((acc) => ToolCall(
+          id: acc.id,
+          type: acc.type,
+          functionName: acc.name,
+          arguments: acc.argumentsBuffer.toString(),
+        )).toList(),
+        timestamp: DateTime.now(),
+        promptTokens: promptTokens,
+        completionTokens: completionTokens,
+      );
+
+      yield ToolCallExecutedMessageEvent(assistantMessage, toolMessages);
+
+      final nextMessages = [
+        ...messages,
+        assistantMessage,
+        ...toolMessages,
+      ];
+
+      yield* _streamCompletionsLoop(
+        baseUrl: baseUrl,
+        apiKey: apiKey,
+        model: model,
+        messages: nextMessages,
+        tools: tools,
+        searxngUrl: searxngUrl,
+        searchBackend: searchBackend,
+        cancelToken: cancelToken,
+        toolRound: toolRound + 1,
+      );
+    } else {
+      // --- No standard tool_calls; check for pseudo-XML fallback ---
+      final fullContent = contentBuffer.toString();
+      final pseudoCalls = parsePseudoXmlToolCalls(fullContent);
+      if (pseudoCalls.isNotEmpty && tools != null && tools.isNotEmpty) {
+        final cleanedContent = stripPseudoXmlToolCalls(fullContent);
+        final conversationId = messages.last.conversationId;
+        final toolMessages = <ChatMessage>[];
+        final toolCallList = <ToolCall>[];
+
+        for (final call in pseudoCalls) {
+          final name = call['name'] as String? ?? '';
+          final params = call['params'] as Map<String, String>? ?? {};
+          final query = params['query'] ?? '';
+
+          if (name == 'web_search' && query.isNotEmpty) {
+            _checkCancellation(cancelToken);
+
+            yield ToolCallStartedEvent(query);
+
+            List<SearchResult> results;
+            String? searchError;
+            try {
+              results = await _searchService.search(
+                query: query,
+                searxngUrl: searxngUrl,
+                searchBackend: searchBackend,
+              );
+            } on SearchException catch (e) {
+              results = [];
+              searchError = e.message;
+              developer.log('Pseudo-XML search failed: ${e.message}', name: 'AgentService');
+            }
+
+            _checkCancellation(cancelToken);
+
+            yield ToolCallCompletedEvent(query, results);
+
+            final formattedResults = searchError != null
+                ? '搜索失败：$searchError'
+                : _searchService.formatSearchResultsForContext(results);
+
+            final toolCallId = 'pseudo_${_uuid.v4()}';
+            toolCallList.add(ToolCall(
+              id: toolCallId,
+              type: 'function',
+              functionName: name,
+              arguments: json.encode(params),
+            ));
+
+            toolMessages.add(ChatMessage(
+              id: _uuid.v4(),
+              conversationId: conversationId,
+              role: 'tool',
+              toolCallId: toolCallId,
+              content: formattedResults,
+              timestamp: DateTime.now(),
+            ));
+          }
+        }
+
+        if (toolMessages.isNotEmpty) {
+          final assistantMessage = ChatMessage(
+            id: _uuid.v4(),
+            conversationId: conversationId,
+            role: 'assistant',
+            content: cleanedContent,
+            reasoningContent: reasoningBuffer.isNotEmpty ? reasoningBuffer.toString() : null,
+            toolCalls: toolCallList,
+            timestamp: DateTime.now(),
+            promptTokens: promptTokens,
+            completionTokens: completionTokens,
+          );
+
+          yield ToolCallExecutedMessageEvent(assistantMessage, toolMessages);
+
+          final nextMessages = [
+            ...messages,
+            assistantMessage,
+            ...toolMessages,
+          ];
+
+          yield* _streamCompletionsLoop(
+            baseUrl: baseUrl,
+            apiKey: apiKey,
+            model: model,
+            messages: nextMessages,
+            tools: tools,
+            searxngUrl: searxngUrl,
+            searchBackend: searchBackend,
+            cancelToken: cancelToken,
+            toolRound: toolRound + 1,
+          );
+          return; // Prevent fall-through to buffered content yield
+        }
+        // If no valid pseudo-XML calls, fall through
+      }
+      // No pseudo-XML; yield buffered content if it was delayed by tool-aware streaming
+      if (tools != null && tools.isNotEmpty && fullContent.isNotEmpty) {
+        yield ContentDeltaEvent(fullContent);
+      }
     }
   }
 

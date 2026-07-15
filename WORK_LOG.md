@@ -1,3 +1,32 @@
+## 2026-07-15 后续修复记录
+
+### 修复内容
+1. **多轮 tool calling 闭环**：当模型在第二轮 `completion` 之后再次返回 `tool_calls`（例如搜索 → 总结 → 追问）时，把 `tools` 一并回传，确保函数定义在后续请求中持续可见；针对部分模型把工具调用泄漏到 `content` 文本（伪 `<tool_call>...</tool_call>` / `<tool_use>...`）的情况，新增兜底解析器从消息正文中抽取工具调用并执行搜索，搜索结果再以 `tool` role 注入，引导模型给出最终文本。
+2. **回退/编辑崩溃加固**：`MarkdownBody` 在流式与非流式阶段统一保持 `selectable: false`，规避 `RenderEditable` 在快速 diff 时的索引越界；`showDialog` 返回后 `Future.delayed(50ms)` 再触发 `dispose()` 与 `editAndResendMessage()`，让 dialog 关闭动画跑完；`ChatProvider` 新增 `mounted` 守卫，所有在异步任务尾部写状态的入口在调用前检查 `if (!mounted) return;`，避免 dispose 后 `notifyListeners` 触发重建。
+3. **思考内容可读与可复制**：`ChatBubble` 的思考/折叠区改为 `SelectableText.rich` 渲染，用户可长按选中并复制；旁加一个独立"复制"按钮，直接把推理内容写入剪贴板，无需先展开。
+4. **系统提示词正式接入**：主界面 `HomeScreen` 顶部新增"系统提示词"入口，`SettingsProvider` 增加 `systemPrompt` 字段并持久化到 `shared_preferences`（键 `system_prompt`）；`ChatProvider.sendMessage` / `editAndResendMessage` / `regenerateLastResponse` 在拼装 `messages` 时真正把系统提示以 `role: 'system'` 注入到第一条（与可空 `systemPrompt` 拼接后回退到模型默认 `system`），而非仅停留在 UI 占位。
+
+### 变更文件
+- `lib/services/agent_service.dart`：第二轮及之后 `completion` 透传 `tools`；增加伪 XML `<tool_call>` 兜底解析分支，命中后转写为 `tool` role 消息再回灌。
+- `lib/services/chat_service.dart`：请求体始终包含 `tools` 字段；`system` 消息合并策略改为优先使用 `settings.systemPrompt`。
+- `lib/providers/chat_provider.dart`：所有异步写状态路径增加 `if (!mounted) return;` 守卫；`editAndResendMessage` / `regenerateLastResponse` 注入系统提示词。
+- `lib/providers/settings_provider.dart`：新增 `systemPrompt` 字段、`updateSystemPrompt()`、持久化键 `system_prompt`。
+- `lib/widgets/chat_bubble.dart`：`MarkdownBody` 统一 `selectable: false`；思考区改用 `SelectableText.rich` + 独立"复制"按钮。
+- `lib/screens/home_screen.dart`：新增系统提示词入口（点击弹 dialog 编辑并保存）；编辑 dialog 关闭后 `Future.delayed(50ms)` 再走 `dispose` / `editAndResendMessage`。
+
+### 状态
+- **测试结果**：`flutter test` 全部 127 个测试用例通过。
+- **静态分析**：`flutter analyze` 0 issues。
+
+### 技术决策
+- **多轮 tool calling 持续可见**：OpenAI/兼容协议下，工具在某一轮被消费后，若同一会话需要再次调用，函数定义必须随之后的 `messages` 一起回传，否则模型无法重新"看见"可用工具。我们在 `AgentService` 中按"最近一次 `assistant` 消息出现 `tool_calls` 即继续带 `tools`"的策略保证这点。
+- **伪 XML 兜底**：少数模型不按 OpenAI 规范输出结构化 `tool_calls`，而是把整段调用放进 `content`。我们采取"先按规范解析，失败再在 `content` 内做有限语法匹配（`<tool_call>...</tool_call>` 与 `<tool_use>...`）"的兜底策略，并限制最大匹配深度，避免误伤普通文本；解析成功后立刻执行工具并以 `tool` role 回灌，模型将基于工具结果产出最终回复。
+- **`selectable: false` 长期保持**：仅在流式阶段关闭选择会引入"加载完成 → 切到可选 → 重建 → 崩溃"的二次路径；统一保持不可选更安全，可读性由思考区的 `SelectableText.rich` 单独承担。
+- **`mounted` 守卫 + 50ms 缓冲**：`Future.delayed(50ms)` 跨过 dialog 关闭动画的一帧，叠加 `mounted` 守卫能同时规避"动画期 dispose"和"dispose 后 notify"两类问题，是 Flutter 社区推荐组合。
+- **系统提示词注入位置**：将系统提示作为 `messages[0]`（`role: 'system'`）注入符合 OpenAI/兼容协议；与模型自带 `system` 字段合并时优先用户自定义，避免"用户写一半被覆盖"的体验割裂。
+
+---
+
 ## 2026-07-15 修复记录
 
 ### 修复内容

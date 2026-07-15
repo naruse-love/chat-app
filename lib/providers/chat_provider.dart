@@ -108,11 +108,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _sendingInProgress = true;
     String targetConvId;
     if (activeConv == null) {
+      final settings = _ref.read(settingsProvider);
       final title = text.length > 20 ? '${text.substring(0, 20)}...' : text;
       final newConv = await _ref.read(conversationProvider.notifier).createConversation(
         title: title,
         apiConfigId: activeConfig.id,
         modelId: selectedModel.id,
+        systemPrompt: settings.defaultSystemPrompt,
       );
       targetConvId = newConv.id;
     } else {
@@ -173,7 +175,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       // Yield once so the dialog exit animation and any pending
       // MarkdownBody/SelectableText element teardown can settle
       // before we mutate the messages list and rebuild.
-      await Future.microtask(() {});
+      await Future.delayed(const Duration(milliseconds: 50));
 
       if (!mounted) return;
 
@@ -244,6 +246,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     // Reload fresh messages
     final freshMessages = await _messageDao.getMessagesForConversation(activeConv.id);
+    // Yield to let any pending widget teardown settle before mutating state
+    await Future.delayed(Duration.zero);
+    if (!mounted) return;
     state = state.copyWith(messages: freshMessages, error: null);
   }
 
@@ -252,6 +257,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final activeConfig = _ref.read(apiConfigProvider).activeConfig;
     final selectedModel = _ref.read(modelProvider).selectedModel;
     final settings = _ref.read(settingsProvider);
+    final activeConv = _ref.read(conversationProvider).activeConversation;
 
     if (activeConfig == null || selectedModel == null) {
       state = state.copyWith(error: '缺少 API 配置或选定的模型。', isGenerating: false);
@@ -262,6 +268,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _cancelToken = CancelToken();
 
     final history = await _messageDao.getMessagesForConversation(conversationId);
+
+    // Determine system prompt: conversation-level takes precedence over default
+    final systemPrompt = (activeConv?.systemPrompt?.trim().isNotEmpty == true)
+        ? activeConv!.systemPrompt
+        : settings.defaultSystemPrompt;
 
     state = state.copyWith(isGenerating: true, streamContent: '', streamReasoning: '', error: null);
 
@@ -274,6 +285,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         apiKey: apiKey,
         model: selectedModel.id,
         messages: history,
+        systemPrompt: systemPrompt,
         searxngUrl: settings.searxngUrl.isNotEmpty ? settings.searxngUrl : null,
         searchBackend: settings.searchBackend,
         cancelToken: _cancelToken,
