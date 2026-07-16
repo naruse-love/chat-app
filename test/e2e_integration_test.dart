@@ -226,7 +226,7 @@ void main() {
       );
 
       final apiState = container.read(apiConfigProvider);
-      expect(apiState.configs.length, equals(1));
+      expect(apiState.configs.length, equals(2));
       expect(apiState.activeConfig, isNotNull);
       expect(apiState.activeConfig!.name, equals('My 9Router Endpoint'));
       expect(apiState.activeConfig!.isDefault, equals(true));

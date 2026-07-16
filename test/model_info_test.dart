@@ -21,7 +21,7 @@ void main() {
       final model3 = ModelInfo.fromApiResponse({
         'id': 'gpt-4o',
       });
-      expect(model3.provider, 'unknown');
+      expect(model3.provider, 'opencode');
       expect(model3.modelName, 'gpt-4o');
     });
 

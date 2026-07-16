@@ -7,6 +7,7 @@ import '../data/message_dao.dart';
 import '../data/api_config_dao.dart';
 import '../services/agent_service.dart';
 import '../services/search_service.dart';
+import '../services/url_fetch_service.dart';
 import 'api_config_provider.dart';
 import 'conversation_provider.dart';
 import 'model_provider.dart';
@@ -23,10 +24,17 @@ final messageDaoProvider = Provider<MessageDao>((ref) {
 
 final searchServiceProvider = Provider<SearchService>((ref) => SearchService());
 
+final urlFetchServiceProvider = Provider<UrlFetchService>((ref) => UrlFetchService());
+
 final agentServiceProvider = Provider<AgentService>((ref) {
   final chatSvc = ref.watch(chatServiceProvider);
   final searchSvc = ref.watch(searchServiceProvider);
-  return AgentService(chatService: chatSvc, searchService: searchSvc);
+  final urlFetchSvc = ref.watch(urlFetchServiceProvider);
+  return AgentService(
+    chatService: chatSvc,
+    searchService: searchSvc,
+    urlFetchService: urlFetchSvc,
+  );
 });
 
 class ChatState {
@@ -302,6 +310,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
           _ref.read(agentProvider.notifier).startSearch(event.query);
         } else if (event is ToolCallCompletedEvent) {
           _ref.read(agentProvider.notifier).completeSearch(event.results);
+        } else if (event is UrlFetchStartedEvent) {
+          _ref.read(agentProvider.notifier).startUrlFetch(event.url);
+        } else if (event is UrlFetchCompletedEvent) {
+          _ref.read(agentProvider.notifier).completeUrlFetch();
         } else if (event is ToolCallExecutedMessageEvent) {
           await _messageDao.insert(event.assistantMessage);
           for (final toolMsg in event.toolMessages) {

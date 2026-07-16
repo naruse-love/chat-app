@@ -23,12 +23,51 @@ class ModelInfo {
   factory ModelInfo.fromJson(Map<String, dynamic> json) => _$ModelInfoFromJson(json);
   Map<String, dynamic> toJson() => _$ModelInfoToJson(this);
 
+  static List<ModelInfo> get defaultOpenCodeFallbackModels => [
+        ModelInfo(
+          id: 'deepseek-v4-flash-free',
+          provider: 'opencode',
+          modelName: 'deepseek-v4-flash-free',
+          supportsVision: false,
+          supportsTools: true,
+        ),
+        ModelInfo(
+          id: 'mimo-v2.5-free',
+          provider: 'opencode',
+          modelName: 'mimo-v2.5-free',
+          supportsVision: false,
+          supportsTools: true,
+        ),
+        ModelInfo(
+          id: 'hy3-free',
+          provider: 'opencode',
+          modelName: 'hy3-free',
+          supportsVision: false,
+          supportsTools: true,
+        ),
+        ModelInfo(
+          id: 'nemotron-3-ultra-free',
+          provider: 'opencode',
+          modelName: 'nemotron-3-ultra-free',
+          supportsVision: false,
+          supportsTools: true,
+        ),
+        ModelInfo(
+          id: 'north-mini-code-free',
+          provider: 'opencode',
+          modelName: 'north-mini-code-free',
+          supportsVision: false,
+          supportsTools: true,
+        ),
+      ];
+
   factory ModelInfo.fromApiResponse(Map<String, dynamic> json) {
     final id = json['id'] as String;
     final ownedBy = json['owned_by'] as String? ?? json['ownedBy'] as String?;
     
     final parts = id.split('/');
-    final provider = parts.length > 1 ? parts[0] : 'unknown';
+    final parsedProvider = parts.length > 1 ? parts[0] : 'unknown';
+    final provider = parsedProvider == 'unknown' ? 'opencode' : parsedProvider;
     final modelName = parts.length > 1 ? parts.sublist(1).join('/') : id;
 
     bool? explicitVision;

@@ -1,26 +1,27 @@
-# BRIEFING — 2026-07-12T08:51:43Z
+# BRIEFING — 2026-07-16T16:57:35+08:00
 
 ## Mission
-Start the Project Orchestrator to implement Milestones 5, 6, 7, and 8, and set up sentinel crons.
+Start the Project Orchestrator to integrate public OpenCode Free provider, implement url_fetch tool, and optimize web search retrieval & formatting.
 
 ## 🔒 My Identity
 - Archetype: sentinel
 - Working directory: d:\work\chat\.agents\sentinel
-- Orchestrator: 10338a91-21f8-473e-9b48-6884a31b4305
+- Orchestrator: 3e5a1e9b-3a1f-46aa-95fc-0ab5963a2208
 - Victory Auditor: TBD
 
 ## 🔒 Key Constraints
 - No technical decisions — relay only
 - Victory Audit is MANDATORY before reporting completion
-- Integrity mode: benchmark
+- Integrity mode: development
 
 ## User Context
-- **Last user request**: Complete Milestones 5 (Image), 6 (Riverpod & UI), 7 (E2E & Widget Testing), and 8 (Hardening).
+- **Last user request**: Integrate OpenCode Free provider, implement `url_fetch` tool (8000-char truncation, stripping tags), optimize SearXNG multi-page search & search results formatting.
 - **Pending clarifications**: none
-- **Delivered results**: Milestones 1-4 completed and verified.
+- **Delivered results**: Milestones 1-8 completed.
 
 ## Project Status
 - **Phase**: in progress
+
 
 ## Victory Audit Status
 - **Triggered**: no
@@ -28,5 +29,5 @@ Start the Project Orchestrator to implement Milestones 5, 6, 7, and 8, and set u
 - **Retry count**: 0
 
 ## Artifact Index
-- d:\work\chat\ORIGINAL_REQUEST.md — Verbatim user request log
 - d:\work\chat\.agents\ORIGINAL_REQUEST.md — Verbatim user request log (agent copy)
+

@@ -9,7 +9,7 @@ void main() {
         final json = {'id': ''};
         final model = ModelInfo.fromApiResponse(json);
         expect(model.id, '');
-        expect(model.provider, 'unknown');
+        expect(model.provider, 'opencode');
         expect(model.modelName, '');
       });
 

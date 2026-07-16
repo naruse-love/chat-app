@@ -151,6 +151,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     Widget buildChatArea() {
+      final isBusy = agentState.isSearching || agentState.isFetchingUrl;
+
       // Build active streaming message if currently generating
       final activeStreamingMessage = chatState.isGenerating &&
               (chatState.streamContent.isNotEmpty || chatState.streamReasoning.isNotEmpty)
@@ -173,7 +175,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: [
           // Message List
           Expanded(
-            child: allMessages.isEmpty && !agentState.isSearching
+            child: allMessages.isEmpty && !isBusy
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -198,10 +200,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   )
                 : ListView.builder(
                     controller: _scrollController,
-                    itemCount: allMessages.length + (agentState.isSearching ? 1 : 0),
+                    itemCount: allMessages.length + (isBusy ? 1 : 0),
                     padding: const EdgeInsets.only(bottom: 16),
                     itemBuilder: (context, index) {
                       if (index == allMessages.length) {
+                        final statusText = agentState.isFetchingUrl
+                            ? '正在读取网页: ${agentState.fetchingUrl}...'
+                            : '正在搜索: "${agentState.searchQuery}"...';
                         return Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           child: Card(
@@ -221,7 +226,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      '正在搜索: "${agentState.searchQuery}"...',
+                                      statusText,
                                       style: theme.textTheme.bodyMedium?.copyWith(
                                         fontWeight: FontWeight.bold,
                                       ),

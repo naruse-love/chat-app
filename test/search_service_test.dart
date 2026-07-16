@@ -267,6 +267,77 @@ void main() {
       }
     });
 
+    test('SearXNG dual-page fetching and URL deduplication', () async {
+      mockAdapter.handler = (options) {
+        final pageno = options.queryParameters['pageno'];
+        if (pageno == 1) {
+          return ResponseBody.fromString(
+            json.encode({
+              'results': [
+                {'title': 'Doc 1', 'url': 'https://a.com', 'content': 'Content A'},
+                {'title': 'Doc 2', 'url': 'https://b.com', 'content': 'Content B'},
+              ]
+            }),
+            200,
+            headers: {Headers.contentTypeHeader: [Headers.jsonContentType]},
+          );
+        } else {
+          return ResponseBody.fromString(
+            json.encode({
+              'results': [
+                {'title': 'Doc 2 Duplicate', 'url': 'https://b.com', 'content': 'Content B Duplicate'},
+                {'title': 'Doc 3', 'url': 'https://c.com', 'content': 'Content C'},
+              ]
+            }),
+            200,
+            headers: {Headers.contentTypeHeader: [Headers.jsonContentType]},
+          );
+        }
+      };
+
+      final results = await searchService.search(
+        query: 'test',
+        searxngUrl: 'https://searxng.local',
+        searchBackend: 'searxng',
+      );
+
+      expect(results, hasLength(3));
+      expect(results[0].url, 'https://a.com');
+      expect(results[1].url, 'https://b.com');
+      expect(results[2].url, 'https://c.com');
+    });
+
+    test('SearXNG partial page timeout resilience', () async {
+      mockAdapter.handler = (options) {
+        final pageno = options.queryParameters['pageno'];
+        if (pageno == 1) {
+          return ResponseBody.fromString(
+            json.encode({
+              'results': [
+                {'title': 'Doc 1', 'url': 'https://a.com', 'content': 'Content A'},
+              ]
+            }),
+            200,
+            headers: {Headers.contentTypeHeader: [Headers.jsonContentType]},
+          );
+        } else {
+          throw DioException(
+            requestOptions: options,
+            type: DioExceptionType.connectionTimeout,
+          );
+        }
+      };
+
+      final results = await searchService.search(
+        query: 'test',
+        searxngUrl: 'https://searxng.local',
+        searchBackend: 'searxng',
+      );
+
+      expect(results, hasLength(1));
+      expect(results[0].title, 'Doc 1');
+    });
+
     // ===================== Common Tests =====================
 
     test('Formatting context string works correctly (Chinese)', () {
@@ -277,10 +348,12 @@ void main() {
 
       final context = searchService.formatSearchResultsForContext(results);
 
-      expect(context, contains('1. 标题: A'));
-      expect(context, contains('网址: https://a.com'));
+      expect(context, contains('以下是网络搜索结果。请仔细阅读后基于这些信息回答用户问题。'));
+      expect(context, contains('如果需要更详细的信息，请使用 url_fetch 工具读取相关页面全文。'));
+      expect(context, contains('回答时请引用来源 URL。'));
+      expect(context, contains('1. [A](https://a.com)'));
       expect(context, contains('摘要: Info A'));
-      expect(context, contains('2. 标题: B'));
+      expect(context, contains('2. [B](https://b.com)'));
     });
 
     test('Empty results formatting returns Chinese message', () {

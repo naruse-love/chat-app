@@ -65,7 +65,16 @@ class ModelNotifier extends StateNotifier<ModelState> {
 
       state = ModelState(models: models, selectedModel: selected, isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: '获取模型失败: $e');
+      final fallbackModels = ModelInfo.defaultOpenCodeFallbackModels;
+      ModelInfo? selected = state.selectedModel;
+      if (selected == null || !fallbackModels.any((m) => m.id == selected!.id)) {
+        selected = fallbackModels.isNotEmpty ? fallbackModels.first : null;
+      }
+      state = ModelState(
+        models: fallbackModels,
+        selectedModel: selected,
+        isLoading: false,
+      );
     }
   }
 

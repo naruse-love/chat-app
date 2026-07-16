@@ -7,6 +7,7 @@ import '../models/chat_message.dart';
 import '../models/tool_call.dart';
 import 'search_service.dart';
 import 'chat_service.dart';
+import 'url_fetch_service.dart';
 
 /// Base class for all events yielded during agent execution.
 abstract class AgentStreamEvent {
@@ -38,7 +39,20 @@ class ToolCallCompletedEvent extends AgentStreamEvent {
   const ToolCallCompletedEvent(this.query, this.results);
 }
 
-/// Yielded after search results are packaged into assistant/tool messages.
+/// Yielded when url_fetch starts fetching a webpage.
+class UrlFetchStartedEvent extends AgentStreamEvent {
+  final String url;
+  const UrlFetchStartedEvent(this.url);
+}
+
+/// Yielded when url_fetch finishes fetching content.
+class UrlFetchCompletedEvent extends AgentStreamEvent {
+  final String url;
+  final String content;
+  const UrlFetchCompletedEvent(this.url, this.content);
+}
+
+/// Yielded after search/url_fetch results are packaged into assistant/tool messages.
 class ToolCallExecutedMessageEvent extends AgentStreamEvent {
   final ChatMessage assistantMessage;
   final List<ChatMessage> toolMessages;
@@ -62,13 +76,16 @@ class _ToolCallAccumulator {
 class AgentService {
   final ChatService _chatService;
   final SearchService _searchService;
+  final UrlFetchService _urlFetchService;
   final Uuid _uuid;
 
   AgentService({
     ChatService? chatService,
     SearchService? searchService,
+    UrlFetchService? urlFetchService,
   })  : _chatService = chatService ?? ChatService(),
         _searchService = searchService ?? SearchService(),
+        _urlFetchService = urlFetchService ?? UrlFetchService(),
         _uuid = const Uuid();
 
   /// OpenAI-compatible Tool definition for web search.
@@ -89,6 +106,30 @@ class AgentService {
       },
     },
   };
+
+  /// OpenAI-compatible Tool definition for fetching full-text webpage content.
+  static const Map<String, dynamic> urlFetchTool = {
+    'type': 'function',
+    'function': {
+      'name': 'url_fetch',
+      'description': 'Fetch and extract plain text body content from a specified webpage URL.',
+      'parameters': {
+        'type': 'object',
+        'properties': {
+          'url': {
+            'type': 'string',
+            'description': 'The absolute HTTP or HTTPS URL of the webpage to fetch.',
+          },
+        },
+        'required': ['url'],
+      },
+    },
+  };
+
+  static const List<Map<String, dynamic>> defaultTools = [
+    webSearchTool,
+    urlFetchTool,
+  ];
 
   /// Regex for matching pseudo-XML tool_call blocks like:
   /// <tool_call>\n<function=web_search>\n<parameter=query>...</parameter>\n</function>\n</tool_call>
@@ -228,7 +269,7 @@ class AgentService {
         apiKey: apiKey,
         model: model,
         messages: nextMessages,
-        tools: [webSearchTool],
+        tools: defaultTools,
         searxngUrl: searxngUrl,
         searchBackend: searchBackend,
         cancelToken: cancelToken,
@@ -246,7 +287,7 @@ class AgentService {
         apiKey: apiKey,
         model: model,
         messages: effectiveMessages,
-        tools: [webSearchTool],
+        tools: defaultTools,
         cancelToken: cancelToken,
       )) {
         // Capture usage from chunks where choices is empty
@@ -311,50 +352,74 @@ class AgentService {
         final toolMessages = <ChatMessage>[];
 
         for (final entry in accumulatedToolCalls.values) {
-          String query = '';
-          try {
-            final parsedArgs = json.decode(entry.argumentsBuffer.toString()) as Map<String, dynamic>;
-            query = parsedArgs['query'] as String? ?? '';
-          } catch (_) {
-            query = entry.argumentsBuffer.toString();
-          }
-
-          _checkCancellation(cancelToken);
-
-          yield ToolCallStartedEvent(query);
-
-          List<SearchResult> results;
-          String? searchError;
-          try {
-            results = await _searchService.search(
-              query: query,
-              searxngUrl: searxngUrl,
-              searchBackend: searchBackend,
-            );
-          } on SearchException catch (e) {
-            results = [];
-            searchError = e.message;
-            developer.log('Auto search failed: ${e.message}', name: 'AgentService');
-          }
-
-          _checkCancellation(cancelToken);
-
-          yield ToolCallCompletedEvent(query, results);
-
-          final formattedResults = searchError != null
-              ? '搜索失败：$searchError'
-              : _searchService.formatSearchResultsForContext(results);
-
           final conversationId = effectiveMessages.last.conversationId;
+          if (entry.name == 'url_fetch') {
+            String url = '';
+            try {
+              final parsedArgs = json.decode(entry.argumentsBuffer.toString()) as Map<String, dynamic>;
+              url = parsedArgs['url'] as String? ?? '';
+            } catch (_) {
+              url = entry.argumentsBuffer.toString();
+            }
 
-          toolMessages.add(ChatMessage(
-            id: _uuid.v4(),
-            conversationId: conversationId,
-            role: 'tool',
-            toolCallId: entry.id,
-            content: formattedResults,
-            timestamp: DateTime.now(),
-          ));
+            _checkCancellation(cancelToken);
+            yield UrlFetchStartedEvent(url);
+            final content = await _urlFetchService.fetchUrlContent(url, cancelToken: cancelToken);
+            _checkCancellation(cancelToken);
+            yield UrlFetchCompletedEvent(url, content);
+
+            toolMessages.add(ChatMessage(
+              id: _uuid.v4(),
+              conversationId: conversationId,
+              role: 'tool',
+              toolCallId: entry.id,
+              content: content,
+              timestamp: DateTime.now(),
+            ));
+          } else {
+            String query = '';
+            try {
+              final parsedArgs = json.decode(entry.argumentsBuffer.toString()) as Map<String, dynamic>;
+              query = parsedArgs['query'] as String? ?? '';
+            } catch (_) {
+              query = entry.argumentsBuffer.toString();
+            }
+
+            _checkCancellation(cancelToken);
+
+            yield ToolCallStartedEvent(query);
+
+            List<SearchResult> results;
+            String? searchError;
+            try {
+              results = await _searchService.search(
+                query: query,
+                searxngUrl: searxngUrl,
+                searchBackend: searchBackend,
+              );
+            } on SearchException catch (e) {
+              results = [];
+              searchError = e.message;
+              developer.log('Auto search failed: ${e.message}', name: 'AgentService');
+            }
+
+            _checkCancellation(cancelToken);
+
+            yield ToolCallCompletedEvent(query, results);
+
+            final formattedResults = searchError != null
+                ? '搜索失败：$searchError'
+                : _searchService.formatSearchResultsForContext(results);
+
+            toolMessages.add(ChatMessage(
+              id: _uuid.v4(),
+              conversationId: conversationId,
+              role: 'tool',
+              toolCallId: entry.id,
+              content: formattedResults,
+              timestamp: DateTime.now(),
+            ));
+          }
         }
 
         final conversationId = effectiveMessages.last.conversationId;
@@ -389,7 +454,7 @@ class AgentService {
           apiKey: apiKey,
           model: model,
           messages: nextMessages,
-          tools: [webSearchTool],
+          tools: defaultTools,
           searxngUrl: searxngUrl,
           searchBackend: searchBackend,
           cancelToken: cancelToken,
@@ -416,7 +481,7 @@ class AgentService {
       apiKey: apiKey,
       model: model,
       messages: messages,
-      tools: tools,
+      tools: tools ?? defaultTools,
       searxngUrl: searxngUrl,
       searchBackend: searchBackend,
       cancelToken: cancelToken,
@@ -515,53 +580,78 @@ class AgentService {
     }
 
     if (accumulatedToolCalls.isNotEmpty) {
-      // --- Standard tool_calls detected: execute search and loop ---
+      // --- Standard tool_calls detected: execute search or url_fetch and loop ---
       final conversationId = messages.last.conversationId;
       final toolMessages = <ChatMessage>[];
 
       for (final entry in accumulatedToolCalls.values) {
-        String query = '';
-        try {
-          final parsedArgs = json.decode(entry.argumentsBuffer.toString()) as Map<String, dynamic>;
-          query = parsedArgs['query'] as String? ?? '';
-        } catch (_) {
-          query = entry.argumentsBuffer.toString();
+        if (entry.name == 'url_fetch') {
+          String url = '';
+          try {
+            final parsedArgs = json.decode(entry.argumentsBuffer.toString()) as Map<String, dynamic>;
+            url = parsedArgs['url'] as String? ?? '';
+          } catch (_) {
+            url = entry.argumentsBuffer.toString();
+          }
+
+          _checkCancellation(cancelToken);
+          yield UrlFetchStartedEvent(url);
+          final content = await _urlFetchService.fetchUrlContent(url, cancelToken: cancelToken);
+          _checkCancellation(cancelToken);
+          yield UrlFetchCompletedEvent(url, content);
+
+          toolMessages.add(ChatMessage(
+            id: _uuid.v4(),
+            conversationId: conversationId,
+            role: 'tool',
+            toolCallId: entry.id,
+            content: content,
+            timestamp: DateTime.now(),
+          ));
+        } else {
+          String query = '';
+          try {
+            final parsedArgs = json.decode(entry.argumentsBuffer.toString()) as Map<String, dynamic>;
+            query = parsedArgs['query'] as String? ?? '';
+          } catch (_) {
+            query = entry.argumentsBuffer.toString();
+          }
+
+          _checkCancellation(cancelToken);
+
+          yield ToolCallStartedEvent(query);
+
+          List<SearchResult> results;
+          String? searchError;
+          try {
+            results = await _searchService.search(
+              query: query,
+              searxngUrl: searxngUrl,
+              searchBackend: searchBackend,
+            );
+          } on SearchException catch (e) {
+            results = [];
+            searchError = e.message;
+            developer.log('Auto search (follow-up) failed: ${e.message}', name: 'AgentService');
+          }
+
+          _checkCancellation(cancelToken);
+
+          yield ToolCallCompletedEvent(query, results);
+
+          final formattedResults = searchError != null
+              ? '搜索失败：$searchError'
+              : _searchService.formatSearchResultsForContext(results);
+
+          toolMessages.add(ChatMessage(
+            id: _uuid.v4(),
+            conversationId: conversationId,
+            role: 'tool',
+            toolCallId: entry.id,
+            content: formattedResults,
+            timestamp: DateTime.now(),
+          ));
         }
-
-        _checkCancellation(cancelToken);
-
-        yield ToolCallStartedEvent(query);
-
-        List<SearchResult> results;
-        String? searchError;
-        try {
-          results = await _searchService.search(
-            query: query,
-            searxngUrl: searxngUrl,
-            searchBackend: searchBackend,
-          );
-        } on SearchException catch (e) {
-          results = [];
-          searchError = e.message;
-          developer.log('Auto search (follow-up) failed: ${e.message}', name: 'AgentService');
-        }
-
-        _checkCancellation(cancelToken);
-
-        yield ToolCallCompletedEvent(query, results);
-
-        final formattedResults = searchError != null
-            ? '搜索失败：$searchError'
-            : _searchService.formatSearchResultsForContext(results);
-
-        toolMessages.add(ChatMessage(
-          id: _uuid.v4(),
-          conversationId: conversationId,
-          role: 'tool',
-          toolCallId: entry.id,
-          content: formattedResults,
-          timestamp: DateTime.now(),
-        ));
       }
 
       final assistantMessage = ChatMessage(
@@ -614,8 +704,36 @@ class AgentService {
           final name = call['name'] as String? ?? '';
           final params = call['params'] as Map<String, String>? ?? {};
           final query = params['query'] ?? '';
+          final url = params['url'] ?? '';
 
-          if (name == 'web_search' && query.isNotEmpty) {
+          if (name == 'url_fetch' && url.isNotEmpty) {
+            _checkCancellation(cancelToken);
+
+            yield UrlFetchStartedEvent(url);
+
+            final content = await _urlFetchService.fetchUrlContent(url, cancelToken: cancelToken);
+
+            _checkCancellation(cancelToken);
+
+            yield UrlFetchCompletedEvent(url, content);
+
+            final toolCallId = 'pseudo_${_uuid.v4()}';
+            toolCallList.add(ToolCall(
+              id: toolCallId,
+              type: 'function',
+              functionName: name,
+              arguments: json.encode(params),
+            ));
+
+            toolMessages.add(ChatMessage(
+              id: _uuid.v4(),
+              conversationId: conversationId,
+              role: 'tool',
+              toolCallId: toolCallId,
+              content: content,
+              timestamp: DateTime.now(),
+            ));
+          } else if (name == 'web_search' && query.isNotEmpty) {
             _checkCancellation(cancelToken);
 
             yield ToolCallStartedEvent(query);

@@ -98,7 +98,7 @@ class SearchService {
     }
   }
 
-  /// Searches via SearXNG JSON API.
+  /// Searches via SearXNG JSON API using concurrent multi-page requests (pageno 1 & 2).
   Future<List<SearchResult>> _searchSearxng(String query, String? searxngUrl) async {
     if (searxngUrl == null || searxngUrl.trim().isEmpty) {
       throw SearchException(
@@ -107,24 +107,25 @@ class SearchService {
       );
     }
 
+    // Normalize SearXNG URL: strip trailing slash, ensure ends with /search
+    var cleanSearxngUrl = searxngUrl.trim();
+    while (cleanSearxngUrl.endsWith('/')) {
+      cleanSearxngUrl = cleanSearxngUrl.substring(0, cleanSearxngUrl.length - 1);
+    }
+    if (!cleanSearxngUrl.endsWith('/search')) {
+      cleanSearxngUrl = '$cleanSearxngUrl/search';
+    }
+
     final List<String> errorDetails = [];
 
-    try {
-      // Normalize SearXNG URL: strip trailing slash, ensure ends with /search
-      var cleanSearxngUrl = searxngUrl.trim();
-      while (cleanSearxngUrl.endsWith('/')) {
-        cleanSearxngUrl = cleanSearxngUrl.substring(0, cleanSearxngUrl.length - 1);
-      }
-      if (!cleanSearxngUrl.endsWith('/search')) {
-        cleanSearxngUrl = '$cleanSearxngUrl/search';
-      }
-
+    Future<List<SearchResult>> fetchPage(int page) async {
       try {
         final response = await _dio.get(
           cleanSearxngUrl,
           queryParameters: {
             'q': query,
             'format': 'json',
+            'pageno': page,
           },
           options: Options(
             headers: {..._commonHeaders},
@@ -132,10 +133,10 @@ class SearchService {
         );
 
         if (response.statusCode == 200) {
-          final results = _parseSearchResults(response.data);
-          return results;
+          return _parseSearchResults(response.data);
         } else {
-          errorDetails.add('SearXNG 返回状态码 ${response.statusCode}');
+          errorDetails.add('SearXNG (page $page) 返回状态码 ${response.statusCode}');
+          return [];
         }
       } on DioException catch (e) {
         final statusCode = e.response?.statusCode;
@@ -149,24 +150,49 @@ class SearchService {
             details: body,
           );
         }
-        errorDetails.add('SearXNG: ${_extractErrorMessage(e)}');
+        errorDetails.add('SearXNG (page $page): ${_extractErrorMessage(e)}');
+        return [];
+      } catch (e) {
+        errorDetails.add('SearXNG (page $page): ${_extractErrorMessage(e)}');
+        return [];
       }
+    }
+
+    try {
+      final pageResults = await Future.wait([fetchPage(1), fetchPage(2)]);
+      final combined = [...pageResults[0], ...pageResults[1]];
+
+      final seenUrls = <String>{};
+      final deduplicated = <SearchResult>[];
+      for (final result in combined) {
+        if (result.url.isNotEmpty) {
+          if (seenUrls.add(result.url)) {
+            deduplicated.add(result);
+          }
+        } else {
+          deduplicated.add(result);
+        }
+      }
+
+      if (deduplicated.isEmpty && errorDetails.isNotEmpty) {
+        throw SearchException(
+          source: 'SearXNG',
+          message: 'SearXNG 搜索失败:\n${errorDetails.join('\n')}',
+          details: errorDetails.join('; '),
+        );
+      }
+
+      return deduplicated;
     } on SearchException {
       rethrow;
     } catch (e, stackTrace) {
       developer.log('SearXNG search failed', error: e, stackTrace: stackTrace, name: 'SearchService');
-      errorDetails.add('SearXNG: ${_extractErrorMessage(e)}');
-    }
-
-    if (errorDetails.isNotEmpty) {
       throw SearchException(
         source: 'SearXNG',
-        message: 'SearXNG 搜索失败:\n${errorDetails.join('\n')}',
-        details: errorDetails.join('; '),
+        message: 'SearXNG 搜索失败:\n${_extractErrorMessage(e)}',
+        details: e.toString(),
       );
     }
-
-    return [];
   }
 
   /// Searches via Bing (experimental) — scrapes the HTML search results page.
@@ -272,13 +298,17 @@ class SearchService {
     }
 
     final buffer = StringBuffer();
-    buffer.writeln('以下是网络搜索结果:');
+    buffer.writeln('以下是网络搜索结果。请仔细阅读后基于这些信息回答用户问题。');
+    buffer.writeln('如果需要更详细的信息，请使用 url_fetch 工具读取相关页面全文。');
+    buffer.writeln('回答时请引用来源 URL。');
+    buffer.writeln();
     for (int i = 0; i < results.length; i++) {
       final r = results[i];
-      buffer.writeln('${i + 1}. 标题: ${r.title}');
-      buffer.writeln('   网址: ${r.url}');
+      buffer.writeln('${i + 1}. [${r.title}](${r.url})');
       buffer.writeln('   摘要: ${r.content}');
-      buffer.writeln();
+      if (i < results.length - 1) {
+        buffer.writeln();
+      }
     }
     return buffer.toString().trim();
   }

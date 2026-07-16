@@ -53,7 +53,19 @@ class ApiConfigNotifier extends StateNotifier<ApiConfigState> {
   Future<void> loadConfigs() async {
     state = state.copyWith(isLoading: true);
     try {
-      final configs = await _apiConfigDao.getAll();
+      var configs = await _apiConfigDao.getAll();
+      if (configs.isEmpty) {
+        final defaultConfig = ApiConfig(
+          id: 'opencode_free',
+          name: 'OpenCode Free',
+          baseUrl: 'https://opencode.ai/zen/v1',
+          apiKeyRef: 'opencode_free_api_key_ref',
+          isDefault: true,
+          createdAt: DateTime.now(),
+        );
+        await _apiConfigDao.insert(defaultConfig, 'opencode-free-key');
+        configs = await _apiConfigDao.getAll();
+      }
       ApiConfig? active = await _apiConfigDao.getDefault();
       if (active == null && configs.isNotEmpty) {
         active = configs.first;

@@ -1,3 +1,53 @@
+## 2026-07-16 OpenCode Free Provider, url_fetch 网页抓取与 SearXNG 双页搜索优化
+
+### 变更内容
+1. **OpenCode Free 免费服务接入**：
+   - 默认模型列表加置 `defaultOpenCodeFallbackModels` (含 `deepseek-v4-flash-free`, `mimo-v2.5-free`, `hy3-free`, `nemotron-3-ultra-free`, `north-mini-code-free`)。
+   - `ModelInfo.fromApiResponse` 对于未解析出 provider 的模型默认映射为 `opencode`。
+   - `ApiConfigNotifier.loadConfigs()` 在数据库配置为空时自动插入 `"OpenCode Free"` (`https://opencode.ai/zen/v1`，占位密钥 `opencode-free-key`) 并设为默认配置。
+   - `ModelNotifier.fetchModels()` 在网络异常时降级为 `defaultOpenCodeFallbackModels` 保证模型选择列表可用。
+2. **网页全文抓取工具 (`url_fetch`)**：
+   - 新增 `UrlFetchService`，使用 Dio 发送 GET 请求（10s 超时、User-Agent 头），并利用 `package:html/parser.dart` 提取正文，自动剔除 `<script>`、`<style>`、`<noscript>` 元素，归一化空白符并截断至 8000 字符。
+   - `AgentService` 定义 `url_fetch` 工具 Schema，集成 `UrlFetchStartedEvent` 与 `UrlFetchCompletedEvent`，并在标准 OpenAI `tool_calls` 和伪 XML 兜底路径中完整支持 `url_fetch` 执行。
+   - `AgentNotifier` 拓展 `isFetchingUrl` 与 `fetchingUrl` 状态及 `startUrlFetch` / `completeUrlFetch` 方法。
+   - `HomeScreen` 识别 `isBusy = isSearching || isFetchingUrl`，动态展示 `"正在读取网页: [URL]..."` 进度状态。
+3. **网络搜索优化与双页并发**：
+   - `SearchService.formatSearchResultsForContext` 提示词升级，明确指示模型阅读搜索结果并提示可使用 `url_fetch` 抓取全文，搜索结果采用 `1. [Title](URL)` Markdown 格式。
+   - `SearXNG` 并发查询 `pageno: 1` 和 `pageno: 2`（`Future.wait`），各页独立 `try-catch` 隔离超时，按 URL 自动去重，提升搜索深度与容错率。
+4. **测试与验证**：
+   - 新增 `test/url_fetch_service_test.dart` 与 `test/opencode_free_test.dart`。
+   - 更新 `test/search_service_test.dart`、`test/e2e_integration_test.dart`、`test/model_info_test.dart` 与 `test/model_info_stress_test.dart`。
+   - 全部 136 个测试用例 100% 通过（0 failures），`flutter analyze` 0 issues。
+
+### 变更文件
+- `lib/models/model_info.dart`
+- `lib/providers/api_config_provider.dart`
+- `lib/providers/model_provider.dart`
+- `lib/services/url_fetch_service.dart`
+- `lib/services/agent_service.dart`
+- `lib/providers/agent_provider.dart`
+- `lib/providers/chat_provider.dart`
+- `lib/screens/home_screen.dart`
+- `lib/services/search_service.dart`
+- `test/url_fetch_service_test.dart`
+- `test/opencode_free_test.dart`
+- `test/search_service_test.dart`
+- `test/e2e_integration_test.dart`
+- `test/model_info_test.dart`
+- `test/model_info_stress_test.dart`
+- `WORK_LOG.md`
+
+### 状态
+- **测试结果**：`flutter test` 136/136 通过（0 failures）。
+- **静态分析**：`flutter analyze` No issues found!
+
+### 技术决策
+- **OpenCode 默认映射与回退**：冷启动无配置时预置 OpenCode Free 免 key 节点降低门槛；API 解析无法识别 provider 时统一挂到 `opencode` 避免分流到 `UNKNOWN`；网络断连降级至静态 5 款模型保证离权或初始化期可展示。
+- **DOM 提取与节点清理**：抓取网页使用 DOM Parser 先 `remove()` 掉 `<script>`、`<style>` 与 `<noscript>` 标签再提取 `.text`，从源头过滤 CSS 样式与 JS 代码片段，提升 LLM 正文上下文纯净度。
+- **SearXNG 并发双页与容错去重**：使用 `Future.wait` 并行发 `pageno=1` 与 `pageno=2` 降低总延迟，利用 `Set<String>` 保持首次出现的 URL 顺序去重；各页局部 `try-catch` 防止单页超时拖塌整个搜索。
+
+---
+
 ## 2026-07-15 后续修复记录
 
 ### 修复内容
