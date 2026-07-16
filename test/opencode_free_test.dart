@@ -115,5 +115,41 @@ void main() {
       expect(modelState.selectedModel, isNotNull);
       expect(modelState.selectedModel!.id, equals('deepseek-v4-flash-free'));
     });
+
+    test('ModelNotifier filters models and defaults to deepseek-v4-flash-free when config is opencode_free', () async {
+      mockChatService.listModelsHandler = (baseUrl, apiKey) async {
+        return [
+          ModelInfo(id: 'deepseek-v4-flash-free', provider: 'opencode', modelName: 'deepseek-v4-flash-free', supportsVision: false, supportsTools: true),
+          ModelInfo(id: 'gpt-4o', provider: 'openai', modelName: 'gpt-4o', supportsVision: true, supportsTools: true),
+          ModelInfo(id: 'mimo-v2.5-free', provider: 'opencode', modelName: 'mimo-v2.5-free', supportsVision: false, supportsTools: true),
+        ];
+      };
+
+      final mockSecureStorageService = SecureStorageService(storage: mockSecureStorage);
+      final container = ProviderContainer(
+        overrides: [
+          dbHelperProvider.overrideWithValue(dbHelper),
+          chatServiceProvider.overrideWithValue(mockChatService),
+          secureStorageServiceProvider.overrideWithValue(mockSecureStorageService),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.read(apiConfigProvider);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final modelNotifier = container.read(modelProvider.notifier);
+      await modelNotifier.fetchModels();
+
+      final modelState = container.read(modelProvider);
+      // gpt-4o should be filtered out because it is not free (doesn't contain 'free')
+      expect(modelState.models, hasLength(2));
+      expect(modelState.models.map((m) => m.id), containsAll([
+        'deepseek-v4-flash-free',
+        'mimo-v2.5-free',
+      ]));
+      expect(modelState.selectedModel, isNotNull);
+      expect(modelState.selectedModel!.id, equals('deepseek-v4-flash-free'));
+    });
   });
 }

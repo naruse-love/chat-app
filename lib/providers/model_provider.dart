@@ -54,24 +54,49 @@ class ModelNotifier extends StateNotifier<ModelState> {
     try {
       final apiKey = await _apiConfigDao.getApiKey(_activeConfig.apiKeyRef) ?? '';
       if (!mounted) return;
-      final models = await _chatService.getModels(
+      var models = await _chatService.getModels(
         baseUrl: _activeConfig.baseUrl,
         apiKey: apiKey,
       );
       if (!mounted) return;
 
+      if (_activeConfig.id == 'opencode_free') {
+        models = models.where((m) => m.id.toLowerCase().contains('free')).toList();
+      }
+
       ModelInfo? selected = state.selectedModel;
       if (selected == null || !models.any((m) => m.id == selected!.id)) {
-        selected = models.isNotEmpty ? models.first : null;
+        if (_activeConfig.id == 'opencode_free') {
+          final defaultIdx = models.indexWhere((m) => m.id == 'deepseek-v4-flash-free');
+          if (defaultIdx != -1) {
+            selected = models[defaultIdx];
+          } else {
+            selected = models.isNotEmpty ? models.first : null;
+          }
+        } else {
+          selected = models.isNotEmpty ? models.first : null;
+        }
       }
 
       state = ModelState(models: models, selectedModel: selected, isLoading: false);
     } catch (e) {
       if (!mounted) return;
-      final fallbackModels = ModelInfo.defaultOpenCodeFallbackModels;
+      var fallbackModels = ModelInfo.defaultOpenCodeFallbackModels;
+      if (_activeConfig.id == 'opencode_free') {
+        fallbackModels = fallbackModels.where((m) => m.id.toLowerCase().contains('free')).toList();
+      }
       ModelInfo? selected = state.selectedModel;
       if (selected == null || !fallbackModels.any((m) => m.id == selected!.id)) {
-        selected = fallbackModels.isNotEmpty ? fallbackModels.first : null;
+        if (_activeConfig.id == 'opencode_free') {
+          final defaultIdx = fallbackModels.indexWhere((m) => m.id == 'deepseek-v4-flash-free');
+          if (defaultIdx != -1) {
+            selected = fallbackModels[defaultIdx];
+          } else {
+            selected = fallbackModels.isNotEmpty ? fallbackModels.first : null;
+          }
+        } else {
+          selected = fallbackModels.isNotEmpty ? fallbackModels.first : null;
+        }
       }
       state = ModelState(
         models: fallbackModels,

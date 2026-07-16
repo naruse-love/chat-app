@@ -1,3 +1,33 @@
+## 2026-07-16 Remediation: UI Touch Target, OpenCode Free Filtering, Bing Search Setup Race Condition & Dialog Animation Crash Fixes
+
+### 变更内容
+1. **模型选择热区与外观优化**：在 `lib/screens/home_screen.dart` 中为模型选择栏增加了包含 `auto_awesome` 标识图标、加粗字体、下拉箭头，且包含充足 Padding（`10.0` 水平, `4.0` 垂直）的 `InkWell` 按钮，将点击热区提升至符合标准的 `48dp`，交互极为便利。
+2. **OpenCode Free 免费模型过滤与默认设定**：在 `lib/providers/model_provider.dart` 的 `fetchModels` 方法中，如果当前激活配置为 `opencode_free`，则自动对模型列表（包括 API 请求结果及 Fallback 默认列表）执行过滤，只保留 ID 含有 `'free'`（不区分大小写）的免费模型，并自动将默认初始选中的模型设为 `deepseek-v4-flash-free`。并在 `test/opencode_free_test.dart` 中追加了该过滤与默认选中行为的单元测试。
+3. **Bing 搜索配置竞态与自动停止加固**：
+   - 为 `SettingsNotifier` 暴露 `initialization` 同步加载期 Future。在 `lib/providers/chat_provider.dart` 的 `_startStreaming` 启动时，如果 Settings 尚未从 SharedPreferences 完成异步加载，则主动进行 `await` 确保 settings 加载完毕后，再读取用户设置的搜索后端。这彻底消除了冷启动时由于读取到默认配置 `'searxng'` 且未配置 SearXNG URL 而误报错“未配置 SearXNG 地址”的竞态问题。
+   - 优化 `lib/services/agent_service.dart` 中 Tool Round 超过限制的机制。当多轮工具调用或因为接口限流重试导致轮数达到上限（`toolRound >= 4`，即第5轮）时，不再直接 `return` 停止流，而是**强制发起最后一次不含 `tools` 的聊天补全请求**，逼迫模型给出最终的文字答复，确保用户始终能接收到总结性的反馈，不会莫名其妙地自动停止生成。同时更新了 `test/agent_service_test.dart` 的单元测试。
+4. **编辑与回退弹窗销毁 Crash 修复**：在 `lib/screens/home_screen.dart` 的 `_showEditDialog` 与 `_confirmRollback` 中，将关闭对话框后的延迟等待由 `50ms` 提升为 `300ms`，使得 Dialog 完全从 Navigator 路由栈中动画关闭且彻底销毁后，才执行 `controller.dispose()` 以及更新 Riverpod 的状态并触发 UI 重建，从而彻底消存在 `TextEditingController` 被提前释放、以及在动画中由于状态变化触发的 `_dependents.isEmpty` 断言崩溃。
+
+### 变更文件
+- `lib/providers/settings_provider.dart`
+- `lib/providers/chat_provider.dart`
+- `lib/providers/model_provider.dart`
+- `lib/services/agent_service.dart`
+- `lib/screens/home_screen.dart`
+- `test/agent_service_test.dart`
+- `test/opencode_free_test.dart`
+- `WORK_LOG.md`
+
+### 状态
+- 静态分析 `flutter analyze` 报告：`No issues found!`。
+- 单元测试与 Widget 测试 `flutter test` 报告：`153 / 153` 测试用例全部 100% 通过（0 failures）。
+
+### 技术决策
+- **强制兜底文本响应**：对于代理多轮 Tool Calling 时极易发生循环调用（特别是因网络或 API 错误报错导致模型陷入反复搜索）的问题，我们在工具使用达到上限时强制剥离 `tools` 参数发送最后一轮请求，利用 LLM 本身总结和理解当前对话上下文的能力，在无法继续搜索时给用户生成一份最终解释或说明，极大提高了 App 生成链路的韧性。
+- **对话框延迟路由等待**：Flutter 路由动画需要一定时间，在此期间被 pop 掉的 Widget 仍留在树上，此时调用其关联的 `TextEditingController.dispose()` 会导致被销毁组件试图使用已释放对象。因此必须等待 300ms 完整关闭过渡动画后再清理，并在 Context 确认 Mounted 状态后才写 Riverpod 状态。
+
+---
+
 ## 2026-07-16 Remediation: OpenCode Key Filter, CodeBlock Crash Fix & Collapsable Tool UI
 
 ### 变更内容

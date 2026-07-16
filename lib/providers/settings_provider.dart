@@ -41,9 +41,10 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _searchBackendKey = 'search_backend';
 
   bool isLoaded = false;
+  late final Future<void> initialization;
 
   SettingsNotifier() : super(AppSettings()) {
-    _loadSettings();
+    initialization = _loadSettings();
   }
 
   Future<void> _loadSettings() async {

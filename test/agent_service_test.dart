@@ -2035,26 +2035,38 @@ void main() {
         CancelToken? cancelToken,
       }) async* {
         completionsCallCount++;
-        // Always return tool_calls to test the max rounds limit
-        yield {
-          'choices': [
-            {
-              'delta': {
-                'tool_calls': [
-                  {
-                    'index': 0,
-                    'id': 'call_$completionsCallCount',
-                    'type': 'function',
-                    'function': {
-                      'name': 'web_search',
-                      'arguments': '{"query": "search $completionsCallCount"}'
-                    }
-                  }
-                ]
+        if (tools == null || tools.isEmpty) {
+          yield {
+            'choices': [
+              {
+                'delta': {
+                  'content': 'Final summary response'
+                }
               }
-            }
-          ]
-        };
+            ]
+          };
+        } else {
+          // Always return tool_calls to test the max rounds limit
+          yield {
+            'choices': [
+              {
+                'delta': {
+                  'tool_calls': [
+                    {
+                      'index': 0,
+                      'id': 'call_$completionsCallCount',
+                      'type': 'function',
+                      'function': {
+                        'name': 'web_search',
+                        'arguments': '{"query": "search $completionsCallCount"}'
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          };
+        }
       };
 
       searchService.searchHandler = ({
@@ -2083,9 +2095,10 @@ void main() {
       ).toList();
 
       // Max 5 total tool rounds: 1 from chatAndSearchStream + 4 from _streamCompletionsLoop
-      // Each round yields 3 events (ToolCallStarted, ToolCallCompleted, ToolCallExecutedMessage)
-      // Total = 5 * 3 = 15 events
-      expect(events, hasLength(15));
+      // Each round yields 3 events (ToolCallStarted, ToolCallCompleted, ToolCallExecutedMessage) -> 15 events
+      // plus the 6th final round which yields 1 event (ContentDeltaEvent)
+      // Total = 15 + 1 = 16 events
+      expect(events, hasLength(16));
 
       // Check that 5 rounds of tool calls happened
       final toolCallIds = <String>{};
@@ -2098,9 +2111,8 @@ void main() {
       }
       expect(toolCallIds, hasLength(5));
 
-      // Total completions calls: 5 rounds = 5 API calls
-      // (the 6th call is never made because toolRound >= 4 guard returns early)
-      expect(completionsCallCount, 5);
+      // Total completions calls: 5 tool rounds + 1 final round = 6 API calls
+      expect(completionsCallCount, 6);
     });
 
     test('parsePseudoXmlToolCalls unit test', () async {

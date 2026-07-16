@@ -502,7 +502,43 @@ class AgentService {
     int toolRound = 0,
   }) async* {
     // Max 5 total tool rounds: 1 from chatAndSearchStream + 4 follow-up rounds
-    if (toolRound >= 4) return;
+    if (toolRound >= 4) {
+      int? finalPromptTokens;
+      int? finalCompletionTokens;
+      await for (final chunk in _chatService.chatCompletionsStream(
+        baseUrl: baseUrl,
+        apiKey: apiKey,
+        model: model,
+        messages: messages,
+        cancelToken: cancelToken,
+      )) {
+        if (chunk.containsKey('usage') && chunk['usage'] is Map) {
+          final usage = chunk['usage'] as Map<String, dynamic>;
+          finalPromptTokens = usage['prompt_tokens'] as int? ?? usage['promptTokens'] as int?;
+          finalCompletionTokens = usage['completion_tokens'] as int? ?? usage['completionTokens'] as int?;
+        }
+
+        final choices = chunk['choices'] as List<dynamic>?;
+        if (choices != null && choices.isNotEmpty) {
+          final delta = choices[0]['delta'] as Map<String, dynamic>?;
+          if (delta != null) {
+            final reasoning = delta['reasoning_content'] as String? ?? delta['reasoning'] as String?;
+            if (reasoning != null && reasoning.isNotEmpty) {
+              yield ReasoningDeltaEvent(reasoning);
+            }
+
+            final content = delta['content'] as String?;
+            if (content != null && content.isNotEmpty) {
+              yield ContentDeltaEvent(content);
+            }
+          }
+        }
+      }
+      if (finalPromptTokens != null && finalCompletionTokens != null) {
+        yield UsageEvent(finalPromptTokens, finalCompletionTokens);
+      }
+      return;
+    }
 
     final accumulatedToolCalls = <int, _ToolCallAccumulator>{};
     final contentBuffer = StringBuffer();

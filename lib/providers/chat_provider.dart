@@ -269,7 +269,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
   Future<void> _startStreaming(String conversationId) async {
     final activeConfig = _ref.read(apiConfigProvider).activeConfig;
     final selectedModel = _ref.read(modelProvider).selectedModel;
+    
+    final settingsNotifier = _ref.read(settingsProvider.notifier);
+    if (!settingsNotifier.isLoaded) {
+      await settingsNotifier.initialization;
+    }
     final settings = _ref.read(settingsProvider);
+    
     final activeConv = _ref.read(conversationProvider).activeConversation;
 
     if (activeConfig == null || selectedModel == null) {

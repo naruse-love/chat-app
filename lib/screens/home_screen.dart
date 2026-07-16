@@ -309,36 +309,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: GestureDetector(
-          onTap: () => Navigator.pushNamed(context, '/model_selector'),
-          child: Column(
-            crossAxisAlignment: isLargeScreen ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-            children: [
-              if (apiState.activeConfig != null)
-                DropdownButton<String>(
-                  value: apiState.activeConfig!.id,
-                  isDense: true,
-                  underline: const SizedBox(),
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  items: apiState.configs.map((c) => DropdownMenuItem(
-                    value: c.id,
-                    child: Text(c.name),
-                  )).toList(),
-                  onChanged: (id) {
-                    if (id != null) {
-                      final config = apiState.configs.firstWhere((c) => c.id == id);
-                      ref.read(apiConfigProvider.notifier).setActiveConfig(config);
-                    }
-                  },
-                ),
-              Text(
-                modelState.selectedModel?.modelName ?? '选择模型...',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+        title: Column(
+          crossAxisAlignment: isLargeScreen ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (apiState.activeConfig != null)
+              DropdownButton<String>(
+                value: apiState.activeConfig!.id,
+                isDense: true,
+                underline: const SizedBox(),
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                items: apiState.configs.map((c) => DropdownMenuItem(
+                  value: c.id,
+                  child: Text(c.name),
+                )).toList(),
+                onChanged: (id) {
+                  if (id != null) {
+                    final config = apiState.configs.firstWhere((c) => c.id == id);
+                    ref.read(apiConfigProvider.notifier).setActiveConfig(config);
+                  }
+                },
+              ),
+            const SizedBox(height: 2),
+            InkWell(
+              onTap: () => Navigator.pushNamed(context, '/model_selector'),
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: isLargeScreen ? MainAxisAlignment.center : MainAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.auto_awesome,
+                      size: 14,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        modelState.selectedModel?.modelName ?? '选择模型...',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_drop_down,
+                      size: 16,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
         actions: [
           IconButton(
@@ -542,11 +571,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
     );
-    // dialog 完全关闭后再释放 controller
+    if (newText == null || newText.isEmpty) {
+      controller.dispose();
+      return;
+    }
+    // Wait for the dialog transition to complete fully (300ms)
+    await Future.delayed(const Duration(milliseconds: 300));
     controller.dispose();
-    if (newText == null || newText.isEmpty) return;
-    if (!context.mounted) return;
-    await Future.delayed(const Duration(milliseconds: 50));
     if (!context.mounted) return;
     await ref.read(chatProvider.notifier).editAndResendMessage(message.id, newText);
   }
@@ -574,7 +605,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     if (confirmed == true) {
       // Ensure dialog close animation completes before modifying state
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(const Duration(milliseconds: 300));
       if (!context.mounted) return;
       ref.read(chatProvider.notifier).rollbackToMessage(message.id);
     }
