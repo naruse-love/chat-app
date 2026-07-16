@@ -29,8 +29,9 @@
 | 汉化 | 全界面中文本地化（UI 文字、错误提示、SnackBar） | ✅ 完成 |
 | 最终编译 | `flutter build apk --debug` 编译成功，产物位于 `build/app/outputs/flutter-apk/app-debug.apk` | ✅ 完成 |
 | **9 / 维护迭代** | 消息编辑/重发、Token 统计、会话回退/重新生成；搜索迁移到 SearXNG 主路径 + 实验性 Bing（移除 9Router 内置搜索）；多轮 tool calling + 伪 XML `<tool_call>` 兜底；Vision 本地预检移除（发图交由 API 报错）；SearXNG URL 回显、Vision 能力解析增强；思考内容可选中/复制；主界面系统提示词入口 + 注入 API system 消息；编辑/回退崩溃加固（2026-07-13 ~ 2026-07-15） | ✅ 完成 |
+| **10 / 深度增强**| OpenCode Free 免本地代理直连（指向 `https://opencode.ai/zen/v1`）；网页全文抓取工具 (`url_fetch` + HTML 过滤 + 8000字截断)；SearXNG 并发双页查询与去重优化；全 StateNotifier 异步 `mounted` 防御，避免测试销毁崩溃（2026-07-16） | ✅ 完成 |
 
-**当前测试状态：127 / 127 测试用例全部通过，`flutter analyze` 0 issues。**
+**当前测试状态：150 / 150 测试用例全部通过，`flutter analyze` 0 issues。**
 
 ---
 
@@ -57,9 +58,10 @@ lib/
 │   └── message_dao.dart          # 消息 CRUD（绝对/相对路径映射 + token 字段）
 │
 ├── services/                     # 业务服务层
-│   ├── chat_service.dart         # Dio HTTP 客户端，/v1/chat/completions SSE 流
-│   ├── search_service.dart       # SearXNG 主路径 + 实验性 Bing（9Router 内置搜索已停用）
-│   ├── agent_service.dart        # 多轮 tool calling，伪 XML tool_call 兜底，systemPrompt 注入
+│   ├── chat_service.dart         # Dio HTTP 客户端，/v1/chat/completions SSE 流（支持免 Key 自动处理）
+│   ├── search_service.dart       # SearXNG 主路径 + 实验性 Bing（9Router 内置搜索已停用，双页并发，URL 去重，新 Prompt）
+│   ├── url_fetch_service.dart    # 网页抓取服务（DOM 节点清洗，8000字符截断）
+│   ├── agent_service.dart        # 多轮 tool calling，伪 XML tool_call 兜底，systemPrompt 注入，url_fetch 路由支持
 │   ├── image_service.dart        # 图片选取 / 压缩 / Base64 编码
 │   └── secure_storage_service.dart  # flutter_secure_storage 封装
 │
@@ -91,7 +93,9 @@ test/
 ├── database_*.dart               # 数据库注入/并发/升级/压力/EXPLAIN 测试
 ├── agent_service_test.dart       # 多轮 tool calling / 伪 XML 兜底 / systemPrompt 注入
 ├── chat_service_test.dart        # SSE 解析与多轮流
-├── search_service_test.dart      # SearXNG / Bing 切换
+├── search_service_test.dart      # SearXNG / Bing 切换与双页去重测试
+├── url_fetch_service_test.dart   # 网页抓取、HTML 清洗与字符数限制测试
+├── opencode_free_test.dart       # OpenCode Free 默认配置初始化与模型降级测试
 ├── model_info_test.dart + model_info_stress_test.dart
 ├── models_serialization_stress_test.dart
 ├── image_service_test.dart
@@ -124,6 +128,14 @@ test/
 10. **系统提示词注入**：`ChatNotifier` 启动流式生成时，优先使用当前会话的 `systemPrompt`，否则使用 `settings_provider` 的 `defaultSystemPrompt`；最终以 `role: system` 注入到 messages 最前。
 
 11. **回退/编辑时序**：`showDialog` 关闭后 `await Future.delayed(Duration(milliseconds: 50))` 再配合 `mounted` 检查后改 state，避免动画/构建期状态写入导致崩溃。
+
+12. **OpenCode Free 免本地代理直连**：冷启动若无配置，自动向数据库插入 OpenCode Free 默认配置（指向 `https://opencode.ai/zen/v1`，apiKey 存为空字符串以跳过 `Authorization` 头），并在获取 models 失败或离线启动时降级提供 `deepseek-v4-flash-free` 等 5 个核心免费模型。
+
+13. **网页抓取与清洗 (`url_fetch`)**：新设 `UrlFetchService`，利用 `package:html` 对 DOM 树的 `.remove()` 方法强力剔除 `<script>`、`<style>` 与 `<noscript>` 标签以确保 LLM 接收正文的高洁净度，合并重复空白，设置 8000 字符限制。在 `agentProvider` 扩展并在 UI 渲染中以进度卡片 `"正在读取网页: [URL]..."` 动态呈现。
+
+14. **SearXNG 并发双页查询与去重**：查询 SearXNG 时并行发起 `pageno: 1` 和 `pageno: 2` 的网络请求（利用 `Future.wait`），各接口超时/异常相互隔离，并通过 URL 做去重（保持首次出现顺序），提升信息覆盖面。
+
+15. **StateNotifier 异步 `mounted` 防御**：针对 `ApiConfigNotifier`、`ConversationNotifier` 等所有状态控制器的异步逻辑补齐 `if (!mounted) return;`，完美避免测试 tearDown 阶段因异步回调更新已被销毁的状态而触发 `Bad state: StateNotifier.state was accessed after being disposed`。
 
 ---
 
