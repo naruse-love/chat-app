@@ -191,5 +191,57 @@ void main() {
         throwsA(predicate((e) => e is DioException && e.type == DioExceptionType.cancel)),
       );
     });
+    test('getModels filters out opencode-free-key placeholder', () async {
+      mockAdapter.handler = (options) {
+        expect(options.headers.containsKey('Authorization'), isFalse);
+        return ResponseBody.fromString(
+          json.encode({'data': []}),
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        );
+      };
+
+      await chatService.getModels(
+        baseUrl: 'https://opencode.ai/zen/v1',
+        apiKey: 'opencode-free-key',
+      );
+    });
+
+    test('chatCompletionsStream filters out opencode-free-key placeholder', () async {
+      mockAdapter.handler = (options) {
+        expect(options.headers.containsKey('Authorization'), isFalse);
+        final stream = Stream.fromIterable([
+          utf8.encode('data: [DONE]\n\n'),
+        ]).map((e) => Uint8List.fromList(e));
+
+        return ResponseBody(
+          stream,
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.textPlainContentType],
+          },
+        );
+      };
+
+      final messages = [
+        ChatMessage(
+          id: '1',
+          conversationId: 'c1',
+          role: 'user',
+          content: 'Hi',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final stream = chatService.chatCompletionsStream(
+        baseUrl: 'https://opencode.ai/zen/v1',
+        apiKey: 'opencode-free-key',
+        model: 'gpt-4o',
+        messages: messages,
+      );
+      await stream.toList();
+    });
   });
 }

@@ -1,3 +1,25 @@
+## 2026-07-16 Remediation: OpenCode Key Filter, CodeBlock Crash Fix & Collapsable Tool UI
+
+### 变更内容
+1. **OpenCode Free 占位密钥过滤**：在 `lib/services/chat_service.dart` 中，发起 `/v1/models` 或 `/v1/chat/completions` 请求时，如果 `apiKey` 值为占位密钥 `'opencode-free-key'`，则自动忽略不添加 `Authorization` 头部，从而支持免 Key 直连 OpenCode 服务。
+2. **编辑重发崩溃修复**：在 `lib/widgets/markdown_renderer.dart` 里的 `CodeBlockWidget` 中将 `SelectableText.rich` 改为 `RichText`，解决了因消息列表快速重建、销毁带代码块的 Widget 时导致的 `_dependents.isEmpty` 断言崩溃。
+3. **工具输出结果默认折叠**：在 `lib/widgets/chat_bubble.dart` 中完善 `_buildToolOutputPanel` 参数类型，为 `'tool'` 角色的消息提供默认折叠的折叠卡片 UI。
+4. **自动化测试覆盖**：在 `test/widgets_test.dart` 中补充折叠卡片交互测试，并在 `test/chat_service_test.dart` 中补充 `opencode-free-key` 过滤头部的测试。
+
+### 变更文件
+- `lib/services/chat_service.dart`
+- `lib/widgets/markdown_renderer.dart`
+- `lib/widgets/chat_bubble.dart`
+- `test/widgets_test.dart`
+- `test/chat_service_test.dart`
+- `WORK_LOG.md`
+
+### 状态
+- 静态分析 `flutter analyze` 报告：`No issues found!`。
+- 单元测试与 Widget 测试 `flutter test` 报告：`152 / 152` 测试用例全部 100% 通过（0 failures）。
+
+---
+
 ## 2026-07-16 Remediation: Fix missing mounted guards in StateNotifier async methods
 
 ### 变更内容

@@ -83,6 +83,12 @@ void main() {
       );
 
       expect(find.text('工具输出: call_abc123'), findsOneWidget);
+      expect(find.text('工具执行结果'), findsOneWidget);
+      expect(find.byIcon(Icons.build_circle_outlined), findsOneWidget);
+
+      // Verify the panel can be toggled
+      await tester.tap(find.text('工具执行结果'));
+      await tester.pumpAndSettle();
     });
   });
 

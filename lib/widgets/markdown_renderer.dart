@@ -269,9 +269,11 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.all(12.0),
-            child: SelectableText.rich(
-              TextSpan(children: highlightedSpans),
-              style: defaultStyle,
+            child: RichText(
+              text: TextSpan(
+                children: highlightedSpans,
+                style: defaultStyle,
+              ),
             ),
           ),
         ],

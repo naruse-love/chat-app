@@ -44,7 +44,7 @@ class ChatService {
     final headers = <String, String>{
       'Content-Type': 'application/json',
     };
-    if (apiKey.isNotEmpty) {
+    if (apiKey.isNotEmpty && apiKey != 'opencode-free-key') {
       headers['Authorization'] = 'Bearer $apiKey';
     }
     final options = Options(
@@ -83,7 +83,7 @@ class ChatService {
     final url = '$cleanBaseUrl/models';
 
     final headers = <String, String>{};
-    if (apiKey.isNotEmpty) {
+    if (apiKey.isNotEmpty && apiKey != 'opencode-free-key') {
       headers['Authorization'] = 'Bearer $apiKey';
     }
     final options = Options(

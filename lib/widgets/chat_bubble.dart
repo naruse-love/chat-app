@@ -28,6 +28,7 @@ class ChatBubble extends StatefulWidget {
 
 class _ChatBubbleState extends State<ChatBubble> {
   bool _isReasoningExpanded = false;
+  bool _isToolOutputExpanded = false;
 
   void _showMessageActions() {
     showModalBottomSheet(
@@ -149,6 +150,8 @@ class _ChatBubbleState extends State<ChatBubble> {
                       widget.message.content,
                       style: theme.textTheme.bodyLarge?.copyWith(color: textColor),
                     )
+                  else if (isTool)
+                    _buildToolOutputPanel(theme, theme.textTheme.bodyLarge?.copyWith(color: textColor))
                   else
                     MarkdownRenderer(
                       markdownData: widget.message.content,
@@ -367,5 +370,96 @@ class _ChatBubbleState extends State<ChatBubble> {
     final hour = timestamp.hour.toString().padLeft(2, '0');
     final minute = timestamp.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
+  }
+
+  Widget _buildToolOutputPanel(ThemeData theme, TextStyle? textColor) {
+    return Container(
+      margin: const EdgeInsets.only(top: 4.0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8.0),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+            child: Row(
+              children: [
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _isToolOutputExpanded = !_isToolOutputExpanded;
+                    });
+                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.build_circle_outlined,
+                        size: 16.0,
+                        color: theme.colorScheme.outline,
+                      ),
+                      const SizedBox(width: 6.0),
+                      Text(
+                        '工具执行结果',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.outline,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 4.0),
+                      Icon(
+                        _isToolOutputExpanded ? Icons.expand_less : Icons.expand_more,
+                        size: 16.0,
+                        color: theme.colorScheme.outline,
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: Icon(
+                      Icons.copy,
+                      size: 16.0,
+                      color: theme.colorScheme.outline,
+                    ),
+                    tooltip: '复制结果',
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: widget.message.content));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('已复制工具执行结果'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(8.0, 0.0, 8.0, 8.0),
+              child: MarkdownRenderer(
+                markdownData: widget.message.content,
+                isStreaming: widget.isStreaming,
+                textColor: textColor,
+              ),
+            ),
+            crossFadeState: _isToolOutputExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 200),
+          ),
+        ],
+      ),
+    );
   }
 }
