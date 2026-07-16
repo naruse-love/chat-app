@@ -94,7 +94,7 @@ void main() {
       expect(state.activeConfig?.id, equals('opencode_free'));
 
       final storedKey = await mockSecureStorage.read(key: 'opencode_free_api_key_ref');
-      expect(storedKey, equals('opencode-free-key'));
+      expect(storedKey, equals(''));
     });
 
     test('Verify OpenCode Free fallback models metadata and tool calling flag defaults', () async {

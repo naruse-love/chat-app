@@ -41,11 +41,14 @@ class ChatService {
     final cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
     final url = '$cleanBaseUrl/chat/completions';
 
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+    if (apiKey.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $apiKey';
+    }
     final options = Options(
-      headers: {
-        'Authorization': 'Bearer $apiKey',
-        'Content-Type': 'application/json',
-      },
+      headers: headers,
       responseType: ResponseType.stream,
     );
 
@@ -79,10 +82,12 @@ class ChatService {
     final cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
     final url = '$cleanBaseUrl/models';
 
+    final headers = <String, String>{};
+    if (apiKey.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $apiKey';
+    }
     final options = Options(
-      headers: {
-        'Authorization': 'Bearer $apiKey',
-      },
+      headers: headers,
     );
 
     final response = await _dio.get(

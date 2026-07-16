@@ -64,7 +64,7 @@ class ApiConfigNotifier extends StateNotifier<ApiConfigState> {
           isDefault: true,
           createdAt: DateTime.now(),
         );
-        await _apiConfigDao.insert(defaultConfig, 'opencode-free-key');
+        await _apiConfigDao.insert(defaultConfig, '');
         if (!mounted) return;
         configs = await _apiConfigDao.getAll();
         if (!mounted) return;

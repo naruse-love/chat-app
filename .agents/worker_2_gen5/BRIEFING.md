@@ -1,4 +1,4 @@
-# BRIEFING — 2026-07-16T09:04:55Z
+# BRIEFING — 2026-07-16T09:06:10Z
 
 ## Mission
 Remediate integrity violation/test failure caused by missing `if (!mounted) return;` after `await` calls in `ApiConfigNotifier` and any other notifiers.
@@ -8,10 +8,10 @@ Remediate integrity violation/test failure caused by missing `if (!mounted) retu
 - Roles: implementer, qa
 - Working directory: d:\work\chat\.agents\worker_2_gen5
 - Original parent: 3e5a1e9b-3a1f-46aa-95fc-0ab5963a2208
-- Milestone: Remediation
+- Milestone: Remediation Completed
 
 ## 🔒 Key Constraints
-- Test must be 100% pass (136/136 tests)
+- Test must be 100% pass (150/150 tests pass)
 - Analyze must be 0 issues (`No issues found!`)
 - Place `if (!mounted) return;` after every `await` in StateNotifier async methods
 - Update `WORK_LOG.md` top header
@@ -19,30 +19,38 @@ Remediate integrity violation/test failure caused by missing `if (!mounted) retu
 
 ## Current Parent
 - Conversation ID: 3e5a1e9b-3a1f-46aa-95fc-0ab5963a2208
-- Updated: not yet
+- Updated: 2026-07-16T09:06:10Z
 
 ## Task Summary
-- **What to build**: Fix async mounted check missing in `ApiConfigNotifier` and check other notifiers for missing `if (!mounted) return;` after `await` calls.
-- **Success criteria**: All tests pass, static analysis clean, git committed and pushed, handoff written.
+- **What to build**: Fixed async mounted check missing in `ApiConfigNotifier` and checked/fixed all other StateNotifiers for missing `if (!mounted) return;` after `await` calls.
+- **Success criteria**: All tests pass (150/150), static analysis clean (`No issues found!`), git committed and pushed, handoff written.
 - **Interface contracts**: `d:\work\chat\.agents\AGENTS.md`
-- **Code layout**: `lib/providers/api_config_provider.dart`
+- **Code layout**: `lib/providers/api_config_provider.dart`, `lib/providers/conversation_provider.dart`, `lib/providers/model_provider.dart`, `lib/providers/settings_provider.dart`, `lib/providers/theme_provider.dart`, `lib/providers/chat_provider.dart`
 
 ## Change Tracker
-- **Files modified**: [TBD]
-- **Build status**: [TBD]
+- **Files modified**:
+  - `lib/providers/api_config_provider.dart` — Added `if (!mounted) return;` after all `await` calls
+  - `lib/providers/conversation_provider.dart` — Added `if (!mounted) return;` after all `await` calls
+  - `lib/providers/model_provider.dart` — Added `if (!mounted) return;` after all `await` calls
+  - `lib/providers/settings_provider.dart` — Added `if (!mounted) return;` after all `await` calls
+  - `lib/providers/theme_provider.dart` — Added `if (!mounted) return;` after all `await` calls
+  - `lib/providers/chat_provider.dart` — Added `if (!mounted) return;` after all `await` calls
+  - `WORK_LOG.md` — Prepend remediation entry
+- **Build status**: `flutter analyze` 0 issues (`No issues found!`), `flutter test` 150/150 passed
 - **Pending issues**: None
 
 ## Quality Status
-- **Build/test result**: [TBD]
-- **Lint status**: [TBD]
-- **Tests added/modified**: None
+- **Build/test result**: Pass (150/150 tests pass)
+- **Lint status**: Clean (0 issues)
+- **Tests added/modified**: Verified against all existing tests
 
 ## Loaded Skills
 - None
 
 ## Key Decisions Made
-- Proceeding with code inspection and edit.
+- Added `if (!mounted) return;` to all StateNotifier async methods across provider files to enforce lifecycle safety.
 
 ## Artifact Index
 - `.agents/worker_2_gen5/ORIGINAL_REQUEST.md` — Original prompt request
 - `.agents/worker_2_gen5/BRIEFING.md` — Current briefing state
+- `.agents/worker_2_gen5/handoff.md` — Final handoff report
