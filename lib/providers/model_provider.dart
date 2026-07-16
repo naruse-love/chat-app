@@ -53,10 +53,12 @@ class ModelNotifier extends StateNotifier<ModelState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final apiKey = await _apiConfigDao.getApiKey(_activeConfig.apiKeyRef) ?? '';
+      if (!mounted) return;
       final models = await _chatService.getModels(
         baseUrl: _activeConfig.baseUrl,
         apiKey: apiKey,
       );
+      if (!mounted) return;
 
       ModelInfo? selected = state.selectedModel;
       if (selected == null || !models.any((m) => m.id == selected!.id)) {
@@ -65,6 +67,7 @@ class ModelNotifier extends StateNotifier<ModelState> {
 
       state = ModelState(models: models, selectedModel: selected, isLoading: false);
     } catch (e) {
+      if (!mounted) return;
       final fallbackModels = ModelInfo.defaultOpenCodeFallbackModels;
       ModelInfo? selected = state.selectedModel;
       if (selected == null || !fallbackModels.any((m) => m.id == selected!.id)) {

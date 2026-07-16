@@ -160,6 +160,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       error: null,
     );
     await _messageDao.insert(userMessage);
+    if (!mounted) return;
 
     if (activeConv != null) {
       _ref.read(conversationProvider.notifier).updateConversation(
@@ -200,6 +201,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final activeConv = _ref.read(conversationProvider).activeConversation;
       if (activeConv != null) {
         await _messageDao.deleteAfter(activeConv.id, messageId);
+        if (!mounted) return;
       }
 
       // Reload messages from DB to ensure consistency
@@ -234,9 +236,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     // Delete all messages after the last user message
     await _messageDao.deleteAfter(activeConv.id, lastUserMsg.id);
+    if (!mounted) return;
 
     // Reload fresh messages
     final freshMessages = await _messageDao.getMessagesForConversation(activeConv.id);
+    if (!mounted) return;
     state = state.copyWith(messages: freshMessages);
 
     // Start streaming
@@ -251,6 +255,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (activeConv == null) return;
 
     await _messageDao.deleteAfter(activeConv.id, messageId);
+    if (!mounted) return;
 
     // Reload fresh messages
     final freshMessages = await _messageDao.getMessagesForConversation(activeConv.id);
@@ -273,9 +278,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
 
     final apiKey = await _apiConfigDao.getApiKey(activeConfig.apiKeyRef) ?? '';
+    if (!mounted) return;
     _cancelToken = CancelToken();
 
     final history = await _messageDao.getMessagesForConversation(conversationId);
+    if (!mounted) return;
 
     // Determine system prompt: conversation-level takes precedence over default
     final systemPrompt = (activeConv?.systemPrompt?.trim().isNotEmpty == true)
@@ -301,6 +308,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
       await for (final event in stream) {
         if (_cancelToken?.isCancelled ?? false) break;
+        if (!mounted) break;
 
         if (event is ReasoningDeltaEvent) {
           state = state.copyWith(streamReasoning: state.streamReasoning + event.reasoning);
@@ -319,6 +327,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
           for (final toolMsg in event.toolMessages) {
             await _messageDao.insert(toolMsg);
           }
+          if (!mounted) break;
           state = state.copyWith(
             messages: [...state.messages, event.assistantMessage, ...event.toolMessages],
             streamContent: '',
@@ -330,6 +339,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
           pendingCompletionTokens = event.completionTokens;
         }
       }
+
+      if (!mounted) return;
 
       if (state.streamContent.isNotEmpty || state.streamReasoning.isNotEmpty) {
         final assistantMessage = ChatMessage(
@@ -343,6 +354,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
           completionTokens: pendingCompletionTokens,
         );
         await _messageDao.insert(assistantMessage);
+        if (!mounted) return;
         state = state.copyWith(
           messages: [...state.messages, assistantMessage],
           isGenerating: false,
@@ -353,6 +365,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         state = state.copyWith(isGenerating: false);
       }
     } catch (e) {
+      if (!mounted) return;
       if (_cancelToken?.isCancelled ?? false) {
         if (state.streamContent.isNotEmpty || state.streamReasoning.isNotEmpty) {
           final cancelledMsg = ChatMessage(
@@ -366,6 +379,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             completionTokens: pendingCompletionTokens,
           );
           await _messageDao.insert(cancelledMsg);
+          if (!mounted) return;
           state = state.copyWith(
             messages: [...state.messages, cancelledMsg],
             isGenerating: false,
@@ -416,6 +430,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final activeConv = _ref.read(conversationProvider).activeConversation;
     if (activeConv != null) {
       await _messageDao.clearConversation(activeConv.id);
+      if (!mounted) return;
       state = ChatState();
     }
   }

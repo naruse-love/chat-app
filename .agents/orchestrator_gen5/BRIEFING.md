@@ -45,12 +45,18 @@ Lead the feature extension for OpenCode Free provider integration, webpage scrap
 | Explorer 1 | teamwork_preview_explorer | R1 OpenCode Free | completed | 337474af-4c46-4ca1-8f25-cf670e7f4690 |
 | Explorer 2 | teamwork_preview_explorer | R2 Webpage Scraper url_fetch | completed | 275cc8a8-2b22-408e-ac54-eb0c495ac791 |
 | Explorer 3 | teamwork_preview_explorer | R3 Search Optimizations | completed | 84370351-a720-4c13-a49c-a86663f84ad1 |
-| Worker 1 | teamwork_preview_worker | Implementation R1, R2, R3 & Tests | in-progress | e332eed9-9f33-4b5d-a2c1-ae67d197bfb6 |
+| Worker 1 | teamwork_preview_worker | Implementation R1, R2, R3 & Tests | completed | e332eed9-9f33-4b5d-a2c1-ae67d197bfb6 |
+| Reviewer 1 | teamwork_preview_reviewer | Code Quality Review | in-progress | 2f66df5a-4de5-4ec0-98fb-97bc81bceab4 |
+| Reviewer 2 | teamwork_preview_reviewer | Deep Robustness Review | in-progress | c6b7beaf-3b1b-4b32-a135-20daff1f7dff |
+| Challenger 1 | teamwork_preview_challenger | Empirical Verification 1 | in-progress | e15196c4-b570-434a-964a-b4be251fe738 |
+| Challenger 2 | teamwork_preview_challenger | Empirical Verification 2 | in-progress | 82acfcc1-55f6-4b3b-a431-3d9e70bf8187 |
+| Auditor 1 | teamwork_preview_auditor | Forensic Integrity Audit | failed (veto) | 199f06be-bad9-4462-a9ad-828fb2126868 |
+| Worker 2 | teamwork_preview_worker | Remediation: Add mounted guards to ApiConfigNotifier | in-progress | d5ce3d46-792f-46d9-b176-9d796b954b94 |
 
 ## Succession Status
 - Succession required: no
-- Spawn count: 4 / 16
-- Pending subagents: e332eed9-9f33-4b5d-a2c1-ae67d197bfb6
+- Spawn count: 10 / 16
+- Pending subagents: d5ce3d46-792f-46d9-b176-9d796b954b94
 - Predecessor: none
 - Successor: not yet spawned
 

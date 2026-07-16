@@ -49,6 +49,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   Future<void> _loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
       isLoaded = true;
       state = AppSettings(
         searxngUrl: prefs.getString(_searxngKey) ?? '',
@@ -140,6 +141,7 @@ class SystemPromptsNotifier extends StateNotifier<List<SystemPromptTemplate>> {
   Future<void> loadTemplates() async {
     try {
       var list = await _dao.getAll();
+      if (!mounted) return;
       if (list.isEmpty) {
         // Prepopulate default templates
         final defaultTemplates = [
@@ -168,8 +170,10 @@ class SystemPromptsNotifier extends StateNotifier<List<SystemPromptTemplate>> {
 
         for (final t in defaultTemplates) {
           await _dao.insert(t);
+          if (!mounted) return;
         }
         list = await _dao.getAll();
+        if (!mounted) return;
       }
       state = list;
     } catch (_) {}
@@ -177,11 +181,13 @@ class SystemPromptsNotifier extends StateNotifier<List<SystemPromptTemplate>> {
 
   Future<void> addTemplate(SystemPromptTemplate template) async {
     await _dao.insert(template);
+    if (!mounted) return;
     await loadTemplates();
   }
 
   Future<void> deleteTemplate(String id) async {
     await _dao.delete(id);
+    if (!mounted) return;
     await loadTemplates();
   }
 }

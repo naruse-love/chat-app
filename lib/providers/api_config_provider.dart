@@ -54,6 +54,7 @@ class ApiConfigNotifier extends StateNotifier<ApiConfigState> {
     state = state.copyWith(isLoading: true);
     try {
       var configs = await _apiConfigDao.getAll();
+      if (!mounted) return;
       if (configs.isEmpty) {
         final defaultConfig = ApiConfig(
           id: 'opencode_free',
@@ -64,14 +65,18 @@ class ApiConfigNotifier extends StateNotifier<ApiConfigState> {
           createdAt: DateTime.now(),
         );
         await _apiConfigDao.insert(defaultConfig, 'opencode-free-key');
+        if (!mounted) return;
         configs = await _apiConfigDao.getAll();
+        if (!mounted) return;
       }
       ApiConfig? active = await _apiConfigDao.getDefault();
+      if (!mounted) return;
       if (active == null && configs.isNotEmpty) {
         active = configs.first;
       }
       state = ApiConfigState(configs: configs, activeConfig: active, isLoading: false);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -80,8 +85,10 @@ class ApiConfigNotifier extends StateNotifier<ApiConfigState> {
     state = state.copyWith(isLoading: true);
     try {
       await _apiConfigDao.insert(config, apiKey);
+      if (!mounted) return;
       await loadConfigs();
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -90,8 +97,10 @@ class ApiConfigNotifier extends StateNotifier<ApiConfigState> {
     state = state.copyWith(isLoading: true);
     try {
       await _apiConfigDao.update(config, apiKey: apiKey);
+      if (!mounted) return;
       await loadConfigs();
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -100,8 +109,10 @@ class ApiConfigNotifier extends StateNotifier<ApiConfigState> {
     state = state.copyWith(isLoading: true);
     try {
       await _apiConfigDao.delete(id);
+      if (!mounted) return;
       await loadConfigs();
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -115,8 +126,10 @@ class ApiConfigNotifier extends StateNotifier<ApiConfigState> {
     try {
       final updated = config.copyWith(isDefault: true);
       await _apiConfigDao.update(updated);
+      if (!mounted) return;
       await loadConfigs();
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }

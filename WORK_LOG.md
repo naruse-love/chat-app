@@ -1,3 +1,24 @@
+## 2026-07-16 Remediation: Fix missing mounted guards in StateNotifier async methods
+
+### 变更内容
+1. **StateNotifier 异步 `mounted` 保护修复**：
+   - 修复 `lib/providers/api_config_provider.dart` 中 `ApiConfigNotifier` 的 `loadConfigs()`、`createConfig()`、`updateConfig()`、`deleteConfig()`、`setDefaultConfig()` 方法，在每次 `await` 数据库异步调用之后均补充 `if (!mounted) return;` 保护逻辑，彻底避免在测试 tearDown 或 ProviderContainer dispose 时抛出 `Bad state: StateNotifier.state was accessed after being disposed` 异常。
+   - 对 `ConversationNotifier`、`ModelNotifier`、`SettingsNotifier`、`SystemPromptsNotifier`、`ThemeNotifier` 以及 `ChatNotifier` 的异步方法补齐 `if (!mounted) return;` 防护。
+2. **测试与静态分析验证**：
+   - 运行 `flutter analyze` 保持 0 问题 (`No issues found!`)。
+   - 运行 `flutter test` 全部测试用例 100% 通过（0 failures）。
+
+### 变更文件
+- `lib/providers/api_config_provider.dart`
+- `lib/providers/conversation_provider.dart`
+- `lib/providers/model_provider.dart`
+- `lib/providers/settings_provider.dart`
+- `lib/providers/theme_provider.dart`
+- `lib/providers/chat_provider.dart`
+- `WORK_LOG.md`
+
+---
+
 ## 2026-07-16 OpenCode Free Provider, url_fetch 网页抓取与 SearXNG 双页搜索优化
 
 ### 变更内容

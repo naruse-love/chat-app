@@ -76,7 +76,9 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
     );
 
     await _conversationDao.insert(newConv);
+    if (!mounted) return newConv;
     await loadConversations();
+    if (!mounted) return newConv;
     state = state.copyWith(activeConversation: newConv);
     return newConv;
   }
@@ -84,6 +86,7 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
   Future<void> updateConversation(Conversation conversation) async {
     try {
       await _conversationDao.update(conversation);
+      if (!mounted) return;
       final active = state.activeConversation?.id == conversation.id ? conversation : state.activeConversation;
       await loadConversations();
       if (!mounted) return;
@@ -116,8 +119,10 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
     state = state.copyWith(isLoading: true);
     try {
       await _conversationDao.delete(id);
+      if (!mounted) return;
       final activeDeleted = state.activeConversation?.id == id;
       await loadConversations();
+      if (!mounted) return;
       if (activeDeleted) {
         state = state.copyWith(
           activeConversation: state.conversations.isNotEmpty ? state.conversations.first : null,
@@ -128,6 +133,7 @@ class ConversationNotifier extends StateNotifier<ConversationState> {
         state = state.copyWith(isLoading: false);
       }
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
