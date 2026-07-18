@@ -55,6 +55,7 @@ class MockSearchService extends SearchService {
     String searchBackend = 'searxng',
     String? googleApiKey,
     String? googleBaseUrl,
+    String? googleSearchModel,
   }) {
     searchCallCount++;
     if (searchHandler != null) {

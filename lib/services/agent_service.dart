@@ -170,6 +170,7 @@ class AgentService {
     String searchBackend = 'searxng',
     String? googleApiKey,
     String? googleBaseUrl,
+    String? googleSearchModel,
     CancelToken? cancelToken,
   }) async* {
     // Inject system prompt if provided (prepend after removing any existing system messages)
@@ -215,6 +216,7 @@ class AgentService {
           searchBackend: searchBackend,
           googleApiKey: googleApiKey,
           googleBaseUrl: googleBaseUrl,
+          googleSearchModel: googleSearchModel,
         );
       } on SearchException catch (e) {
         results = [];
@@ -402,6 +404,9 @@ class AgentService {
                 query: query,
                 searxngUrl: searxngUrl,
                 searchBackend: searchBackend,
+                googleApiKey: googleApiKey,
+                googleBaseUrl: googleBaseUrl,
+                googleSearchModel: googleSearchModel,
               );
             } on SearchException catch (e) {
               results = [];
@@ -465,6 +470,7 @@ class AgentService {
           searchBackend: searchBackend,
           googleApiKey: googleApiKey,
           googleBaseUrl: googleBaseUrl,
+          googleSearchModel: googleSearchModel,
           cancelToken: cancelToken,
         );
       }
@@ -484,6 +490,7 @@ class AgentService {
     String searchBackend = 'searxng',
     String? googleApiKey,
     String? googleBaseUrl,
+    String? googleSearchModel,
     CancelToken? cancelToken,
   }) async* {
     yield* _streamCompletionsLoop(
@@ -496,6 +503,7 @@ class AgentService {
       searchBackend: searchBackend,
       googleApiKey: googleApiKey,
       googleBaseUrl: googleBaseUrl,
+      googleSearchModel: googleSearchModel,
       cancelToken: cancelToken,
       toolRound: 0,
     );
@@ -512,6 +520,7 @@ class AgentService {
     String searchBackend = 'searxng',
     String? googleApiKey,
     String? googleBaseUrl,
+    String? googleSearchModel,
     CancelToken? cancelToken,
     int toolRound = 0,
   }) async* {
@@ -751,6 +760,7 @@ class AgentService {
         searchBackend: searchBackend,
         googleApiKey: googleApiKey,
         googleBaseUrl: googleBaseUrl,
+        googleSearchModel: googleSearchModel,
         cancelToken: cancelToken,
         toolRound: toolRound + 1,
       );
@@ -876,6 +886,7 @@ class AgentService {
             searchBackend: searchBackend,
             googleApiKey: googleApiKey,
             googleBaseUrl: googleBaseUrl,
+            googleSearchModel: googleSearchModel,
             cancelToken: cancelToken,
             toolRound: toolRound + 1,
           );

@@ -395,6 +395,44 @@ void main() {
       expect(results[1].content, '来自 Google 搜索的网页来源。');
     });
 
+    test('Google Grounding search succeeds with custom model', () async {
+      mockAdapter.handler = (options) {
+        expect(options.path, contains('/v1beta/models/custom-model-name:generateContent'));
+        expect(options.method, 'POST');
+        expect(options.queryParameters['key'], 'google_key');
+
+        final mockResponse = {
+          'candidates': [
+            {
+              'content': {
+                'parts': [
+                  {'text': 'Custom model response'}
+                ]
+              }
+            }
+          ]
+        };
+
+        return ResponseBody.fromString(
+          json.encode(mockResponse),
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        );
+      };
+
+      final results = await searchService.search(
+        query: 'test query',
+        searchBackend: 'google',
+        googleApiKey: 'google_key',
+        googleSearchModel: 'custom-model-name',
+      );
+
+      expect(results, hasLength(1));
+      expect(results[0].content, 'Custom model response');
+    });
+
     test('Google Grounding search throws exception on missing API Key', () async {
       try {
         await searchService.search(

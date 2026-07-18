@@ -14,6 +14,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _searxngController;
   late final TextEditingController _googleApiKeyController;
   late final TextEditingController _googleBaseUrlController;
+  late final TextEditingController _googleModelController;
   bool _obscureGoogleApiKey = true;
 
   void _syncFieldsIfNeeded(AppSettings settings) {
@@ -26,6 +27,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_googleBaseUrlController.text.isEmpty && settings.googleSearchBaseUrl.isNotEmpty) {
       _googleBaseUrlController.text = settings.googleSearchBaseUrl;
     }
+    if (_googleModelController.text.isEmpty && settings.googleSearchModel.isNotEmpty) {
+      _googleModelController.text = settings.googleSearchModel;
+    }
   }
 
   @override
@@ -35,6 +39,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _searxngController = TextEditingController(text: settings.searxngUrl);
     _googleApiKeyController = TextEditingController(text: settings.googleSearchApiKey);
     _googleBaseUrlController = TextEditingController(text: settings.googleSearchBaseUrl);
+    _googleModelController = TextEditingController(text: settings.googleSearchModel);
   }
 
   @override
@@ -42,6 +47,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _searxngController.dispose();
     _googleApiKeyController.dispose();
     _googleBaseUrlController.dispose();
+    _googleModelController.dispose();
     super.dispose();
   }
 
@@ -226,6 +232,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       onChanged: (val) {
                         notifier.updateGoogleSearchBaseUrl(val.trim());
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _googleModelController,
+                      decoration: const InputDecoration(
+                        labelText: 'Google Grounding 模型',
+                        hintText: '例如 gemini-2.5-flash',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: (val) {
+                        notifier.updateGoogleSearchModel(val.trim());
                       },
                     ),
                   ),

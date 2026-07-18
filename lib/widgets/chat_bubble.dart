@@ -152,12 +152,15 @@ class _ChatBubbleState extends State<ChatBubble> {
   Widget build(BuildContext context) {
     final isUser = widget.message.role == 'user';
     final isTool = widget.message.role == 'tool';
+    final isIntermediateAssistant = widget.message.role == 'assistant' &&
+        widget.message.toolCalls != null &&
+        widget.message.toolCalls!.isNotEmpty;
     final theme = Theme.of(context);
     
     final alignment = isUser ? Alignment.centerRight : Alignment.centerLeft;
     final bubbleColor = isUser
         ? theme.colorScheme.primary
-        : (isTool
+        : ((isTool || isIntermediateAssistant)
             ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
             : theme.colorScheme.surfaceContainerHighest);
     final textColor = isUser ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface;
@@ -208,12 +211,6 @@ class _ChatBubbleState extends State<ChatBubble> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (widget.message.reasoningContent != null &&
-                      widget.message.reasoningContent!.isNotEmpty) ...[
-                    _buildReasoningPanel(theme),
-                    const SizedBox(height: 8.0),
-                  ],
-                  
                   if (isUser)
                     Text(
                       widget.message.content,
@@ -221,12 +218,20 @@ class _ChatBubbleState extends State<ChatBubble> {
                     )
                   else if (isTool)
                     _buildToolOutputPanel(theme, theme.textTheme.bodyLarge?.copyWith(color: textColor))
-                  else
+                  else if (isIntermediateAssistant)
+                    _buildIntermediateAssistantPanel(theme, theme.textTheme.bodyLarge?.copyWith(color: textColor))
+                  else ...[
+                    if (widget.message.reasoningContent != null &&
+                        widget.message.reasoningContent!.isNotEmpty) ...[
+                      _buildReasoningPanel(theme),
+                      const SizedBox(height: 8.0),
+                    ],
                     MarkdownRenderer(
                       markdownData: widget.message.content,
                       isStreaming: widget.isStreaming,
                       textColor: theme.textTheme.bodyLarge?.copyWith(color: textColor),
                     ),
+                  ],
                 ],
               ),
             ),
@@ -439,6 +444,106 @@ class _ChatBubbleState extends State<ChatBubble> {
     final hour = timestamp.hour.toString().padLeft(2, '0');
     final minute = timestamp.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
+  }
+
+  Widget _buildIntermediateAssistantPanel(ThemeData theme, TextStyle? textColor) {
+    final toolNames = widget.message.toolCalls?.map((tc) => tc.functionName).join(', ') ?? '';
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () {
+            setState(() {
+              _isReasoningExpanded = !_isReasoningExpanded;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.auto_awesome,
+                  size: 16.0,
+                  color: theme.colorScheme.outline,
+                ),
+                const SizedBox(width: 6.0),
+                Text(
+                  '思考与工具调用 [$toolNames]',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 4.0),
+                Icon(
+                  _isReasoningExpanded ? Icons.expand_less : Icons.expand_more,
+                  size: 16.0,
+                  color: theme.colorScheme.outline,
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedCrossFade(
+          firstChild: const SizedBox.shrink(),
+          secondChild: Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.message.reasoningContent != null &&
+                    widget.message.reasoningContent!.isNotEmpty) ...[
+                  Text(
+                    '思考过程:',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    width: double.infinity,
+                    child: Text(
+                      widget.message.reasoningContent!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (widget.message.content.isNotEmpty) ...[
+                  Text(
+                    '过程输出:',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  MarkdownRenderer(
+                    markdownData: widget.message.content,
+                    isStreaming: widget.isStreaming,
+                    textColor: theme.textTheme.bodyMedium?.copyWith(color: textColor?.color),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          crossFadeState: _isReasoningExpanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 200),
+        ),
+      ],
+    );
   }
 
   Widget _buildToolOutputPanel(ThemeData theme, TextStyle? textColor) {

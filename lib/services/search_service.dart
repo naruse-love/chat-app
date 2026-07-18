@@ -90,12 +90,13 @@ class SearchService {
     String searchBackend = 'searxng',
     String? googleApiKey,
     String? googleBaseUrl,
+    String? googleSearchModel,
   }) async {
     switch (searchBackend) {
       case 'bing':
         return _searchBing(query);
       case 'google':
-        return _searchGoogle(query, googleApiKey, googleBaseUrl);
+        return _searchGoogle(query, googleApiKey, googleBaseUrl, googleSearchModel);
       case 'searxng':
       default:
         return _searchSearxng(query, searxngUrl);
@@ -322,6 +323,7 @@ class SearchService {
     String query,
     String? apiKey,
     String? baseUrl,
+    String? googleSearchModel,
   ) async {
     if (apiKey == null || apiKey.trim().isEmpty) {
       throw SearchException(
@@ -341,7 +343,9 @@ class SearchService {
     }
 
     // Default model to gemini-2.5-flash as it is fast and supports search grounding
-    const model = 'gemini-2.5-flash';
+    final model = googleSearchModel == null || googleSearchModel.trim().isEmpty
+        ? 'gemini-2.5-flash'
+        : googleSearchModel.trim();
     final requestUrl = '$url/v1beta/models/$model:generateContent';
 
     final body = {

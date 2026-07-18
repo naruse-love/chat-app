@@ -14,6 +14,7 @@ class AppSettings {
   final String searchBackend;
   final String googleSearchApiKey;
   final String googleSearchBaseUrl;
+  final String googleSearchModel;
 
   AppSettings({
     this.searxngUrl = '',
@@ -22,6 +23,7 @@ class AppSettings {
     this.searchBackend = 'searxng',
     this.googleSearchApiKey = '',
     this.googleSearchBaseUrl = 'https://generativelanguage.googleapis.com',
+    this.googleSearchModel = 'gemini-2.5-flash',
   });
 
   AppSettings copyWith({
@@ -31,6 +33,7 @@ class AppSettings {
     String? searchBackend,
     String? googleSearchApiKey,
     String? googleSearchBaseUrl,
+    String? googleSearchModel,
   }) {
     return AppSettings(
       searxngUrl: searxngUrl ?? this.searxngUrl,
@@ -39,6 +42,7 @@ class AppSettings {
       searchBackend: searchBackend ?? this.searchBackend,
       googleSearchApiKey: googleSearchApiKey ?? this.googleSearchApiKey,
       googleSearchBaseUrl: googleSearchBaseUrl ?? this.googleSearchBaseUrl,
+      googleSearchModel: googleSearchModel ?? this.googleSearchModel,
     );
   }
 }
@@ -49,6 +53,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _autoSearchKey = 'enable_auto_search';
   static const _searchBackendKey = 'search_backend';
   static const _googleSearchBaseUrlKey = 'google_search_base_url';
+  static const _googleSearchModelKey = 'google_search_model';
   static const _googleSearchApiKeySecureKey = 'google_search_api_key';
 
   final SecureStorageService _secureStorage;
@@ -72,6 +77,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         searchBackend: prefs.getString(_searchBackendKey) ?? 'searxng',
         googleSearchApiKey: apiKey,
         googleSearchBaseUrl: prefs.getString(_googleSearchBaseUrlKey) ?? 'https://generativelanguage.googleapis.com',
+        googleSearchModel: prefs.getString(_googleSearchModelKey) ?? 'gemini-2.5-flash',
       );
     } catch (_) {
       isLoaded = true;
@@ -122,6 +128,14 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_googleSearchBaseUrlKey, url);
+    } catch (_) {}
+  }
+
+  Future<void> updateGoogleSearchModel(String model) async {
+    state = state.copyWith(googleSearchModel: model);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_googleSearchModelKey, model);
     } catch (_) {}
   }
 }
