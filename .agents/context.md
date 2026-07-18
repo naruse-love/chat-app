@@ -31,8 +31,9 @@
 | **9 / 维护迭代** | 消息编辑/重发、Token 统计、会话回退/重新生成；搜索迁移到 SearXNG 主路径 + 实验性 Bing（移除 9Router 内置搜索）；多轮 tool calling + 伪 XML `<tool_call>` 兜底；Vision 本地预检移除（发图交由 API 报错）；SearXNG URL 回显、Vision 能力解析增强；思考内容可选中/复制；主界面系统提示词入口 + 注入 API system 消息；编辑/回退崩溃加固（2026-07-13 ~ 2026-07-15） | ✅ 完成 |
 | **10 / 深度增强**| OpenCode Free 免本地代理直连（指向 `https://opencode.ai/zen/v1`）；网页全文抓取工具 (`url_fetch` + HTML 过滤 + 8000字截断)；SearXNG 并发双页查询与去重优化；全 StateNotifier 异步 `mounted` 防御，避免测试销毁崩溃（2026-07-16） | ✅ 完成 |
 | **11 / 修复加固**| 模型选择区域加大（热区提升至符合 48dp 标准）；OpenCode Free 免费模型过滤（仅保留 ID 含有 free 字段的模型）与默认模型 deepseek-v4-flash-free 设置；SharedPreferences 异步竞态防范（在 _startStreaming 强制 await initialization，消除 Bing 搜索误报 SearXNG 错误）；Tool Round 超限保底方案（toolRound >= 4 强制进行不含 tools 的最终响应补全，防止自动停止）；编辑与回退弹窗 300ms 路由延迟销毁加固，防止 disposed controller 与 _dependents.isEmpty 框架断言崩溃（2026-07-16 ~ 2026-07-18） | ✅ 完成 |
+| **12 / 维护增强**| 多轮调用上限提升至 10 轮并配置总结兜底；思考过程和工具结果默认折叠展示；长按消息可复制纯文本（自动洗 Markdown 标记）和 Markdown 原始格式；接入谷歌 AI Studio 搜索接地 (Google Grounding)，可在设置中切换并提供 API Key 及 Base URL 配置 (2026-07-18) | ✅ 完成 |
 
-**当前测试状态：153 / 153 测试用例全部通过，`flutter analyze` 0 issues。**
+**当前测试状态：156 / 156 测试用例全部通过，`flutter analyze` 0 issues。**
 
 ---
 
@@ -147,6 +148,9 @@ test/
 19. **弹窗过渡动画延迟销毁**：在 `_showEditDialog` 与 `_confirmRollback` 中，将关闭对话框后的操作延迟增加到 `300ms`，让 Dialog 路由过渡动画充分收缩销毁后再 `dispose()` 关联的 `controller` 并更新 Riverpod 状态，杜绝由于动画期间 Widget 被提前注销或组件未挂载产生的 `_dependents.isEmpty` 断言崩溃。
 
 20. **OpenCode Free 模型过滤与默认配置**：当选择 OpenCode Free API 时，自动过滤出仅包含 `'free'` 字段的免费模型列表，并将 `deepseek-v4-flash-free` 设定为初始默认选定模型。
+
+21. **Google Grounding AI 搜索整合**：将 Google AI Studio 搜索接地输出的 AI 整合总结与原始 `groundingChunks` 链接一并解析封装，作为搜索返回列表呈现。这种既有 AI 预先提炼又附带真实来源链接的设计，既加速了后续大模型的理解，又保障了事实可靠性。
+22. **正则表达式原始字符串替换**：在 Dart 中，正常字符串内的 `$1` 会被识别为表达式插值。为了在 `chat_bubble` 清理 Markdown 标记时使用正则匹配组替换，我们必须使用 Dart 原始字符串（`r'$1'`）规避插值编译错误。
 
 ---
 
