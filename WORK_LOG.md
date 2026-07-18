@@ -1,4 +1,42 @@
+## 2026-07-18 Maintenance: Multi-Round 10-Limit collapse, AI Copy Plain/Markdown, and Google Search Grounding
+
+### 变更内容
+1. **多轮工具链上限调整与思考/工具折叠**：
+   - 在 `lib/services/agent_service.dart` 中将最大工具调用/思考轮次限制提高到 10 轮（`toolRound >= 9`）。并在第 10 轮最终请求时，注入系统消息提示词（指引模型给出最终回答并绝对不要使用工具或输出 `<tool_call>` 伪 XML），从而保证生成结果完整且没有冗余的裸标签。
+   - 确认在 `lib/widgets/chat_bubble.dart` 中思考（Reasoning）面板与工具输出面板默认保持折叠状态（`_isReasoningExpanded` 和 `_isToolOutputExpanded` 初始为 `false`）。
+2. **AI 输出内容长按复制（纯文本与 Markdown）**：
+   - 在 `lib/widgets/chat_bubble.dart` 中实现了 `_stripMarkdown` 工具函数，用于清洗标准的 Markdown 符号（如粗体、斜体、标题、代码块、链接等）。
+   - 在长按消息底栏操作中，为 Assistant 消息增加了“复制纯文本”（已清洗 Markdown 符号）与“复制 Markdown”（复制原始带标记格式），为 User 消息增加了“复制文本”，并追加了 SnackBar 复制成功的浮动通知。
+3. **支持谷歌 AI Studio 搜索接地 (Search Grounding)**：
+   - 扩展了 `AppSettings` 与 `SettingsNotifier`（`lib/providers/settings_provider.dart`），增加了对 `googleSearchApiKey`（使用 `SecureStorageService` 存储）和 `googleSearchBaseUrl`（存储在 SharedPreferences，支持 VPS 反代）的读写和加载管理。
+   - 升级了设置页（`lib/screens/settings_screen.dart`），支持在“搜索后端”多段按钮中选择 `Google Grounding` 模式，并提供带有密码隐藏/展开切换的 API Key 输入框与 Base URL 输入框。
+   - 实现并接入 `SearchService._searchGoogle`（`lib/services/search_service.dart`），使用 Gemini API `google_search` 搜索接地工具，提取生成的总结作为首条 AI 总结结果，并提取 `groundingChunks` 包含的来源网页作为辅助搜索结果回传给后续流中。
+
+### 变更文件
+- `lib/providers/settings_provider.dart`
+- `lib/providers/chat_provider.dart`
+- `lib/services/agent_service.dart`
+- `lib/services/search_service.dart`
+- `lib/screens/settings_screen.dart`
+- `lib/widgets/chat_bubble.dart`
+- `test/agent_service_test.dart`
+- `test/search_service_test.dart`
+- `test/challenger_web_search_empirical_test.dart`
+- `test/e2e_integration_test.dart`
+- `WORK_LOG.md`
+
+### 状态
+- 静态分析 `flutter analyze` 报告：`No issues found!`。
+- 单元测试与 Widget 测试 `flutter test` 报告：`156 / 156` 测试用例全部 100% 串行通过（0 failures）。
+
+### 技术决策
+- **AI 搜索总结结合来源链接回显**：Gemini 搜索接地不仅会产生来源引用链接（`groundingChunks`），还直接给出一个由谷歌大模型针对当前 query 整合的高质量 Grounded Summary。我们在 `SearchService` 中将这一 AI 总结与其它网页来源一并作为 `SearchResult` 包装回传，既减轻了主模型在合并多网页时的负担，又最大化还原了 Google AI Studio Grounding 的优势。
+- **Raw Regex 避免 interpolation**：在 Dart 的普通单引号/双引号字符串中，`$1` 这种针对正则匹配组的变量会被解释为 Dart 语法字符串插值（String Interpolation）标识，因 `1` 不是有效标识符导致编译失败。我们通过使用 Raw String (`r'$1'`) 来彻底忽略 Dart 插值处理，确保正则替换顺利编译。
+
+---
+
 ## 2026-07-16 Remediation: UI Touch Target, OpenCode Free Filtering, Bing Search Setup Race Condition & Dialog Animation Crash Fixes
+
 
 ### 变更内容
 1. **模型选择热区与外观优化**：在 `lib/screens/home_screen.dart` 中为模型选择栏增加了包含 `auto_awesome` 标识图标、加粗字体、下拉箭头，且包含充足 Padding（`10.0` 水平, `4.0` 垂直）的 `InkWell` 按钮，将点击热区提升至符合标准的 `48dp`，交互极为便利。
