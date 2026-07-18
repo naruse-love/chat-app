@@ -31,9 +31,9 @@
 | **9 / 维护迭代** | 消息编辑/重发、Token 统计、会话回退/重新生成；搜索迁移到 SearXNG 主路径 + 实验性 Bing（移除 9Router 内置搜索）；多轮 tool calling + 伪 XML `<tool_call>` 兜底；Vision 本地预检移除（发图交由 API 报错）；SearXNG URL 回显、Vision 能力解析增强；思考内容可选中/复制；主界面系统提示词入口 + 注入 API system 消息；编辑/回退崩溃加固（2026-07-13 ~ 2026-07-15） | ✅ 完成 |
 | **10 / 深度增强**| OpenCode Free 免本地代理直连（指向 `https://opencode.ai/zen/v1`）；网页全文抓取工具 (`url_fetch` + HTML 过滤 + 8000字截断)；SearXNG 并发双页查询与去重优化；全 StateNotifier 异步 `mounted` 防御，避免测试销毁崩溃（2026-07-16） | ✅ 完成 |
 | **11 / 修复加固**| 模型选择区域加大（热区提升至符合 48dp 标准）；OpenCode Free 免费模型过滤（仅保留 ID 含有 free 字段的模型）与默认模型 deepseek-v4-flash-free 设置；SharedPreferences 异步竞态防范（在 _startStreaming 强制 await initialization，消除 Bing 搜索误报 SearXNG 错误）；Tool Round 超限保底方案（toolRound >= 4 强制进行不含 tools 的最终响应补全，防止自动停止）；编辑与回退弹窗 300ms 路由延迟销毁加固，防止 disposed controller 与 _dependents.isEmpty 框架断言崩溃（2026-07-16 ~ 2026-07-18） | ✅ 完成 |
-| **12 / 维护增强**| 多轮调用上限提升至 10 轮并配置总结兜底；思考过程和工具结果默认折叠展示；长按消息可复制纯文本（自动洗 Markdown 标记）和 Markdown 原始格式；接入谷歌 AI Studio 搜索接地 (Google Grounding)，可在设置中切换并提供 API Key 及 Base URL 配置 (2026-07-18) | ✅ 完成 |
+| **12 / 维护增强**| 多轮调用上限提升至 10 轮并配置总结兜底；中途所有过程消息整泡折叠展示（除无工具调用的最终文本回答外均默认折叠）；长按消息可复制纯文本（自动洗 Markdown 标记）和 Markdown 原始格式；接入谷歌 AI Studio 搜索接地 (Google Grounding)，修复首轮搜索参数丢失问题，支持配置 API Key、Base URL 以及 Grounding 专用 Gemini 模型 (2026-07-18) | ✅ 完成 |
 
-**当前测试状态：156 / 156 测试用例全部通过，`flutter analyze` 0 issues。**
+**当前测试状态：157 / 157 测试用例全部通过，`flutter analyze` 0 issues。**
 
 ---
 

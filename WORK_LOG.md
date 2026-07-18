@@ -1,16 +1,17 @@
 ## 2026-07-18 Maintenance: Multi-Round 10-Limit collapse, AI Copy Plain/Markdown, and Google Search Grounding
 
 ### 变更内容
-1. **多轮工具链上限调整与思考/工具折叠**：
+1. **多轮工具链上限调整与中途所有消息折叠**：
    - 在 `lib/services/agent_service.dart` 中将最大工具调用/思考轮次限制提高到 10 轮（`toolRound >= 9`）。并在第 10 轮最终请求时，注入系统消息提示词（指引模型给出最终回答并绝对不要使用工具或输出 `<tool_call>` 伪 XML），从而保证生成结果完整且没有冗余的裸标签。
-   - 确认在 `lib/widgets/chat_bubble.dart` 中思考（Reasoning）面板与工具输出面板默认保持折叠状态（`_isReasoningExpanded` 和 `_isToolOutputExpanded` 初始为 `false`）。
+   - 重构了中途消息的折叠逻辑：除了最后的输出结果（无 `toolCalls` 的 assistant 最终文本消息显示为常规 Markdown，其思考面板默认折叠）之外，中途的所有过程消息（包括带 `toolCalls` 的过程 assistant 消息，以及所有 `role == 'tool'` 的工具响应消息）全部通过在 `lib/widgets/chat_bubble.dart` 中封装为 collapsible cards 进行默认折叠隐藏，大幅简化和清洁了多轮调用时的界面。
 2. **AI 输出内容长按复制（纯文本与 Markdown）**：
    - 在 `lib/widgets/chat_bubble.dart` 中实现了 `_stripMarkdown` 工具函数，用于清洗标准的 Markdown 符号（如粗体、斜体、标题、代码块、链接等）。
    - 在长按消息底栏操作中，为 Assistant 消息增加了“复制纯文本”（已清洗 Markdown 符号）与“复制 Markdown”（复制原始带标记格式），为 User 消息增加了“复制文本”，并追加了 SnackBar 复制成功的浮动通知。
-3. **支持谷歌 AI Studio 搜索接地 (Search Grounding)**：
-   - 扩展了 `AppSettings` 与 `SettingsNotifier`（`lib/providers/settings_provider.dart`），增加了对 `googleSearchApiKey`（使用 `SecureStorageService` 存储）和 `googleSearchBaseUrl`（存储在 SharedPreferences，支持 VPS 反代）的读写和加载管理。
-   - 升级了设置页（`lib/screens/settings_screen.dart`），支持在“搜索后端”多段按钮中选择 `Google Grounding` 模式，并提供带有密码隐藏/展开切换的 API Key 输入框与 Base URL 输入框。
-   - 实现并接入 `SearchService._searchGoogle`（`lib/services/search_service.dart`），使用 Gemini API `google_search` 搜索接地工具，提取生成的总结作为首条 AI 总结结果，并提取 `groundingChunks` 包含的来源网页作为辅助搜索结果回传给后续流中。
+3. **支持谷歌 AI Studio 搜索接地 (Search Grounding) 配置与参数透传修复**：
+   - 扩展了 `AppSettings` 与 `SettingsNotifier`（`lib/providers/settings_provider.dart`），增加了对 `googleSearchApiKey`（使用 `SecureStorageService` 安全存储）、`googleSearchBaseUrl`（存储在 SharedPreferences，支持 VPS 反代）以及 `googleSearchModel`（存储在 SharedPreferences，用于指定搜索接地的 Gemini 模型，默认为 `gemini-2.5-flash`）的读写和加载管理。
+   - 升级了设置页（`lib/screens/settings_screen.dart`），支持在“搜索后端”多段按钮中选择 `Google Grounding` 模式，并提供含有隐藏/展开按钮的 API Key 输入框、Base URL 输入框以及 Grounding Model 配置框。
+   - 修复了 `agent_service.dart` 的 `chatAndSearchStream` 在发起首轮工具调用搜索时未将 `googleApiKey` 与 `googleBaseUrl` 传入 `SearchService.search` 的严重 Bug（导致首轮执行 Google Grounding 时报错提示未配置 API 密钥），并在所有搜索调用中完成了 `googleSearchModel` 字段的安全下发透传。
+   - 实现并接入 `SearchService._searchGoogle`（`lib/services/search_service.dart`），使用 Gemini API `google_search` 搜索接地工具并动态根据配置选择 Gemini 模型，提取生成的总结作为首条 AI 总结结果，并提取 `groundingChunks` 包含的来源网页作为辅助搜索结果回传。
 
 ### 变更文件
 - `lib/providers/settings_provider.dart`
