@@ -97,6 +97,19 @@ class SearchService {
         return _searchBing(query);
       case 'google':
         return _searchGoogle(query, googleApiKey, googleBaseUrl, googleSearchModel);
+      case 'google_bing':
+        final googleFuture = _searchGoogle(query, googleApiKey, googleBaseUrl, googleSearchModel)
+            .catchError((e) {
+              developer.log('Dual search (Google part) failed: $e', name: 'SearchService');
+              return <SearchResult>[];
+            });
+        final bingFuture = _searchBing(query)
+            .catchError((e) {
+              developer.log('Dual search (Bing part) failed: $e', name: 'SearchService');
+              return <SearchResult>[];
+            });
+        final List<List<SearchResult>> results = await Future.wait([googleFuture, bingFuture]);
+        return [...results[0], ...results[1]];
       case 'searxng':
       default:
         return _searchSearxng(query, searxngUrl);
@@ -303,10 +316,6 @@ class SearchService {
     }
 
     final buffer = StringBuffer();
-    buffer.writeln('以下是网络搜索结果。请仔细阅读后基于这些信息回答用户问题。');
-    buffer.writeln('如果需要更详细的信息，请使用 url_fetch 工具读取相关页面全文。');
-    buffer.writeln('回答时请引用来源 URL。');
-    buffer.writeln();
     for (int i = 0; i < results.length; i++) {
       final r = results[i];
       buffer.writeln('${i + 1}. [${r.title}](${r.url})');

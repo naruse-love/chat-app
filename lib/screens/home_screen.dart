@@ -571,13 +571,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
     );
-    if (newText == null || newText.isEmpty) {
-      controller.dispose();
-      return;
-    }
     // Wait for the dialog transition to complete fully (300ms)
     await Future.delayed(const Duration(milliseconds: 300));
     controller.dispose();
+
+    if (newText == null || newText.isEmpty) {
+      return;
+    }
     if (!context.mounted) return;
     await ref.read(chatProvider.notifier).editAndResendMessage(message.id, newText);
   }

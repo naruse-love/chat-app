@@ -15,6 +15,7 @@ class AppSettings {
   final String googleSearchApiKey;
   final String googleSearchBaseUrl;
   final String googleSearchModel;
+  final bool isLoaded;
 
   AppSettings({
     this.searxngUrl = '',
@@ -24,6 +25,7 @@ class AppSettings {
     this.googleSearchApiKey = '',
     this.googleSearchBaseUrl = 'https://generativelanguage.googleapis.com',
     this.googleSearchModel = 'gemini-2.5-flash',
+    this.isLoaded = false,
   });
 
   AppSettings copyWith({
@@ -34,6 +36,7 @@ class AppSettings {
     String? googleSearchApiKey,
     String? googleSearchBaseUrl,
     String? googleSearchModel,
+    bool? isLoaded,
   }) {
     return AppSettings(
       searxngUrl: searxngUrl ?? this.searxngUrl,
@@ -43,6 +46,7 @@ class AppSettings {
       googleSearchApiKey: googleSearchApiKey ?? this.googleSearchApiKey,
       googleSearchBaseUrl: googleSearchBaseUrl ?? this.googleSearchBaseUrl,
       googleSearchModel: googleSearchModel ?? this.googleSearchModel,
+      isLoaded: isLoaded ?? this.isLoaded,
     );
   }
 }
@@ -78,6 +82,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         googleSearchApiKey: apiKey,
         googleSearchBaseUrl: prefs.getString(_googleSearchBaseUrlKey) ?? 'https://generativelanguage.googleapis.com',
         googleSearchModel: prefs.getString(_googleSearchModelKey) ?? 'gemini-2.5-flash',
+        isLoaded: true,
       );
     } catch (_) {
       isLoaded = true;

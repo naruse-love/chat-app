@@ -395,10 +395,10 @@ void main() {
 
       final formattedContext = searchService.formatSearchResultsForContext(results);
 
-      // Verify exact line structure and mandatory instructions
-      expect(formattedContext, contains('以下是网络搜索结果。请仔细阅读后基于这些信息回答用户问题。'));
-      expect(formattedContext, contains('如果需要更详细的信息，请使用 url_fetch 工具读取相关页面全文。'));
-      expect(formattedContext, contains('回答时请引用来源 URL。'));
+      // Verify that instructions are removed
+      expect(formattedContext, isNot(contains('以下是网络搜索结果。')));
+      expect(formattedContext, isNot(contains('如果需要更详细的信息')));
+      expect(formattedContext, isNot(contains('回答时请引用来源 URL。')));
 
       // Verify numbering format 1. [Title](URL)
       expect(formattedContext, contains('1. [Dart Overview](https://dart.dev/overview)'));

@@ -17,18 +17,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _googleModelController;
   bool _obscureGoogleApiKey = true;
 
+  bool _hasSynced = false;
+
   void _syncFieldsIfNeeded(AppSettings settings) {
-    if (_searxngController.text.isEmpty && settings.searxngUrl.isNotEmpty) {
+    if (settings.isLoaded && !_hasSynced) {
       _searxngController.text = settings.searxngUrl;
-    }
-    if (_googleApiKeyController.text.isEmpty && settings.googleSearchApiKey.isNotEmpty) {
       _googleApiKeyController.text = settings.googleSearchApiKey;
-    }
-    if (_googleBaseUrlController.text.isEmpty && settings.googleSearchBaseUrl.isNotEmpty) {
       _googleBaseUrlController.text = settings.googleSearchBaseUrl;
-    }
-    if (_googleModelController.text.isEmpty && settings.googleSearchModel.isNotEmpty) {
       _googleModelController.text = settings.googleSearchModel;
+      _hasSynced = true;
     }
   }
 
@@ -40,6 +37,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _googleApiKeyController = TextEditingController(text: settings.googleSearchApiKey);
     _googleBaseUrlController = TextEditingController(text: settings.googleSearchBaseUrl);
     _googleModelController = TextEditingController(text: settings.googleSearchModel);
+    _hasSynced = settings.isLoaded;
   }
 
   @override
@@ -140,15 +138,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   segments: const [
                     ButtonSegment(
                       value: 'searxng',
-                      label: Text('SearXNG'),
+                      label: Text('SearXNG', style: TextStyle(fontSize: 11)),
                     ),
                     ButtonSegment(
                       value: 'bing',
-                      label: Text('Bing'),
+                      label: Text('Bing', style: TextStyle(fontSize: 11)),
                     ),
                     ButtonSegment(
                       value: 'google',
-                      label: Text('Google Grounding'),
+                      label: Text('Google', style: TextStyle(fontSize: 11)),
+                    ),
+                    ButtonSegment(
+                      value: 'google_bing',
+                      label: Text('Google+Bing', style: TextStyle(fontSize: 11)),
                     ),
                   ],
                   selected: {settings.searchBackend},
@@ -183,7 +185,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ],
               ),
             ),
-          if (settings.searchBackend == 'google') ...[
+          if (settings.searchBackend == 'google' || settings.searchBackend == 'google_bing') ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
               child: Row(

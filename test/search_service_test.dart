@@ -477,12 +477,52 @@ void main() {
 
       final context = searchService.formatSearchResultsForContext(results);
 
-      expect(context, contains('以下是网络搜索结果。请仔细阅读后基于这些信息回答用户问题。'));
-      expect(context, contains('如果需要更详细的信息，请使用 url_fetch 工具读取相关页面全文。'));
-      expect(context, contains('回答时请引用来源 URL。'));
       expect(context, contains('1. [A](https://a.com)'));
       expect(context, contains('摘要: Info A'));
       expect(context, contains('2. [B](https://b.com)'));
+      expect(context, isNot(contains('以下是网络搜索结果。')));
+    });
+
+    test('google_bing search combines Google and Bing results in parallel', () async {
+      int apiRequestsCount = 0;
+      mockAdapter.handler = (options) {
+        apiRequestsCount++;
+        if (options.path.contains('/v1beta/models/')) {
+          // Google response
+          return ResponseBody.fromString(
+            json.encode({
+              'candidates': [
+                {
+                  'content': {
+                    'parts': [{'text': 'Google Summary'}]
+                  }
+                }
+              ]
+            }),
+            200,
+            headers: {
+              Headers.contentTypeHeader: [Headers.jsonContentType],
+            },
+          );
+        } else {
+          // Bing response
+          return ResponseBody.fromString(
+            '<html><body><ol id="b_results"><li class="b_algo"><h2><a href="https://bing.com/res">Bing Title</a></h2><p>Bing Snippet</p></li></ol></body></html>',
+            200,
+          );
+        }
+      };
+
+      final results = await searchService.search(
+        query: 'dual search test',
+        searchBackend: 'google_bing',
+        googleApiKey: 'google_key',
+      );
+
+      expect(apiRequestsCount, 2);
+      expect(results, hasLength(2));
+      expect(results[0].content, 'Google Summary');
+      expect(results[1].title, 'Bing Title');
     });
 
     test('Empty results formatting returns Chinese message', () {
