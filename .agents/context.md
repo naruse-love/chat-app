@@ -1,5 +1,5 @@
 # 项目接手上下文（Context）
-> 最后更新：2026-07-15
+> 最后更新：2026-07-18
 
 ---
 
@@ -10,7 +10,7 @@
 - **工作目录**：`D:\work\chat`
 - **Flutter SDK**：`D:\work\flutter-sdk\flutter\bin\flutter.bat`
 - **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支，HEAD `fc9a35f`）
-- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（127/127），`flutter analyze` 必须 0 issues
+- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（153/153），`flutter analyze` 必须 0 issues
 
 ---
 
@@ -18,7 +18,7 @@
 
 | Milestone | 描述 | 状态 |
 |-----------|------|------|
-| 1 | 数据模型与序列化（ModelInfo、ChatMessage、ApiConfig、ToolCall 等） | ✅ 完成 |
+| 1 | 数据模型与序列化（ModelInfo、ChatMessage、ApiConfig, ToolCall 等） | ✅ 完成 |
 | 2 | 本地 SQLite 数据库（DatabaseHelper、ApiConfigDao、MessageDao、ConversationDao）+ 安全凭证存储（SecureStorageService） | ✅ 完成 |
 | 3 | SSE 流解析（SseDecoder、SseParser）+ 网络 API（ChatService） | ✅ 完成 |
 | 4 | 网络搜索与 Agent 调度（SearchService、AgentService） | ✅ 完成 |
@@ -30,8 +30,9 @@
 | 最终编译 | `flutter build apk --debug` 编译成功，产物位于 `build/app/outputs/flutter-apk/app-debug.apk` | ✅ 完成 |
 | **9 / 维护迭代** | 消息编辑/重发、Token 统计、会话回退/重新生成；搜索迁移到 SearXNG 主路径 + 实验性 Bing（移除 9Router 内置搜索）；多轮 tool calling + 伪 XML `<tool_call>` 兜底；Vision 本地预检移除（发图交由 API 报错）；SearXNG URL 回显、Vision 能力解析增强；思考内容可选中/复制；主界面系统提示词入口 + 注入 API system 消息；编辑/回退崩溃加固（2026-07-13 ~ 2026-07-15） | ✅ 完成 |
 | **10 / 深度增强**| OpenCode Free 免本地代理直连（指向 `https://opencode.ai/zen/v1`）；网页全文抓取工具 (`url_fetch` + HTML 过滤 + 8000字截断)；SearXNG 并发双页查询与去重优化；全 StateNotifier 异步 `mounted` 防御，避免测试销毁崩溃（2026-07-16） | ✅ 完成 |
+| **11 / 修复加固**| 模型选择区域加大（热区提升至符合 48dp 标准）；OpenCode Free 免费模型过滤（仅保留 ID 含有 free 字段的模型）与默认模型 deepseek-v4-flash-free 设置；SharedPreferences 异步竞态防范（在 _startStreaming 强制 await initialization，消除 Bing 搜索误报 SearXNG 错误）；Tool Round 超限保底方案（toolRound >= 4 强制进行不含 tools 的最终响应补全，防止自动停止）；编辑与回退弹窗 300ms 路由延迟销毁加固，防止 disposed controller 与 _dependents.isEmpty 框架断言崩溃（2026-07-16 ~ 2026-07-18） | ✅ 完成 |
 
-**当前测试状态：150 / 150 测试用例全部通过，`flutter analyze` 0 issues。**
+**当前测试状态：153 / 153 测试用例全部通过，`flutter analyze` 0 issues。**
 
 ---
 
@@ -137,6 +138,16 @@ test/
 
 15. **StateNotifier 异步 `mounted` 防御**：针对 `ApiConfigNotifier`、`ConversationNotifier` 等所有状态控制器的异步逻辑补齐 `if (!mounted) return;`，完美避免测试 tearDown 阶段因异步回调更新已被销毁的状态而触发 `Bad state: StateNotifier.state was accessed after being disposed`。
 
+16. **模型选择热区与外观优化**：将 AppBar 模型选择 GestureDetector 改造为包含 `auto_awesome` 芯片图标、加粗字体、下拉箭头和不小于 `48dp` 点击热区的 `InkWell` 按钮，提升高频功能点击的便利性。
+
+17. **SharedPreferences 竞态防范**：`SettingsNotifier` 暴露 `initialization` 同步加载期 Future，并在流式生成前强制 `await` 确保配置完全拉取，从而杜绝由于异步偏好获取延迟导致 Bing 搜索误降级至 SearXNG 并报错的 Race Condition。
+
+18. **工具链轮次超限强制文本响应**：在多轮 Tool calling 重试或循环（如 API 网络故障）达到 `toolRound >= 4` 上限时，剥离 tools 参数发起最后一次文本补全，迫使模型利用当前搜集到的上下文给出总结性文字，极大地提升了 Agent 链路的健壮性防止自动挂断。
+
+19. **弹窗过渡动画延迟销毁**：在 `_showEditDialog` 与 `_confirmRollback` 中，将关闭对话框后的操作延迟增加到 `300ms`，让 Dialog 路由过渡动画充分收缩销毁后再 `dispose()` 关联的 `controller` 并更新 Riverpod 状态，杜绝由于动画期间 Widget 被提前注销或组件未挂载产生的 `_dependents.isEmpty` 断言崩溃。
+
+20. **OpenCode Free 模型过滤与默认配置**：当选择 OpenCode Free API 时，自动过滤出仅包含 `'free'` 字段的免费模型列表，并将 `deepseek-v4-flash-free` 设定为初始默认选定模型。
+
 ---
 
 ## 🚀 下一步可能的开发方向
@@ -170,7 +181,7 @@ test/
 # 静态分析（必须 0 issues）
 D:\work\flutter-sdk\flutter\bin\flutter.bat analyze
 
-# 运行全部测试（必须 127/127 通过）
+# 运行全部测试（必须 153/153 通过）
 D:\work\flutter-sdk\flutter\bin\flutter.bat test
 
 # 编译 Debug APK
