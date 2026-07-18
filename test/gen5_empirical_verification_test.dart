@@ -81,7 +81,7 @@ void main() {
 
       // Trigger initial load
       container.read(apiConfigProvider);
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future.delayed(const Duration(milliseconds: 200));
 
       final state = container.read(apiConfigProvider);
       expect(state.configs, hasLength(1), reason: 'Fresh DB must contain exactly 1 pre-populated config');

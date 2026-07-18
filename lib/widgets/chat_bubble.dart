@@ -469,11 +469,15 @@ class _ChatBubbleState extends State<ChatBubble> {
                   color: theme.colorScheme.outline,
                 ),
                 const SizedBox(width: 6.0),
-                Text(
-                  '思考与工具调用 [$toolNames]',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.outline,
-                    fontWeight: FontWeight.bold,
+                Flexible(
+                  child: Text(
+                    '思考与工具调用 [$toolNames]',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.outline,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 4.0),
