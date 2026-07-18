@@ -77,6 +77,8 @@ class MockSearchService extends SearchService {
     required String query,
     String? searxngUrl,
     String searchBackend = 'searxng',
+    String? googleApiKey,
+    String? googleBaseUrl,
   }) async {
     if (searchHandler != null) {
       return searchHandler!(query);

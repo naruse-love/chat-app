@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/system_prompt_template.dart';
 import '../data/database_helper.dart';
+import '../services/secure_storage_service.dart';
 import 'api_config_provider.dart'; // To reuse dbHelperProvider
 
 // Settings structures
@@ -11,12 +12,16 @@ class AppSettings {
   final String defaultSystemPrompt;
   final bool enableAutoSearch;
   final String searchBackend;
+  final String googleSearchApiKey;
+  final String googleSearchBaseUrl;
 
   AppSettings({
     this.searxngUrl = '',
     this.defaultSystemPrompt = 'You are a helpful assistant.',
     this.enableAutoSearch = true,
     this.searchBackend = 'searxng',
+    this.googleSearchApiKey = '',
+    this.googleSearchBaseUrl = 'https://generativelanguage.googleapis.com',
   });
 
   AppSettings copyWith({
@@ -24,12 +29,16 @@ class AppSettings {
     String? defaultSystemPrompt,
     bool? enableAutoSearch,
     String? searchBackend,
+    String? googleSearchApiKey,
+    String? googleSearchBaseUrl,
   }) {
     return AppSettings(
       searxngUrl: searxngUrl ?? this.searxngUrl,
       defaultSystemPrompt: defaultSystemPrompt ?? this.defaultSystemPrompt,
       enableAutoSearch: enableAutoSearch ?? this.enableAutoSearch,
       searchBackend: searchBackend ?? this.searchBackend,
+      googleSearchApiKey: googleSearchApiKey ?? this.googleSearchApiKey,
+      googleSearchBaseUrl: googleSearchBaseUrl ?? this.googleSearchBaseUrl,
     );
   }
 }
@@ -39,17 +48,21 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _systemPromptKey = 'default_system_prompt';
   static const _autoSearchKey = 'enable_auto_search';
   static const _searchBackendKey = 'search_backend';
+  static const _googleSearchBaseUrlKey = 'google_search_base_url';
+  static const _googleSearchApiKeySecureKey = 'google_search_api_key';
 
+  final SecureStorageService _secureStorage;
   bool isLoaded = false;
   late final Future<void> initialization;
 
-  SettingsNotifier() : super(AppSettings()) {
+  SettingsNotifier(this._secureStorage) : super(AppSettings()) {
     initialization = _loadSettings();
   }
 
   Future<void> _loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final apiKey = await _secureStorage.read(_googleSearchApiKeySecureKey) ?? '';
       if (!mounted) return;
       isLoaded = true;
       state = AppSettings(
@@ -57,6 +70,8 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         defaultSystemPrompt: prefs.getString(_systemPromptKey) ?? 'You are a helpful assistant.',
         enableAutoSearch: prefs.getBool(_autoSearchKey) ?? true,
         searchBackend: prefs.getString(_searchBackendKey) ?? 'searxng',
+        googleSearchApiKey: apiKey,
+        googleSearchBaseUrl: prefs.getString(_googleSearchBaseUrlKey) ?? 'https://generativelanguage.googleapis.com',
       );
     } catch (_) {
       isLoaded = true;
@@ -94,10 +109,26 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       await prefs.setString(_searchBackendKey, backend);
     } catch (_) {}
   }
+
+  Future<void> updateGoogleSearchApiKey(String apiKey) async {
+    state = state.copyWith(googleSearchApiKey: apiKey);
+    try {
+      await _secureStorage.write(_googleSearchApiKeySecureKey, apiKey);
+    } catch (_) {}
+  }
+
+  Future<void> updateGoogleSearchBaseUrl(String url) async {
+    state = state.copyWith(googleSearchBaseUrl: url);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_googleSearchBaseUrlKey, url);
+    } catch (_) {}
+  }
 }
 
 final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {
-  return SettingsNotifier();
+  final secureStorage = ref.watch(secureStorageServiceProvider);
+  return SettingsNotifier(secureStorage);
 });
 
 // System Prompt Template DAO & Notifier

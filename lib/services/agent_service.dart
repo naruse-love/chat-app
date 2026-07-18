@@ -168,6 +168,8 @@ class AgentService {
     String? systemPrompt,
     String? searxngUrl,
     String searchBackend = 'searxng',
+    String? googleApiKey,
+    String? googleBaseUrl,
     CancelToken? cancelToken,
   }) async* {
     // Inject system prompt if provided (prepend after removing any existing system messages)
@@ -211,6 +213,8 @@ class AgentService {
           query: query,
           searxngUrl: searxngUrl,
           searchBackend: searchBackend,
+          googleApiKey: googleApiKey,
+          googleBaseUrl: googleBaseUrl,
         );
       } on SearchException catch (e) {
         results = [];
@@ -272,6 +276,8 @@ class AgentService {
         tools: defaultTools,
         searxngUrl: searxngUrl,
         searchBackend: searchBackend,
+        googleApiKey: googleApiKey,
+        googleBaseUrl: googleBaseUrl,
         cancelToken: cancelToken,
       );
     } else {
@@ -457,6 +463,8 @@ class AgentService {
           tools: defaultTools,
           searxngUrl: searxngUrl,
           searchBackend: searchBackend,
+          googleApiKey: googleApiKey,
+          googleBaseUrl: googleBaseUrl,
           cancelToken: cancelToken,
         );
       }
@@ -474,6 +482,8 @@ class AgentService {
     List<Map<String, dynamic>>? tools,
     String? searxngUrl,
     String searchBackend = 'searxng',
+    String? googleApiKey,
+    String? googleBaseUrl,
     CancelToken? cancelToken,
   }) async* {
     yield* _streamCompletionsLoop(
@@ -484,6 +494,8 @@ class AgentService {
       tools: tools ?? defaultTools,
       searxngUrl: searxngUrl,
       searchBackend: searchBackend,
+      googleApiKey: googleApiKey,
+      googleBaseUrl: googleBaseUrl,
       cancelToken: cancelToken,
       toolRound: 0,
     );
@@ -498,18 +510,30 @@ class AgentService {
     List<Map<String, dynamic>>? tools,
     String? searxngUrl,
     String searchBackend = 'searxng',
+    String? googleApiKey,
+    String? googleBaseUrl,
     CancelToken? cancelToken,
     int toolRound = 0,
   }) async* {
-    // Max 5 total tool rounds: 1 from chatAndSearchStream + 4 follow-up rounds
-    if (toolRound >= 4) {
+    // Max 10 total tool rounds: 1 from chatAndSearchStream + 9 follow-up rounds
+    if (toolRound >= 9) {
       int? finalPromptTokens;
       int? finalCompletionTokens;
+      final finalMessages = [
+        ...messages,
+        ChatMessage(
+          id: _uuid.v4(),
+          conversationId: messages.isNotEmpty ? messages.first.conversationId : '',
+          role: 'system',
+          content: '请根据上述已获取的搜索结果和网页内容，直接给出最终的总结回答，绝对不要再尝试使用任何工具或输出形如 <tool_call> 的工具调用格式。',
+          timestamp: DateTime.now(),
+        ),
+      ];
       await for (final chunk in _chatService.chatCompletionsStream(
         baseUrl: baseUrl,
         apiKey: apiKey,
         model: model,
-        messages: messages,
+        messages: finalMessages,
         cancelToken: cancelToken,
       )) {
         if (chunk.containsKey('usage') && chunk['usage'] is Map) {
@@ -664,6 +688,8 @@ class AgentService {
               query: query,
               searxngUrl: searxngUrl,
               searchBackend: searchBackend,
+              googleApiKey: googleApiKey,
+              googleBaseUrl: googleBaseUrl,
             );
           } on SearchException catch (e) {
             results = [];
@@ -723,6 +749,8 @@ class AgentService {
         tools: tools,
         searxngUrl: searxngUrl,
         searchBackend: searchBackend,
+        googleApiKey: googleApiKey,
+        googleBaseUrl: googleBaseUrl,
         cancelToken: cancelToken,
         toolRound: toolRound + 1,
       );
@@ -781,6 +809,8 @@ class AgentService {
                 query: query,
                 searxngUrl: searxngUrl,
                 searchBackend: searchBackend,
+                googleApiKey: googleApiKey,
+                googleBaseUrl: googleBaseUrl,
               );
             } on SearchException catch (e) {
               results = [];
@@ -844,6 +874,8 @@ class AgentService {
             tools: tools,
             searxngUrl: searxngUrl,
             searchBackend: searchBackend,
+            googleApiKey: googleApiKey,
+            googleBaseUrl: googleBaseUrl,
             cancelToken: cancelToken,
             toolRound: toolRound + 1,
           );

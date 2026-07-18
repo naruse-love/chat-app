@@ -88,10 +88,14 @@ class SearchService {
     required String query,
     String? searxngUrl,
     String searchBackend = 'searxng',
+    String? googleApiKey,
+    String? googleBaseUrl,
   }) async {
     switch (searchBackend) {
       case 'bing':
         return _searchBing(query);
+      case 'google':
+        return _searchGoogle(query, googleApiKey, googleBaseUrl);
       case 'searxng':
       default:
         return _searchSearxng(query, searxngUrl);
@@ -311,6 +315,141 @@ class SearchService {
       }
     }
     return buffer.toString().trim();
+  }
+
+  /// Searches via Google AI Studio's Search Grounding tool.
+  Future<List<SearchResult>> _searchGoogle(
+    String query,
+    String? apiKey,
+    String? baseUrl,
+  ) async {
+    if (apiKey == null || apiKey.trim().isEmpty) {
+      throw SearchException(
+        source: 'Google Grounding',
+        message: '未配置 Google AI Studio API 密钥。请在设置中填写。',
+      );
+    }
+
+    final cleanBaseUrl = baseUrl == null || baseUrl.trim().isEmpty
+        ? 'https://generativelanguage.googleapis.com'
+        : baseUrl.trim();
+
+    // Ensure no trailing slash
+    var url = cleanBaseUrl;
+    while (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+
+    // Default model to gemini-2.5-flash as it is fast and supports search grounding
+    const model = 'gemini-2.5-flash';
+    final requestUrl = '$url/v1beta/models/$model:generateContent';
+
+    final body = {
+      'contents': [
+        {
+          'role': 'user',
+          'parts': [
+            {'text': query}
+          ]
+        }
+      ],
+      'tools': [
+        {'google_search': {}}
+      ]
+    };
+
+    try {
+      final response = await _dio.post(
+        requestUrl,
+        queryParameters: {'key': apiKey},
+        data: body,
+        options: Options(
+          headers: {'Content-Type': 'application/json'},
+        ),
+      );
+
+      if (response.statusCode != 200) {
+        throw SearchException(
+          source: 'Google Grounding',
+          statusCode: response.statusCode,
+          message: 'Google 搜索接地失败（HTTP ${response.statusCode}）。',
+          details: response.data?.toString(),
+        );
+      }
+
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        throw SearchException(
+          source: 'Google Grounding',
+          message: '返回的数据格式不正确',
+        );
+      }
+
+      final candidates = data['candidates'] as List<dynamic>?;
+      if (candidates == null || candidates.isEmpty) {
+        return [];
+      }
+
+      final firstCandidate = candidates[0] as Map<String, dynamic>;
+      final results = <SearchResult>[];
+
+      // 1. Extract the grounded AI summary text if available
+      final contentObj = firstCandidate['content'] as Map<String, dynamic>?;
+      if (contentObj != null) {
+        final parts = contentObj['parts'] as List<dynamic>?;
+        if (parts != null && parts.isNotEmpty) {
+          final firstPart = parts[0] as Map<String, dynamic>?;
+          final text = firstPart?['text'] as String?;
+          if (text != null && text.trim().isNotEmpty) {
+            results.add(SearchResult(
+              title: 'Google 搜索总结 (AI)',
+              url: '',
+              content: text.trim(),
+            ));
+          }
+        }
+      }
+
+      // 2. Extract grounding chunks (the search links)
+      final metadata = firstCandidate['groundingMetadata'] as Map<String, dynamic>?;
+      if (metadata != null) {
+        final chunks = metadata['groundingChunks'] as List<dynamic>?;
+        if (chunks != null) {
+          for (final chunk in chunks) {
+            if (chunk is Map<String, dynamic>) {
+              final web = chunk['web'] as Map<String, dynamic>?;
+              if (web != null) {
+                final title = web['title'] as String? ?? '';
+                final uri = web['uri'] as String? ?? web['url'] as String? ?? '';
+                if (uri.isNotEmpty) {
+                  results.add(SearchResult(
+                    title: title.isNotEmpty ? title : uri,
+                    url: uri,
+                    content: '来自 Google 搜索的网页来源。',
+                  ));
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return results;
+    } on DioException catch (e) {
+      throw SearchException(
+        source: 'Google Grounding',
+        statusCode: e.response?.statusCode,
+        message: 'Google 搜索接地请求失败：${_extractErrorMessage(e)}',
+        details: e.response?.data?.toString(),
+      );
+    } catch (e, stackTrace) {
+      developer.log('Google search grounding failed', error: e, stackTrace: stackTrace, name: 'SearchService');
+      throw SearchException(
+        source: 'Google Grounding',
+        message: 'Google 搜索接地解析失败：${_extractErrorMessage(e)}',
+        details: e.toString(),
+      );
+    }
   }
 
   /// Safely extracts a short human-readable message from an exception.

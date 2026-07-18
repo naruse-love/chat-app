@@ -30,12 +30,81 @@ class _ChatBubbleState extends State<ChatBubble> {
   bool _isReasoningExpanded = false;
   bool _isToolOutputExpanded = false;
 
+  String _stripMarkdown(String markdown) {
+    // 1. Remove code blocks
+    var txt = markdown.replaceAll(RegExp(r'```[\s\S]*?```'), '');
+    // 2. Remove inline code backticks
+    txt = txt.replaceAll(RegExp(r'`([^`]+)`'), r'$1');
+    // 3. Remove bold/italic markers
+    txt = txt.replaceAll(RegExp(r'\*\*([^*]+)\*\*'), r'$1');
+    txt = txt.replaceAll(RegExp(r'\*([^*]+)\*'), r'$1');
+    txt = txt.replaceAll(RegExp(r'__([^_]+)__'), r'$1');
+    txt = txt.replaceAll(RegExp(r'_([^_]+)_'), r'$1');
+    // 4. Remove headers (e.g., # Header)
+    txt = txt.replaceAll(RegExp(r'^#+\s+', multiLine: true), '');
+    // 5. Remove markdown links, keep only text. E.g. [text](url) -> text
+    txt = txt.replaceAll(RegExp(r'\[([^\]]+)\]\([^)]+\)'), r'$1');
+    // 6. Remove blockquotes, horizontal rules, lists
+    txt = txt.replaceAll(RegExp(r'^>\s+', multiLine: true), '');
+    txt = txt.replaceAll(RegExp(r'^[-*+]\s+', multiLine: true), '');
+    txt = txt.replaceAll(RegExp(r'^\d+\.\s+', multiLine: true), '');
+    // 7. Collapse multiple newlines
+    txt = txt.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    return txt.trim();
+  }
+
   void _showMessageActions() {
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
+            if (widget.message.role == 'user')
+              ListTile(
+                leading: const Icon(Icons.copy),
+                title: const Text('复制文本'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Clipboard.setData(ClipboardData(text: widget.message.content));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('已复制文本'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+            if (widget.message.role == 'assistant') ...[
+              ListTile(
+                leading: const Icon(Icons.copy),
+                title: const Text('复制纯文本'),
+                onTap: () {
+                  Navigator.pop(context);
+                  final plainText = _stripMarkdown(widget.message.content);
+                  Clipboard.setData(ClipboardData(text: plainText));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('已复制纯文本'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.code),
+                title: const Text('复制 Markdown'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Clipboard.setData(ClipboardData(text: widget.message.content));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('已复制 Markdown'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+            ],
             if (widget.message.role == 'user' && widget.onEdit != null)
               ListTile(
                 leading: const Icon(Icons.edit),

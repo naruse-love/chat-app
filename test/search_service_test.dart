@@ -338,6 +338,97 @@ void main() {
       expect(results[0].title, 'Doc 1');
     });
 
+    // ===================== Google Grounding Tests =====================
+
+    test('Google Grounding search succeeds', () async {
+      mockAdapter.handler = (options) {
+        expect(options.path, contains('/v1beta/models/gemini-2.5-flash:generateContent'));
+        expect(options.method, 'POST');
+        expect(options.queryParameters['key'], 'google_key');
+
+        final mockResponse = {
+          'candidates': [
+            {
+              'content': {
+                'parts': [
+                  {'text': 'Grounded AI summary text'}
+                ]
+              },
+              'groundingMetadata': {
+                'webSearchQueries': ['flutter agent'],
+                'groundingChunks': [
+                  {
+                    'web': {
+                      'uri': 'https://google.com/search-result',
+                      'title': 'Google Grounded Page'
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        };
+
+        return ResponseBody.fromString(
+          json.encode(mockResponse),
+          200,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        );
+      };
+
+      final results = await searchService.search(
+        query: 'flutter agent',
+        searchBackend: 'google',
+        googleApiKey: 'google_key',
+        googleBaseUrl: 'https://generativelanguage.googleapis.com',
+      );
+
+      expect(results, hasLength(2));
+      expect(results[0].title, 'Google 搜索总结 (AI)');
+      expect(results[0].url, '');
+      expect(results[0].content, 'Grounded AI summary text');
+
+      expect(results[1].title, 'Google Grounded Page');
+      expect(results[1].url, 'https://google.com/search-result');
+      expect(results[1].content, '来自 Google 搜索的网页来源。');
+    });
+
+    test('Google Grounding search throws exception on missing API Key', () async {
+      try {
+        await searchService.search(
+          query: 'test',
+          searchBackend: 'google',
+          googleApiKey: '',
+        );
+        fail('Expected SearchException was not thrown');
+      } on SearchException catch (e) {
+        expect(e.source, 'Google Grounding');
+        expect(e.message, contains('未配置 Google AI Studio API 密钥'));
+      }
+    });
+
+    test('Google Grounding HTTP error throws SearchException', () async {
+      mockAdapter.handler = (options) {
+        return ResponseBody.fromString('Error body', 400);
+      };
+
+      try {
+        await searchService.search(
+          query: 'test',
+          searchBackend: 'google',
+          googleApiKey: 'key',
+        );
+        fail('Expected SearchException was not thrown');
+      } on SearchException catch (e) {
+        expect(e.source, 'Google Grounding');
+        expect(e.statusCode, 400);
+        expect(e.message, contains('Google 搜索接地'));
+        expect(e.message, contains('失败'));
+      }
+    });
+
     // ===================== Common Tests =====================
 
     test('Formatting context string works correctly (Chinese)', () {

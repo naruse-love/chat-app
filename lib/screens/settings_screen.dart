@@ -12,10 +12,19 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _searxngController;
+  late final TextEditingController _googleApiKeyController;
+  late final TextEditingController _googleBaseUrlController;
+  bool _obscureGoogleApiKey = true;
 
-  void _syncSearxngIfNeeded(String url) {
-    if (_searxngController.text.isEmpty && url.isNotEmpty) {
-      _searxngController.text = url;
+  void _syncFieldsIfNeeded(AppSettings settings) {
+    if (_searxngController.text.isEmpty && settings.searxngUrl.isNotEmpty) {
+      _searxngController.text = settings.searxngUrl;
+    }
+    if (_googleApiKeyController.text.isEmpty && settings.googleSearchApiKey.isNotEmpty) {
+      _googleApiKeyController.text = settings.googleSearchApiKey;
+    }
+    if (_googleBaseUrlController.text.isEmpty && settings.googleSearchBaseUrl.isNotEmpty) {
+      _googleBaseUrlController.text = settings.googleSearchBaseUrl;
     }
   }
 
@@ -24,11 +33,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.initState();
     final settings = ref.read(settingsProvider);
     _searxngController = TextEditingController(text: settings.searxngUrl);
+    _googleApiKeyController = TextEditingController(text: settings.googleSearchApiKey);
+    _googleBaseUrlController = TextEditingController(text: settings.googleSearchBaseUrl);
   }
 
   @override
   void dispose() {
     _searxngController.dispose();
+    _googleApiKeyController.dispose();
+    _googleBaseUrlController.dispose();
     super.dispose();
   }
 
@@ -37,10 +50,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settings = ref.watch(settingsProvider);
 
     ref.listen<AppSettings>(settingsProvider, (prev, next) {
-      _syncSearxngIfNeeded(next.searxngUrl);
+      _syncFieldsIfNeeded(next);
     });
 
-    _syncSearxngIfNeeded(settings.searxngUrl);
+    _syncFieldsIfNeeded(settings);
 
     final currentTheme = ref.watch(themeProvider);
     final theme = Theme.of(context);
@@ -98,7 +111,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text(
-              '网络搜索 (SearXNG)',
+              '网络搜索设置',
               style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.bold,
@@ -125,7 +138,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     ButtonSegment(
                       value: 'bing',
-                      label: Text('Bing（实验）'),
+                      label: Text('Bing'),
+                    ),
+                    ButtonSegment(
+                      value: 'google',
+                      label: Text('Google Grounding'),
                     ),
                   ],
                   selected: {settings.searchBackend},
@@ -137,6 +154,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 8),
           if (settings.searchBackend == 'searxng')
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
@@ -159,6 +177,62 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ],
               ),
             ),
+          if (settings.searchBackend == 'google') ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _googleApiKeyController,
+                      obscureText: _obscureGoogleApiKey,
+                      decoration: InputDecoration(
+                        labelText: 'Google AI Studio API Key',
+                        hintText: '输入您的 Gemini API 密钥',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscureGoogleApiKey ? Icons.visibility_off : Icons.visibility,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscureGoogleApiKey = !_obscureGoogleApiKey;
+                            });
+                          },
+                        ),
+                      ),
+                      onChanged: (val) {
+                        notifier.updateGoogleSearchApiKey(val.trim());
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _googleBaseUrlController,
+                      decoration: const InputDecoration(
+                        labelText: 'Google AI Studio 基础 URL',
+                        hintText: '例如 https://generativelanguage.googleapis.com',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: (val) {
+                        notifier.updateGoogleSearchBaseUrl(val.trim());
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const Divider(),
 
           // Configuration Managers Section

@@ -309,6 +309,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
         systemPrompt: systemPrompt,
         searxngUrl: settings.searxngUrl.isNotEmpty ? settings.searxngUrl : null,
         searchBackend: settings.searchBackend,
+        googleApiKey: settings.googleSearchApiKey.isNotEmpty ? settings.googleSearchApiKey : null,
+        googleBaseUrl: settings.googleSearchBaseUrl.isNotEmpty ? settings.googleSearchBaseUrl : null,
         cancelToken: _cancelToken,
       );
 

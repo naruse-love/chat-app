@@ -53,6 +53,8 @@ class MockSearchService extends SearchService {
     required String query,
     String? searxngUrl,
     String searchBackend = 'searxng',
+    String? googleApiKey,
+    String? googleBaseUrl,
   }) {
     searchCallCount++;
     if (searchHandler != null) {
@@ -2019,7 +2021,7 @@ void main() {
       expect(completionsCallCount, 3);
     });
 
-    test('Max tool rounds (5) prevents infinite loop', () async {
+    test('Max tool rounds (10) prevents infinite loop', () async {
       final chatService = MockChatService();
       final searchService = MockSearchService();
       final agentService = AgentService(chatService: chatService, searchService: searchService);
@@ -2073,6 +2075,8 @@ void main() {
         required String query,
         String? searxngUrl,
         required String searchBackend,
+        String? googleApiKey,
+        String? googleBaseUrl,
       }) async {
         return [SearchResult(title: 'Result', url: 'https://example.com', content: 'Data for $query')];
       };
@@ -2094,13 +2098,13 @@ void main() {
         messages: messages,
       ).toList();
 
-      // Max 5 total tool rounds: 1 from chatAndSearchStream + 4 from _streamCompletionsLoop
-      // Each round yields 3 events (ToolCallStarted, ToolCallCompleted, ToolCallExecutedMessage) -> 15 events
-      // plus the 6th final round which yields 1 event (ContentDeltaEvent)
-      // Total = 15 + 1 = 16 events
-      expect(events, hasLength(16));
+      // Max 10 total tool rounds: 1 from chatAndSearchStream + 9 from _streamCompletionsLoop
+      // Each round yields 3 events (ToolCallStarted, ToolCallCompleted, ToolCallExecutedMessage) -> 30 events
+      // plus the 11th final round which yields 1 event (ContentDeltaEvent)
+      // Total = 30 + 1 = 31 events
+      expect(events, hasLength(31));
 
-      // Check that 5 rounds of tool calls happened
+      // Check that 10 rounds of tool calls happened
       final toolCallIds = <String>{};
       for (final event in events) {
         if (event is ToolCallExecutedMessageEvent) {
@@ -2109,10 +2113,10 @@ void main() {
           }
         }
       }
-      expect(toolCallIds, hasLength(5));
+      expect(toolCallIds, hasLength(10));
 
-      // Total completions calls: 5 tool rounds + 1 final round = 6 API calls
-      expect(completionsCallCount, 6);
+      // Total completions calls: 10 tool rounds + 1 final round = 11 API calls
+      expect(completionsCallCount, 11);
     });
 
     test('parsePseudoXmlToolCalls unit test', () async {
