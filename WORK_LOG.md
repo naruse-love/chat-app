@@ -12,6 +12,16 @@
    - 升级了设置页（`lib/screens/settings_screen.dart`），支持在“搜索后端”多段按钮中选择 `Google Grounding` 模式，并提供含有隐藏/展开按钮的 API Key 输入框、Base URL 输入框以及 Grounding Model 配置框。
    - 修复了 `agent_service.dart` 的 `chatAndSearchStream` 在发起首轮工具调用搜索时未将 `googleApiKey` 与 `googleBaseUrl` 传入 `SearchService.search` 的严重 Bug（导致首轮执行 Google Grounding 时报错提示未配置 API 密钥），并在所有搜索调用中完成了 `googleSearchModel` 字段的安全下发透传。
    - 实现并接入 `SearchService._searchGoogle`（`lib/services/search_service.dart`），使用 Gemini API `google_search` 搜索接地工具并动态根据配置选择 Gemini 模型，提取生成的总结作为首条 AI 总结结果，并提取 `groundingChunks` 包含的来源网页作为辅助搜索结果回传。
+4. **修复搜索接地模型重启被自动重置问题**：
+   - 在 `AppSettings` 中增加了 `isLoaded` 属性，并在 `SettingsScreen` 中引入了 `_hasSynced` 状态。在 settings 初始化异步读取 prefs 时，只有当 settings 确实加载完毕且尚未 sync 过时才会重写 TextControllers 的 text，有效杜绝了因异步加载延迟导致 TextField 回退至硬编码默认值 `gemini-2.5-flash` 的问题。
+5. **支持 Bing 和 Google Grounding 并行双搜 (Google+Bing)**：
+   - 在 Settings 搜索后端新增了 `google_bing` (Google+Bing) 多段选择按钮。
+   - 在 `SearchService.search` 中新增了 `google_bing` 双搜后端，利用 `Future.wait` 并行发起 Google Grounding 与 Bing 搜索请求，并对每一路使用 `catchError` 进行异常熔断隔离，确保任何一方故障时不至于导致整体搜索失败，最后合并二者的网页结果。
+6. **精简网络搜索结果上下文的系统提示词**：
+   - 移除了 `SearchService.formatSearchResultsForContext` 中头部诸如“以下是网络搜索结果。请仔细阅读后基于这些信息回答用户问题”等一长串赘余的提示文字，仅回传纯净的搜索结果及其摘要列表，保持 prompt 精简化并移除对模型的干扰。
+7. **修复编辑消息在有光标时取消导致的框架崩溃 Bug**：
+   - 在 `_showEditDialog` 弹出层取消（或 newText 为空）时，之前会同步调用 `controller.dispose()`，若此时输入框处于聚焦/输入状态，会导致 Flutter 框架在 Dialog pop 动画播放完毕前销毁 Controller 从而引发 `_dependents.isEmpty: is not true` 的断言崩溃。
+   - 修复逻辑：将等待 300ms pop 动画执行完毕和 `controller.dispose()` 的动作统一置于 `await showDialog` 之后执行，彻底消除崩溃。
 
 ### 变更文件
 - `lib/providers/settings_provider.dart`
@@ -28,7 +38,7 @@
 
 ### 状态
 - 静态分析 `flutter analyze` 报告：`No issues found!`。
-- 单元测试与 Widget 测试 `flutter test` 报告：`156 / 156` 测试用例全部 100% 串行通过（0 failures）。
+- 单元测试与 Widget 测试 `flutter test` 报告：`158 / 158` 测试用例全部 100% 串行通过（0 failures）。
 
 ### 技术决策
 - **AI 搜索总结结合来源链接回显**：Gemini 搜索接地不仅会产生来源引用链接（`groundingChunks`），还直接给出一个由谷歌大模型针对当前 query 整合的高质量 Grounded Summary。我们在 `SearchService` 中将这一 AI 总结与其它网页来源一并作为 `SearchResult` 包装回传，既减轻了主模型在合并多网页时的负担，又最大化还原了 Google AI Studio Grounding 的优势。
