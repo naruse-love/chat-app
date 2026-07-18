@@ -22,6 +22,9 @@
 7. **修复编辑消息在有光标时取消导致的框架崩溃 Bug**：
    - 在 `_showEditDialog` 弹出层取消（或 newText 为空）时，之前会同步调用 `controller.dispose()`，若此时输入框处于聚焦/输入状态，会导致 Flutter 框架在 Dialog pop 动画播放完毕前销毁 Controller 从而引发 `_dependents.isEmpty: is not true` 的断言崩溃。
    - 修复逻辑：将等待 300ms pop 动画执行完毕和 `controller.dispose()` 的动作统一置于 `await showDialog` 之后执行，彻底消除崩溃。
+8. **修复过程消息卡片标题文本超长导致布局溢出（Right Overflowed / 黄黑条纹斑马线）Bug**：
+   - 在 `lib/widgets/chat_bubble.dart` 的 `_buildIntermediateAssistantPanel` 中，为中间过程消息面板标题中的工具名称文本控件（`Text`）外层增加了 `Flexible` 包装，并配置了 `maxLines: 1` 和 `overflow: TextOverflow.ellipsis`。
+   - 彻底解决了当模型进行多次连续工具调用（如 `web_search, web_search, web_search`）时，工具名称连写过长超出屏幕右侧边界（溢出 37 像素）触发 Flutter 调试模式黄黑横条警告与 `RIGHT OVERFLOWED BY 37 PIXELS` 的 UI 错误。
 
 ### 变更文件
 - `lib/providers/settings_provider.dart`
