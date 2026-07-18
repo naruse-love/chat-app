@@ -177,12 +177,17 @@ class AgentService {
     List<ChatMessage> effectiveMessages;
     if (systemPrompt != null && systemPrompt.trim().isNotEmpty) {
       final conversationId = messages.isNotEmpty ? messages.first.conversationId : '';
+      // Append current date/time so the model always knows "today"
+      final now = DateTime.now();
+      final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      final enrichedPrompt = '$systemPrompt\n\n当前日期与时间: $dateStr $timeStr';
       effectiveMessages = [
         ChatMessage(
           id: _uuid.v4(),
           conversationId: conversationId,
           role: 'system',
-          content: systemPrompt,
+          content: enrichedPrompt,
           timestamp: DateTime.now(),
         ),
         ...messages.where((m) => m.role != 'system'),

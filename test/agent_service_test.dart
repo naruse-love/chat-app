@@ -182,10 +182,10 @@ void main() {
 
       await stream.toList();
 
-      expect(capturedMessages, isNotNull);
-      // First message should be the new system prompt
+      // First message should be the new system prompt with appended date/time
       expect(capturedMessages!.first.role, 'system');
-      expect(capturedMessages!.first.content, 'New system prompt');
+      expect(capturedMessages!.first.content, startsWith('New system prompt'));
+      expect(capturedMessages!.first.content, contains('当前日期与时间:'));
       // Old system message should be removed (replaced)
       expect(capturedMessages!.where((m) => m.role == 'system'), hasLength(1));
       // User message should still be there
