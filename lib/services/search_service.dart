@@ -208,6 +208,38 @@ class SearchService {
     }
   }
 
+  /// Clean and format raw Cookie strings (remove "Cookie:" prefix, line breaks).
+  static String cleanCookieString(String? rawCookie) {
+    if (rawCookie == null) return '';
+    var cleaned = rawCookie.trim();
+    if (cleaned.toLowerCase().startsWith('cookie:')) {
+      cleaned = cleaned.substring(7).trim();
+    }
+    cleaned = cleaned.replaceAll('\r', '').replaceAll('\n', ' ');
+    return cleaned.trim();
+  }
+
+  /// Merges Set-Cookie response headers into existing Cookie header.
+  static String _mergeCookies(String? existingCookieHeader, List<String> setCookieHeaders) {
+    final cookieMap = <String, String>{};
+    if (existingCookieHeader != null && existingCookieHeader.isNotEmpty) {
+      for (final pair in existingCookieHeader.split(';')) {
+        final kv = pair.split('=');
+        if (kv.length >= 2) {
+          cookieMap[kv[0].trim()] = kv.sublist(1).join('=').trim();
+        }
+      }
+    }
+    for (final header in setCookieHeaders) {
+      final firstPart = header.split(';').first;
+      final kv = firstPart.split('=');
+      if (kv.length >= 2) {
+        cookieMap[kv[0].trim()] = kv.sublist(1).join('=').trim();
+      }
+    }
+    return cookieMap.entries.map((e) => '${e.key}=${e.value}').join('; ');
+  }
+
   /// Searches via Bing — scrapes the HTML search results page with Cookie support,
   /// desktop browser headers, and Bing cvid tracking parameters for account search history.
   Future<List<SearchResult>> _searchBing(String query, String? bingCookie) async {
@@ -216,11 +248,12 @@ class SearchService {
       final encodedQuery = Uri.encodeComponent(cleanQuery).replaceAll('%20', '+');
       final cvid = const Uuid().v4().replaceAll('-', '');
 
-      final url = 'https://www.bing.com/search?q=$encodedQuery&form=QBLH&pq=$encodedQuery&sc=10-0&qs=n&sk=&cvid=$cvid&sp=-1';
+      // Append cc=us and setlang=zh-hans to bypass domestic strict keyword filtering on cn.bing.com
+      final url = 'https://www.bing.com/search?q=$encodedQuery&form=QBLH&pq=$encodedQuery&sc=10-0&qs=n&sk=&cvid=$cvid&sp=-1&cc=us&setlang=zh-hans';
 
       final headers = <String, String>{
         'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/126.0.0.0 Safari/537.36',
         'Accept':
             'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -234,17 +267,43 @@ class SearchService {
         'Upgrade-Insecure-Requests': '1',
       };
 
-      if (bingCookie != null && bingCookie.trim().isNotEmpty) {
-        headers['Cookie'] = bingCookie.trim();
+      final sanitizedCookie = cleanCookieString(bingCookie);
+      if (sanitizedCookie.isNotEmpty) {
+        headers['Cookie'] = sanitizedCookie;
       }
 
-      final response = await _dio.get(
-        url,
-        options: Options(
-          headers: headers,
-          followRedirects: true,
-        ),
-      );
+      // Intercept redirects up to 5 hops to forward Cookie headers, as Dio drops Cookie cross-domain/subdomain
+      String currentUrl = url;
+      Response response;
+      int redirectCount = 0;
+      while (true) {
+        response = await _dio.get(
+          currentUrl,
+          options: Options(
+            headers: headers,
+            followRedirects: false,
+            validateStatus: (status) => status != null && status < 500,
+          ),
+        );
+
+        final statusCode = response.statusCode ?? 200;
+        if ((statusCode == 301 || statusCode == 302 || statusCode == 303 || statusCode == 307 || statusCode == 308) &&
+            redirectCount < 5) {
+          final location = response.headers.value('location');
+          if (location != null && location.isNotEmpty) {
+            final nextUri = Uri.parse(currentUrl).resolve(location);
+            currentUrl = nextUri.toString();
+            redirectCount++;
+
+            final setCookieHeaders = response.headers['set-cookie'];
+            if (setCookieHeaders != null && setCookieHeaders.isNotEmpty) {
+              headers['Cookie'] = _mergeCookies(headers['Cookie'], setCookieHeaders);
+            }
+            continue;
+          }
+        }
+        break;
+      }
 
       if (response.statusCode != 200) {
         throw SearchException(
@@ -256,12 +315,30 @@ class SearchService {
 
       final body = response.data is String ? response.data as String : json.encode(response.data);
       final document = html_parser.parse(body);
+
+      // Detect anti-bot / CAPTCHA challenge pages
+      final isCaptcha = body.contains('g-recaptcha') ||
+          body.contains('client_captcha') ||
+          body.contains('验证码') ||
+          document.querySelector('#challenge') != null ||
+          document.querySelector('.b_captcha') != null;
+
+      if (isCaptcha) {
+        throw SearchException(
+          source: 'Bing',
+          message: 'Bing 触发了反爬验证码拦截。建议在设置中刷新并填入最新的 Bing 登录 Cookie 或改用 SearXNG。',
+        );
+      }
+
       final results = _parseBingResults(document);
+      final hasCookie = sanitizedCookie.isNotEmpty;
 
       if (results.isEmpty) {
         throw SearchException(
           source: 'Bing',
-          message: 'Bing 搜索失败（未提取到结果）。可在设置中配置 Bing 登录 Cookie。',
+          message: hasCookie
+              ? 'Bing 搜索未提取到有效结果。可能是 Cookie 已失效过期或 Bing 变更了页面结构，建议重新获取 Cookie 或切换搜索后端。'
+              : 'Bing 搜索失败（未提取到结果）。可在设置中配置 Bing 登录 Cookie。',
         );
       }
 
@@ -292,23 +369,37 @@ class SearchService {
 
     var items = document.querySelectorAll('li.b_algo');
     if (items.isEmpty) {
+      items = document.querySelectorAll('.b_algo');
+    }
+    if (items.isEmpty) {
       items = document.querySelectorAll('ol#b_results > li');
+    }
+    if (items.isEmpty) {
+      items = document.querySelectorAll('#b_results > li');
     }
 
     for (final item in items) {
       try {
-        final heading = item.querySelector('h2') ?? item.querySelector('h3') ?? item.querySelector('.b_title');
+        final heading = item.querySelector('h2') ?? item.querySelector('h3') ?? item.querySelector('.b_title') ?? item.querySelector('.b_algoHeader');
         final link = heading?.querySelector('a') ?? item.querySelector('a.tilk') ?? item.querySelector('a');
-        final title = link?.text.trim() ?? '';
-        var rawUrl = link?.attributes['href']?.trim() ?? '';
+        if (link == null) continue;
 
-        if (title.isEmpty || rawUrl.isEmpty) continue;
+        var title = link.text.trim();
+        if (title.isEmpty && heading != null) {
+          title = heading.text.trim();
+        }
+        if (title.isEmpty) {
+          title = link.attributes['title']?.trim() ?? '';
+        }
+
+        var rawUrl = link.attributes['href']?.trim() ?? '';
+        if (title.isEmpty || rawUrl.isEmpty || rawUrl.startsWith('javascript:') || rawUrl == '#') continue;
 
         final url = _decodeBingUrl(rawUrl);
         if (seenUrls.contains(url)) continue;
 
         String snippet = '';
-        final selectors = ['.b_caption p', '.b_algoSlug', '.b_lineclamp2', '.b_lineclamp3', '.b_snippet', '.b_attribution', 'p'];
+        final selectors = ['.b_caption p', '.b_algoSlug', '.b_lineclamp2', '.b_lineclamp3', '.b_snippet', '.b_attribution', '.b_factrow', 'p', '.b_paractl'];
         for (final sel in selectors) {
           final el = item.querySelector(sel);
           if (el != null && el.text.trim().isNotEmpty) {

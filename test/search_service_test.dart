@@ -242,11 +242,17 @@ void main() {
       }
     });
 
-    test('Bing search passes bingCookie in headers and decodes redirect URLs', () async {
-      String? sentCookie;
-      mockAdapter.handler = (options) {
-        sentCookie = options.headers['Cookie'];
-        const mockHtml = '''
+      test('cleanCookieString removes Cookie: prefix and line breaks', () {
+        expect(SearchService.cleanCookieString('Cookie: MUID=123;\r\nSRCH=456'), equals('MUID=123; SRCH=456'));
+        expect(SearchService.cleanCookieString('  cookie: MUID=123  '), equals('MUID=123'));
+        expect(SearchService.cleanCookieString(null), equals(''));
+      });
+
+      test('Bing search passes bingCookie in headers and decodes redirect URLs', () async {
+        String? sentCookie;
+        mockAdapter.handler = (options) {
+          sentCookie = options.headers['Cookie'];
+          const mockHtml = '''
 <html>
   <body>
     <ol id="b_results">
@@ -258,20 +264,84 @@ void main() {
   </body>
 </html>
 ''';
-        return ResponseBody.fromString(mockHtml, 200);
-      };
+          return ResponseBody.fromString(mockHtml, 200);
+        };
 
-      final results = await searchService.search(
-        query: 'test',
-        searchBackend: 'bing',
-        bingCookie: 'MUID=123456; SRCHD=AF=NOFORM;',
-      );
+        final results = await searchService.search(
+          query: 'test',
+          searchBackend: 'bing',
+          bingCookie: 'Cookie: MUID=123456; SRCHD=AF=NOFORM;\r\n',
+        );
 
-      expect(sentCookie, equals('MUID=123456; SRCHD=AF=NOFORM;'));
-      expect(results, hasLength(1));
-      expect(results[0].title, equals('Redirect Link'));
-      expect(results[0].url, equals('https://example.com/article'));
-    });
+        expect(sentCookie, equals('MUID=123456; SRCHD=AF=NOFORM;'));
+        expect(results, hasLength(1));
+        expect(results[0].title, equals('Redirect Link'));
+        expect(results[0].url, equals('https://example.com/article'));
+      });
+
+      test('Bing search multi-hop redirect forwards Cookie header', () async {
+        final cookiesSent = <String?>[];
+        mockAdapter.handler = (options) {
+          cookiesSent.add(options.headers['Cookie']);
+          if (options.path.contains('www.bing.com')) {
+            return ResponseBody.fromString(
+              '',
+              302,
+              headers: {
+                'location': ['https://cn.bing.com/search?q=test'],
+                'set-cookie': ['SRCHD=AF=1; path=/'],
+              },
+            );
+          } else {
+            const mockHtml = '''
+<html>
+  <body>
+    <div class="b_algo">
+      <h2><a href="https://example.com">Target Page</a></h2>
+      <p>Content</p>
+    </div>
+  </body>
+</html>
+''';
+            return ResponseBody.fromString(mockHtml, 200);
+          }
+        };
+
+        final results = await searchService.search(
+          query: 'test',
+          searchBackend: 'bing',
+          bingCookie: 'MUID=123',
+        );
+
+        expect(cookiesSent, hasLength(2));
+        expect(cookiesSent[0], equals('MUID=123'));
+        expect(cookiesSent[1], contains('MUID=123'));
+        expect(cookiesSent[1], contains('SRCHD=AF=1'));
+        expect(results, hasLength(1));
+        expect(results[0].title, equals('Target Page'));
+      });
+
+      test('Bing empty results differentiates between cookie set or not', () async {
+        mockAdapter.handler = (options) {
+          return ResponseBody.fromString('<html><body></body></html>', 200);
+        };
+
+        // Without cookie
+        try {
+          await searchService.search(query: 'test', searchBackend: 'bing');
+          fail('Expected exception');
+        } on SearchException catch (e) {
+          expect(e.message, contains('可在设置中配置 Bing 登录 Cookie'));
+        }
+
+        // With cookie
+        try {
+          await searchService.search(query: 'test', searchBackend: 'bing', bingCookie: 'MUID=123');
+          fail('Expected exception');
+        } on SearchException catch (e) {
+          expect(e.message, contains('可能是 Cookie 已失效过期或 Bing 变更了页面结构'));
+        }
+      });
 
     test('Bing search HTTP error throws SearchException', () async {
       mockAdapter.handler = (options) {

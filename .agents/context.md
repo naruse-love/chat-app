@@ -33,9 +33,12 @@
 | **11 / 修复加固**| 模型选择区域加大（热区提升至符合 48dp 标准）；OpenCode Free 免费模型过滤（仅保留 ID 含有 free 字段的模型）与默认模型 deepseek-v4-flash-free 设置；SharedPreferences 异步竞态防范（在 _startStreaming 强制 await initialization，消除 Bing 搜索误报 SearXNG 错误）；Tool Round 超限保底方案（toolRound >= 4 强制进行不含 tools 的最终响应补全，防止自动停止）；编辑与回退弹窗 300ms 路由延迟销毁加固，防止 disposed controller 与 _dependents.isEmpty 框架断言崩溃（2026-07-16 ~ 2026-07-18） | ✅ 完成 |
 | **12 / 维护增强**| 多轮调用上限提升至 10 轮并配置总结兜底；中途所有过程消息整泡折叠展示（除无工具调用的最终文本回答外均默认折叠）；长按消息可复制纯文本（自动洗 Markdown 标记）和 Markdown 原始格式；接入谷歌 AI Studio 搜索接地 (Google Grounding)；修复接地模型重启重置 Bug，修复编辑消息取消崩溃，支持并行双搜 (Google+Bing)，精简搜索结果系统提示模板，修复过程消息标题文本超长右侧溢出警告 (2026-07-18) | ✅ 完成 |
 | **13 / 搜索与设置增强** | 对话内自由选择复制文本；独立 `google_search` 与 `bing_search` 工具；透传 OpenCode Free 思考等级 `reasoningEffort`；`url_fetch` 结构化 Markdown 转换与 UTF-8 容错解码；会话死锁释放与底层滚动平滑适配；修复对话内修改系统提示词 Controller dispose 崩溃；支持设置默认系统提示词模板与 `[默认]` 标识（2026-07-20） | ✅ 完成 |
-| **14 / 状态加固与 Bing 全效** | 修复新对话发送消息时由于 `activeConversation` 回调触发 `loadMessages` 覆盖清空 UI `state` 的隐形 Bug；Bing 搜索采用 `+` 转义多词空格防止“我的世界 红肠配音 梗”截断为“我”；生成 `cvid`（Correlation Vector ID）并补齐 Chrome 全套 Request Headers 及 `form=QBLH` 参数，使带 `bingCookie` 的请求正常在用户 Bing 个人账号记录搜索历史（2026-07-20） | ✅ 完成 |
+| **14 / 状态加固与新对话异常** | 修复新对话发送消息时由于 `activeConversation` 回调触发 `loadMessages` 覆盖清空 UI `state` 的隐形 Bug（2026-07-20） | ✅ 完成 |
+| **15 / Bing 搜索多词及 Cookie 修复** | Bing 搜索采用 `+` 转义多词空格并在 URL 中追加 `cc=us&setlang=zh-hans`，强制使用全球端点绕过国内关键字截断降级策略；修复 `Dio` 跨域重定向丢失 `Cookie` 的问题，通过 `followRedirects: false` 拦截重定向并手动注入 Cookie，使搜索记录能正确同步至用户账户（2026-07-20） | ✅ 完成 |
+| **16 / Bing Cookie 跨域透传与 Agent 规则加锁** | Bing 搜索新增 Cookie 格式清洗与多重重定向 5-hop 显式转发（含 `Set-Cookie` 动态合并），强化 DOM 选择器与反爬/验证码页面识别，优化已填 Cookie 时的错误提示；`AGENTS.md` 新增约束：每次更新/修复必须递增版本号 0.01（`pubspec.yaml` 升至 `1.01.0+2`）（2026-07-20） | ✅ 完成 |
 
-**当前测试状态：159 / 159 测试用例全部通过，`flutter analyze` 0 issues。**
+**当前测试状态：162 / 162 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.01.0+2。**
+
 
 ---
 

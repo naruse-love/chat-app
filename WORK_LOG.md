@@ -1,3 +1,30 @@
+## 2026-07-20 Fixes & Agent Rule: Bing Cookie Forwarding & Version Increment Rule (v1.01.0+2)
+
+### 变更文件
+- `lib/services/search_service.dart`: 增加了 `cleanCookieString` 函数清洗 Bing Cookie 格式（自动剥离 `Cookie:` 前缀与换行符）；改造重定向逻辑为 5 轮显式 `followRedirects: false` 循环，保证每次跨域/子域名跳转（如 `www.bing.com` -> `cn.bing.com`）均强制带上 Cookie，并动态合并响应头中的 `Set-Cookie`；扩充 HTML DOM 解析选择器（支持 `.b_algo`、`header`、`.b_title` 等多种组合及 Title 回退策略）；增加反爬/验证码页面识别，优化已填 Cookie 场景下的错误提示文案。
+- `test/search_service_test.dart`: 增加 `cleanCookieString`、多跳转 Cookie 透传与错误提示分流的单元测试。
+- `.agents/AGENTS.md`: 新增约束规则 6（版本号递增规范），要求每次新增功能、修 bug 或修改代码必须将版本号递增 0.01。
+- `pubspec.yaml`: 项目版本号由 `1.0.0+1` 提升至 `1.01.0+2`。
+- `.agents/context.md` & `WORK_LOG.md`: 追加 Milestone 16 接手上下文记录。
+
+### 核心改进
+1. **解决 Cookie 设置后仍报未提取到结果问题**：修复用户在 copy-paste 时自带 `Cookie:` 或换行符导致的 Cookie 格式失效；解决跨域跳转后续 Request Header 丢失 Cookie 的 bug，实现 Set-Cookie 自动继承与 5 轮防剥离重定向。
+2. **错误提示精准化**：已填 Cookie 但 Cookie 失效/页面结构变动时，明确提示“可能是 Cookie 已失效过期或 Bing 变更了页面结构”，消除用户误以为 Cookie 没填成功的疑虑。
+3. **Agent 开发规范升级**：为项目迭代引入强制递增版本号 0.01 的防漏追踪机制。
+
+---
+
+## 2026-07-20 Fixes: Bing Multi-Word Search & Cookie Forwarding Fix
+
+### 变更文件
+- `lib/services/search_service.dart`: 彻底修复 Bing 搜索中多词短语结果错乱的问题（解决“我的世界 红肠配音 梗”被截断降级的问题）；修复 Bing Cookie 设置后未生效的问题。
+
+### 核心改进
+1. **解决 Bing 搜索多词分词错乱问题**：发现在直接请求 `cn.bing.com` 或被重定向时，Bing 会触发严格的国内关键字过滤和降级分词策略，导致多词查询结果偏离。解决方案是在请求 URL 中追加 `&cc=us&setlang=zh-hans`，强制使用 Bing 全球端点但保留中文结果，成功绕过分词截断。
+2. **解决 Bing Cookie 不生效/历史记录不互通问题**：发现 `Dio` 的底层 `HttpClient` 在处理 `www.bing.com` 到 `cn.bing.com` 跨域重定向时，出于安全策略会自动剥离手动设置的 `Cookie` Header。解决方案是配置 `followRedirects: false`，手动拦截 `301/302/307` 重定向并重新注入 `Cookie`，确保携带用户凭据完成最终请求。
+
+---
+
 ## 2026-07-20 Fixes: New Conversation Message Visibility & Bing Multi-Word Search History Fix
 
 ### 变更文件
