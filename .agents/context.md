@@ -1,5 +1,5 @@
 # 项目接手上下文（Context）
-> 最后更新：2026-07-18
+> 最后更新：2026-07-20
 
 ---
 
@@ -9,8 +9,8 @@
 
 - **工作目录**：`D:\work\chat`
 - **Flutter SDK**：`D:\work\flutter-sdk\flutter\bin\flutter.bat`
-- **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支，HEAD `fc9a35f`）
-- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（153/153），`flutter analyze` 必须 0 issues
+- **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支，HEAD `69aff21`）
+- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（159/159），`flutter analyze` 必须 0 issues
 
 ---
 
@@ -32,8 +32,10 @@
 | **10 / 深度增强**| OpenCode Free 免本地代理直连（指向 `https://opencode.ai/zen/v1`）；网页全文抓取工具 (`url_fetch` + HTML 过滤 + 8000字截断)；SearXNG 并发双页查询与去重优化；全 StateNotifier 异步 `mounted` 防御，避免测试销毁崩溃（2026-07-16） | ✅ 完成 |
 | **11 / 修复加固**| 模型选择区域加大（热区提升至符合 48dp 标准）；OpenCode Free 免费模型过滤（仅保留 ID 含有 free 字段的模型）与默认模型 deepseek-v4-flash-free 设置；SharedPreferences 异步竞态防范（在 _startStreaming 强制 await initialization，消除 Bing 搜索误报 SearXNG 错误）；Tool Round 超限保底方案（toolRound >= 4 强制进行不含 tools 的最终响应补全，防止自动停止）；编辑与回退弹窗 300ms 路由延迟销毁加固，防止 disposed controller 与 _dependents.isEmpty 框架断言崩溃（2026-07-16 ~ 2026-07-18） | ✅ 完成 |
 | **12 / 维护增强**| 多轮调用上限提升至 10 轮并配置总结兜底；中途所有过程消息整泡折叠展示（除无工具调用的最终文本回答外均默认折叠）；长按消息可复制纯文本（自动洗 Markdown 标记）和 Markdown 原始格式；接入谷歌 AI Studio 搜索接地 (Google Grounding)；修复接地模型重启重置 Bug，修复编辑消息取消崩溃，支持并行双搜 (Google+Bing)，精简搜索结果系统提示模板，修复过程消息标题文本超长右侧溢出警告 (2026-07-18) | ✅ 完成 |
+| **13 / 搜索与设置增强** | 对话内自由选择复制文本；独立 `google_search` 与 `bing_search` 工具；透传 OpenCode Free 思考等级 `reasoningEffort`；`url_fetch` 结构化 Markdown 转换与 UTF-8 容错解码；会话死锁释放与底层滚动平滑适配；修复对话内修改系统提示词 Controller dispose 崩溃；支持设置默认系统提示词模板与 `[默认]` 标识（2026-07-20） | ✅ 完成 |
+| **14 / 状态加固与 Bing 全效** | 修复新对话发送消息时由于 `activeConversation` 回调触发 `loadMessages` 覆盖清空 UI `state` 的隐形 Bug；Bing 搜索采用 `+` 转义多词空格防止“我的世界 红肠配音 梗”截断为“我”；生成 `cvid`（Correlation Vector ID）并补齐 Chrome 全套 Request Headers 及 `form=QBLH` 参数，使带 `bingCookie` 的请求正常在用户 Bing 个人账号记录搜索历史（2026-07-20） | ✅ 完成 |
 
-**当前测试状态：158 / 158 测试用例全部通过，`flutter analyze` 0 issues。**
+**当前测试状态：159 / 159 测试用例全部通过，`flutter analyze` 0 issues。**
 
 ---
 
@@ -151,6 +153,9 @@ test/
 
 21. **Google Grounding AI 搜索整合**：将 Google AI Studio 搜索接地输出的 AI 整合总结与原始 `groundingChunks` 链接一并解析封装，作为搜索返回列表呈现。这种既有 AI 预先提炼又附带真实来源链接的设计，既加速了后续大模型的理解，又保障了事实可靠性。
 22. **正则表达式原始字符串替换**：在 Dart 中，正常字符串内的 `$1` 会被识别为表达式插值。为了在 `chat_bubble` 清理 Markdown 标记时使用正则匹配组替换，我们必须使用 Dart 原始字符串（`r'$1'`）规避插值编译错误。
+23. **系统提示词 BottomSheet 延迟销毁防御**：在 `_showSystemPromptBottomSheet` 中使用 `await showModalBottomSheet` 并在关闭动效收尾后等待 300ms 再调用 `controller.dispose()`，消除 Flutter 框架 `_dependents.isEmpty: is not true` 的关联注销断言崩溃。
+24. **Bing 搜索多词 `+` 编码与 `cvid` 账号历史跟踪**：使用 `+` 替换 `%20` 转义空格解决 Bing 国内节点多词分词截断问题；生成 UUID `cvid` 参数并补全 `form=QBLH` 与 Chrome 标头，保证带有 `bingCookie` 的搜素成功写入用户个人 Bing 搜索历史。
+25. **新会话状态竞争（Race Condition）防范**：在 `ChatNotifier.loadMessages` 内为异步重置加锁防范，新建对话发消息时不被 `activeConversation` 回调重载冲刷，保证用户实时发送消息持续直观渲染。
 
 ---
 
