@@ -22,15 +22,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _showArchived = false;
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool forceDelayed = false}) {
     if (_scrollController.hasClients) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
       });
+      if (forceDelayed) {
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (mounted && _scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
     }
   }
 
@@ -45,12 +58,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Set up auto scroll listener
     ref.listen<ChatState>(chatProvider, (prev, next) {
+      final isNewMessageList = prev == null ||
+          (prev.messages.isEmpty && next.messages.isNotEmpty) ||
+          (prev.messages.isNotEmpty && next.messages.isNotEmpty && prev.messages.first.id != next.messages.first.id);
       if (next.messages.length != prev?.messages.length ||
           next.streamContent != prev?.streamContent ||
-          next.streamReasoning != prev?.streamReasoning) {
-        _scrollToBottom();
+          next.streamReasoning != prev?.streamReasoning ||
+          isNewMessageList) {
+        _scrollToBottom(forceDelayed: isNewMessageList);
       }
     });
+
+    ref.listen<Conversation?>(
+      conversationProvider.select((s) => s.activeConversation),
+      (prev, next) {
+        _scrollToBottom(forceDelayed: true);
+      },
+    );
 
     final isLargeScreen = MediaQuery.of(context).size.width > 800;
 

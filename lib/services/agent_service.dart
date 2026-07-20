@@ -107,6 +107,44 @@ class AgentService {
     },
   };
 
+  /// OpenAI-compatible Tool definition for Google search.
+  static const Map<String, dynamic> googleSearchTool = {
+    'type': 'function',
+    'function': {
+      'name': 'google_search',
+      'description': 'Search Google for up-to-date information on a given topic.',
+      'parameters': {
+        'type': 'object',
+        'properties': {
+          'query': {
+            'type': 'string',
+            'description': 'The search query for Google.',
+          },
+        },
+        'required': ['query'],
+      },
+    },
+  };
+
+  /// OpenAI-compatible Tool definition for Bing search.
+  static const Map<String, dynamic> bingSearchTool = {
+    'type': 'function',
+    'function': {
+      'name': 'bing_search',
+      'description': 'Search Bing for up-to-date information on a given topic.',
+      'parameters': {
+        'type': 'object',
+        'properties': {
+          'query': {
+            'type': 'string',
+            'description': 'The search query for Bing.',
+          },
+        },
+        'required': ['query'],
+      },
+    },
+  };
+
   /// OpenAI-compatible Tool definition for fetching full-text webpage content.
   static const Map<String, dynamic> urlFetchTool = {
     'type': 'function',
@@ -125,6 +163,20 @@ class AgentService {
       },
     },
   };
+
+  static List<Map<String, dynamic>> getEffectiveTools(String searchBackend) {
+    switch (searchBackend) {
+      case 'google':
+        return [googleSearchTool, urlFetchTool];
+      case 'bing':
+        return [bingSearchTool, urlFetchTool];
+      case 'google_bing':
+        return [googleSearchTool, bingSearchTool, urlFetchTool];
+      case 'searxng':
+      default:
+        return [webSearchTool, urlFetchTool];
+    }
+  }
 
   static const List<Map<String, dynamic>> defaultTools = [
     webSearchTool,
@@ -171,6 +223,7 @@ class AgentService {
     String? googleApiKey,
     String? googleBaseUrl,
     String? googleSearchModel,
+    String? reasoningEffort,
     CancelToken? cancelToken,
   }) async* {
     // Inject system prompt if provided (prepend after removing any existing system messages)
@@ -201,6 +254,8 @@ class AgentService {
     final lastMessage = effectiveMessages.last;
     final isManualSearch = lastMessage.role == 'user' &&
         lastMessage.content.trim().startsWith('@search');
+
+    final effectiveTools = getEffectiveTools(searchBackend);
 
     if (isManualSearch) {
       final query = lastMessage.content.trim().substring(7).trim();
@@ -250,7 +305,7 @@ class AgentService {
           ToolCall(
             id: toolCallId,
             type: 'function',
-            functionName: 'web_search',
+            functionName: searchBackend == 'google' ? 'google_search' : (searchBackend == 'bing' ? 'bing_search' : 'web_search'),
             arguments: json.encode({'query': query}),
           ),
         ],
@@ -280,11 +335,13 @@ class AgentService {
         apiKey: apiKey,
         model: model,
         messages: nextMessages,
-        tools: defaultTools,
+        tools: effectiveTools,
         searxngUrl: searxngUrl,
         searchBackend: searchBackend,
         googleApiKey: googleApiKey,
         googleBaseUrl: googleBaseUrl,
+        googleSearchModel: googleSearchModel,
+        reasoningEffort: reasoningEffort,
         cancelToken: cancelToken,
       );
     } else {
@@ -300,7 +357,8 @@ class AgentService {
         apiKey: apiKey,
         model: model,
         messages: effectiveMessages,
-        tools: defaultTools,
+        tools: effectiveTools,
+        reasoningEffort: reasoningEffort,
         cancelToken: cancelToken,
       )) {
         // Capture usage from chunks where choices is empty
@@ -405,10 +463,19 @@ class AgentService {
             List<SearchResult> results;
             String? searchError;
             try {
+              String effectiveBackend = searchBackend;
+              if (entry.name == 'google_search') {
+                effectiveBackend = 'google';
+              } else if (entry.name == 'bing_search') {
+                effectiveBackend = 'bing';
+              } else if (entry.name == 'web_search') {
+                effectiveBackend = 'searxng';
+              }
+
               results = await _searchService.search(
                 query: query,
                 searxngUrl: searxngUrl,
-                searchBackend: searchBackend,
+                searchBackend: effectiveBackend,
                 googleApiKey: googleApiKey,
                 googleBaseUrl: googleBaseUrl,
                 googleSearchModel: googleSearchModel,
@@ -470,12 +537,13 @@ class AgentService {
           apiKey: apiKey,
           model: model,
           messages: nextMessages,
-          tools: defaultTools,
+          tools: effectiveTools,
           searxngUrl: searxngUrl,
           searchBackend: searchBackend,
           googleApiKey: googleApiKey,
           googleBaseUrl: googleBaseUrl,
           googleSearchModel: googleSearchModel,
+          reasoningEffort: reasoningEffort,
           cancelToken: cancelToken,
         );
       }
@@ -496,6 +564,7 @@ class AgentService {
     String? googleApiKey,
     String? googleBaseUrl,
     String? googleSearchModel,
+    String? reasoningEffort,
     CancelToken? cancelToken,
   }) async* {
     yield* _streamCompletionsLoop(
@@ -503,12 +572,13 @@ class AgentService {
       apiKey: apiKey,
       model: model,
       messages: messages,
-      tools: tools ?? defaultTools,
+      tools: tools ?? getEffectiveTools(searchBackend),
       searxngUrl: searxngUrl,
       searchBackend: searchBackend,
       googleApiKey: googleApiKey,
       googleBaseUrl: googleBaseUrl,
       googleSearchModel: googleSearchModel,
+      reasoningEffort: reasoningEffort,
       cancelToken: cancelToken,
       toolRound: 0,
     );
@@ -526,6 +596,7 @@ class AgentService {
     String? googleApiKey,
     String? googleBaseUrl,
     String? googleSearchModel,
+    String? reasoningEffort,
     CancelToken? cancelToken,
     int toolRound = 0,
   }) async* {
@@ -548,6 +619,7 @@ class AgentService {
         apiKey: apiKey,
         model: model,
         messages: finalMessages,
+        reasoningEffort: reasoningEffort,
         cancelToken: cancelToken,
       )) {
         if (chunk.containsKey('usage') && chunk['usage'] is Map) {
@@ -590,6 +662,7 @@ class AgentService {
       model: model,
       messages: messages,
       tools: tools,
+      reasoningEffort: reasoningEffort,
       cancelToken: cancelToken,
     )) {
       // Capture usage from chunks where choices is empty
@@ -698,12 +771,22 @@ class AgentService {
           List<SearchResult> results;
           String? searchError;
           try {
+            String effectiveBackend = searchBackend;
+            if (entry.name == 'google_search') {
+              effectiveBackend = 'google';
+            } else if (entry.name == 'bing_search') {
+              effectiveBackend = 'bing';
+            } else if (entry.name == 'web_search') {
+              effectiveBackend = 'searxng';
+            }
+
             results = await _searchService.search(
               query: query,
               searxngUrl: searxngUrl,
-              searchBackend: searchBackend,
+              searchBackend: effectiveBackend,
               googleApiKey: googleApiKey,
               googleBaseUrl: googleBaseUrl,
+              googleSearchModel: googleSearchModel,
             );
           } on SearchException catch (e) {
             results = [];
@@ -766,6 +849,7 @@ class AgentService {
         googleApiKey: googleApiKey,
         googleBaseUrl: googleBaseUrl,
         googleSearchModel: googleSearchModel,
+        reasoningEffort: reasoningEffort,
         cancelToken: cancelToken,
         toolRound: toolRound + 1,
       );
@@ -812,7 +896,7 @@ class AgentService {
               content: content,
               timestamp: DateTime.now(),
             ));
-          } else if (name == 'web_search' && query.isNotEmpty) {
+          } else if ((name == 'web_search' || name == 'google_search' || name == 'bing_search') && query.isNotEmpty) {
             _checkCancellation(cancelToken);
 
             yield ToolCallStartedEvent(query);
@@ -820,12 +904,22 @@ class AgentService {
             List<SearchResult> results;
             String? searchError;
             try {
+              String effectiveBackend = searchBackend;
+              if (name == 'google_search') {
+                effectiveBackend = 'google';
+              } else if (name == 'bing_search') {
+                effectiveBackend = 'bing';
+              } else if (name == 'web_search') {
+                effectiveBackend = 'searxng';
+              }
+
               results = await _searchService.search(
                 query: query,
                 searxngUrl: searxngUrl,
-                searchBackend: searchBackend,
+                searchBackend: effectiveBackend,
                 googleApiKey: googleApiKey,
                 googleBaseUrl: googleBaseUrl,
+                googleSearchModel: googleSearchModel,
               );
             } on SearchException catch (e) {
               results = [];

@@ -59,6 +59,14 @@ class _ChatBubbleState extends State<ChatBubble> {
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
+            ListTile(
+              leading: const Icon(Icons.select_all),
+              title: const Text('自由选择文本'),
+              onTap: () {
+                Navigator.pop(context);
+                _showTextSelectionDialog(context, widget.message.content);
+              },
+            ),
             if (widget.message.role == 'user')
               ListTile(
                 leading: const Icon(Icons.copy),
@@ -144,6 +152,30 @@ class _ChatBubbleState extends State<ChatBubble> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showTextSelectionDialog(BuildContext context, String text) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('自由选择与复制文本'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              text.isEmpty ? '(无文本内容)' : text,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('关闭'),
+          ),
+        ],
       ),
     );
   }
@@ -497,6 +529,35 @@ class _ChatBubbleState extends State<ChatBubble> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (widget.message.toolCalls != null &&
+                    widget.message.toolCalls!.isNotEmpty) ...[
+                  Text(
+                    '工具调用指令:',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  for (final tc in widget.message.toolCalls!) ...[
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 4.0),
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(4.0),
+                      ),
+                      child: SelectableText(
+                        '${tc.functionName}(${tc.arguments})',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                ],
                 if (widget.message.reasoningContent != null &&
                     widget.message.reasoningContent!.isNotEmpty) ...[
                   Text(

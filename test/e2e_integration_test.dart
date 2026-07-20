@@ -23,14 +23,7 @@ import 'package:chat/providers/settings_provider.dart';
 import 'package:chat/providers/theme_provider.dart';
 
 class MockChatService extends ChatService {
-  Stream<Map<String, dynamic>> Function({
-    required String baseUrl,
-    required String apiKey,
-    required String model,
-    required List<ChatMessage> messages,
-    List<Map<String, dynamic>>? tools,
-    CancelToken? cancelToken,
-  })? chatCompletionsStreamHandler;
+  dynamic chatCompletionsStreamHandler;
 
   Future<List<ModelInfo>> Function(String baseUrl, String apiKey)? listModelsHandler;
 
@@ -41,17 +34,36 @@ class MockChatService extends ChatService {
     required String model,
     required List<ChatMessage> messages,
     List<Map<String, dynamic>>? tools,
+    String? reasoningEffort,
     CancelToken? cancelToken,
   }) {
     if (chatCompletionsStreamHandler != null) {
-      return chatCompletionsStreamHandler!(
-        baseUrl: baseUrl,
-        apiKey: apiKey,
-        model: model,
-        messages: messages,
-        tools: tools,
-        cancelToken: cancelToken,
-      );
+      dynamic res;
+      try {
+        res = (chatCompletionsStreamHandler as Function)(
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          model: model,
+          messages: messages,
+          tools: tools,
+          reasoningEffort: reasoningEffort,
+          cancelToken: cancelToken,
+        );
+      } catch (_) {
+        res = (chatCompletionsStreamHandler as Function)(
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          model: model,
+          messages: messages,
+          tools: tools,
+          cancelToken: cancelToken,
+        );
+      }
+      if (res is Stream<Map<String, dynamic>>) {
+        return res;
+      } else if (res is Stream) {
+        return res.cast<Map<String, dynamic>>();
+      }
     }
     return const Stream.empty();
   }

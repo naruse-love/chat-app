@@ -60,7 +60,8 @@ void main() {
       };
 
       final content = await fetchService.fetchUrlContent('https://example.com/page');
-      expect(content, contains('Title Header This is the main body text of the article.'));
+      expect(content, contains('Title Header'));
+      expect(content, contains('This is the main body text of the article.'));
       expect(content, isNot(contains('secret')));
       expect(content, isNot(contains('color: red')));
       expect(content, isNot(contains('Please enable JS')));

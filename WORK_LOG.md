@@ -1,3 +1,25 @@
+## 2026-07-20 Features & Fixes: Selection Box, Search Decoupling, OpenCode Reasoning Effort, URL Fetch Markdown, Switching Deadlock Fix
+
+### 变更文件
+- `lib/widgets/chat_bubble.dart`: 长按文本菜单新增“自由选择文本”弹窗 (`SelectableText`)；过程消息卡片增加 `toolCalls` (方法名与 JSON 参数) 回显，解决 hy3 等无思考文本模型的空面板问题。
+- `lib/services/agent_service.dart`: 明确 `google_search` 与 `bing_search` 单独工具定义，`google_bing` 模式同时下发双工具由 AI 自由选择调用；下发 `reasoningEffort` 思考等级参数。
+- `lib/services/url_fetch_service.dart`: 响应格式改用 `bytes` + `utf8.decode(..., allowMalformed: true)` 防乱码；实现 HTML DOM 结构化提取器 (`_parseHtmlToStructuredMarkdown`)，保留标题、段落、列表、链接与表格。
+- `lib/services/chat_service.dart`: API 请求 Payload 新增 `reasoning_effort` 字段透传。
+- `lib/providers/settings_provider.dart`: `AppSettings` 与 `SettingsNotifier` 新增 `reasoningEffort` (`'none'`, `'low'`, `'medium'`, `'high'`) 设置。
+- `lib/providers/chat_provider.dart`: `sendMessage` 使用 `try-finally` 确保 `_sendingInProgress = false` 重置解锁；`loadMessages` 切换会话时自动取消上一次流生成；透传 `reasoningEffort`。
+- `lib/screens/settings_screen.dart`: 更新搜索后端按钮文案；新增“模型思考设置”段落控制 `reasoningEffort`。
+- `lib/screens/home_screen.dart`: `_scrollToBottom` 增加 post-frame 延迟处理，修复长历史会话重入与切换无法到达底层问题。
+- `test/*`: 修复/更新 `MockChatService` 与 `UrlFetchService` 单元测试，保证所有 158 个测试用例 100% 通过。
+
+### 核心改进
+1. **长按自由文本选择与复制**：用户长按消息弹窗支持点击“自由选择文本”，调出标准选择游标与复制浮条。
+2. **Google 与 Bing 双独立搜索工具**：解耦混合搜索为 `google_search` 与 `bing_search`，AI 可自由选择单一或并行工具调用。
+3. **OpenCode Free 思考等级设置**：支持设置 `reasoningEffort` 并透传至 API。
+4. **网页抓取排版与中文/英数提取增强**：保留 HTML 级排版结构（标题 `#`、列表 `-`、链接与表格）。
+5. **切换会话卡死与滚动底端自适应修复**：解耦发送状态锁，自动切断旧会话流，多阶段平滑滚动底端。
+
+---
+
 ## 2026-07-18 Maintenance: Multi-Round 10-Limit collapse, AI Copy Plain/Markdown, and Google Search Grounding
 
 ### 变更内容

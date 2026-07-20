@@ -15,6 +15,7 @@ class AppSettings {
   final String googleSearchApiKey;
   final String googleSearchBaseUrl;
   final String googleSearchModel;
+  final String reasoningEffort;
   final bool isLoaded;
 
   AppSettings({
@@ -25,6 +26,7 @@ class AppSettings {
     this.googleSearchApiKey = '',
     this.googleSearchBaseUrl = 'https://generativelanguage.googleapis.com',
     this.googleSearchModel = 'gemini-2.5-flash',
+    this.reasoningEffort = 'medium',
     this.isLoaded = false,
   });
 
@@ -36,6 +38,7 @@ class AppSettings {
     String? googleSearchApiKey,
     String? googleSearchBaseUrl,
     String? googleSearchModel,
+    String? reasoningEffort,
     bool? isLoaded,
   }) {
     return AppSettings(
@@ -46,6 +49,7 @@ class AppSettings {
       googleSearchApiKey: googleSearchApiKey ?? this.googleSearchApiKey,
       googleSearchBaseUrl: googleSearchBaseUrl ?? this.googleSearchBaseUrl,
       googleSearchModel: googleSearchModel ?? this.googleSearchModel,
+      reasoningEffort: reasoningEffort ?? this.reasoningEffort,
       isLoaded: isLoaded ?? this.isLoaded,
     );
   }
@@ -58,6 +62,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _searchBackendKey = 'search_backend';
   static const _googleSearchBaseUrlKey = 'google_search_base_url';
   static const _googleSearchModelKey = 'google_search_model';
+  static const _reasoningEffortKey = 'reasoning_effort';
   static const _googleSearchApiKeySecureKey = 'google_search_api_key';
 
   final SecureStorageService _secureStorage;
@@ -82,6 +87,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         googleSearchApiKey: apiKey,
         googleSearchBaseUrl: prefs.getString(_googleSearchBaseUrlKey) ?? 'https://generativelanguage.googleapis.com',
         googleSearchModel: prefs.getString(_googleSearchModelKey) ?? 'gemini-2.5-flash',
+        reasoningEffort: prefs.getString(_reasoningEffortKey) ?? 'medium',
         isLoaded: true,
       );
     } catch (_) {
@@ -141,6 +147,14 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_googleSearchModelKey, model);
+    } catch (_) {}
+  }
+
+  Future<void> updateReasoningEffort(String effort) async {
+    state = state.copyWith(reasoningEffort: effort);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_reasoningEffortKey, effort);
     } catch (_) {}
   }
 }

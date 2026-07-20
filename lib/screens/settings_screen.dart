@@ -265,6 +265,66 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
           const Divider(),
 
+          // Model Reasoning Effort Section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Text(
+              '模型思考设置',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '思考等级 (Reasoning Effort)',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '适用于支持思考的 AI 模型（如 OpenCode Free / o1 / DeepSeek 等）',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'none',
+                      label: Text('关闭', style: TextStyle(fontSize: 11)),
+                    ),
+                    ButtonSegment(
+                      value: 'low',
+                      label: Text('低', style: TextStyle(fontSize: 11)),
+                    ),
+                    ButtonSegment(
+                      value: 'medium',
+                      label: Text('中', style: TextStyle(fontSize: 11)),
+                    ),
+                    ButtonSegment(
+                      value: 'high',
+                      label: Text('高', style: TextStyle(fontSize: 11)),
+                    ),
+                  ],
+                  selected: {settings.reasoningEffort},
+                  onSelectionChanged: (selection) {
+                    notifier.updateReasoningEffort(selection.first);
+                  },
+                  showSelectedIcon: false,
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+
           // Configuration Managers Section
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),

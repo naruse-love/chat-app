@@ -191,7 +191,9 @@ void main() {
       };
 
       final text = await urlFetchService.fetchUrlContent('https://test.local/article');
-      expect(text, contains('Header Title Paragraph 1 line 1. Paragraph 1 line 2. Paragraph 2 content.'));
+      expect(text, contains('Header Title'));
+      expect(text, contains('Paragraph 1 line 1.'));
+      expect(text, contains('Paragraph 2 content.'));
       expect(text, isNot(contains('secretKey')));
       expect(text, isNot(contains('background-color')));
       expect(text, isNot(contains('JavaScript is disabled')));

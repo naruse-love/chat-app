@@ -85,9 +85,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   Future<void> loadMessages(String conversationId) async {
-    // Do not reload messages while a send is in progress to avoid
-    // overwriting the newly added user message.
-    if (_sendingInProgress) return;
+    if (_sendingInProgress || state.isGenerating) {
+      cancelGeneration();
+      _sendingInProgress = false;
+    }
     state = state.copyWith(isGenerating: false, error: null);
     try {
       final messages = await _messageDao.getMessagesForConversation(conversationId);
@@ -114,62 +115,66 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
 
     _sendingInProgress = true;
-    String targetConvId;
-    if (activeConv == null) {
-      final settings = _ref.read(settingsProvider);
-      final title = text.length > 20 ? '${text.substring(0, 20)}...' : text;
-      final newConv = await _ref.read(conversationProvider.notifier).createConversation(
-        title: title,
-        apiConfigId: activeConfig.id,
-        modelId: selectedModel.id,
-        systemPrompt: settings.defaultSystemPrompt,
-      );
-      targetConvId = newConv.id;
-    } else {
-      targetConvId = activeConv.id;
-    }
-
-    final messageId = const Uuid().v4();
-    String? finalImagePath;
-    if (imagePath != null) {
-      try {
-        finalImagePath = await _ref.read(imageServiceProvider).compressAndSaveImage(
-          sourcePath: imagePath,
-          messageId: messageId,
+    try {
+      String targetConvId;
+      if (activeConv == null) {
+        final settings = _ref.read(settingsProvider);
+        final title = text.length > 20 ? '${text.substring(0, 20)}...' : text;
+        final newConv = await _ref.read(conversationProvider.notifier).createConversation(
+          title: title,
+          apiConfigId: activeConfig.id,
+          modelId: selectedModel.id,
+          systemPrompt: settings.defaultSystemPrompt,
         );
-      } catch (e) {
-        state = state.copyWith(error: '图片处理失败: $e');
-        return;
+        targetConvId = newConv.id;
+      } else {
+        targetConvId = activeConv.id;
       }
-    }
 
-    final userMessage = ChatMessage(
-      id: messageId,
-      conversationId: targetConvId,
-      role: 'user',
-      content: text,
-      imagePath: finalImagePath,
-      timestamp: DateTime.now(),
-    );
+      final messageId = const Uuid().v4();
+      String? finalImagePath;
+      if (imagePath != null) {
+        try {
+          finalImagePath = await _ref.read(imageServiceProvider).compressAndSaveImage(
+            sourcePath: imagePath,
+            messageId: messageId,
+          );
+        } catch (e) {
+          state = state.copyWith(error: '图片处理失败: $e');
+          return;
+        }
+      }
 
-    state = state.copyWith(
-      messages: [...state.messages, userMessage],
-      isGenerating: true,
-      streamContent: '',
-      streamReasoning: '',
-      error: null,
-    );
-    await _messageDao.insert(userMessage);
-    if (!mounted) return;
-
-    if (activeConv != null) {
-      _ref.read(conversationProvider.notifier).updateConversation(
-        activeConv.copyWith(updatedAt: DateTime.now()),
+      final userMessage = ChatMessage(
+        id: messageId,
+        conversationId: targetConvId,
+        role: 'user',
+        content: text,
+        imagePath: finalImagePath,
+        timestamp: DateTime.now(),
       );
-    }
 
-    // Start streaming the API call
-    await _startStreaming(targetConvId);
+      state = state.copyWith(
+        messages: [...state.messages, userMessage],
+        isGenerating: true,
+        streamContent: '',
+        streamReasoning: '',
+        error: null,
+      );
+      await _messageDao.insert(userMessage);
+      if (!mounted) return;
+
+      if (activeConv != null) {
+        _ref.read(conversationProvider.notifier).updateConversation(
+          activeConv.copyWith(updatedAt: DateTime.now()),
+        );
+      }
+
+      // Start streaming the API call
+      await _startStreaming(targetConvId);
+    } finally {
+      _sendingInProgress = false;
+    }
   }
 
   /// Edits a user message and resends the conversation from that point.
@@ -312,6 +317,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         googleApiKey: settings.googleSearchApiKey.isNotEmpty ? settings.googleSearchApiKey : null,
         googleBaseUrl: settings.googleSearchBaseUrl.isNotEmpty ? settings.googleSearchBaseUrl : null,
         googleSearchModel: settings.googleSearchModel.isNotEmpty ? settings.googleSearchModel : null,
+        reasoningEffort: settings.reasoningEffort,
         cancelToken: _cancelToken,
       );
 

@@ -23,6 +23,7 @@ class ChatService {
     required String model,
     required List<ChatMessage> messages,
     List<Map<String, dynamic>>? tools,
+    String? reasoningEffort,
     CancelToken? cancelToken,
   }) async* {
     final List<Map<String, dynamic>> apiMessages = [];
@@ -35,6 +36,8 @@ class ChatService {
       'messages': apiMessages,
       'stream': true,
       'stream_options': {'include_usage': true},
+      if (reasoningEffort != null && reasoningEffort.isNotEmpty && reasoningEffort != 'none')
+        'reasoning_effort': reasoningEffort,
       if (tools != null && tools.isNotEmpty) 'tools': tools,
     };
 
