@@ -15,6 +15,7 @@ class AppSettings {
   final String googleSearchApiKey;
   final String googleSearchBaseUrl;
   final String googleSearchModel;
+  final String bingCookie;
   final String reasoningEffort;
   final bool isLoaded;
 
@@ -26,6 +27,7 @@ class AppSettings {
     this.googleSearchApiKey = '',
     this.googleSearchBaseUrl = 'https://generativelanguage.googleapis.com',
     this.googleSearchModel = 'gemini-2.5-flash',
+    this.bingCookie = '',
     this.reasoningEffort = 'medium',
     this.isLoaded = false,
   });
@@ -38,6 +40,7 @@ class AppSettings {
     String? googleSearchApiKey,
     String? googleSearchBaseUrl,
     String? googleSearchModel,
+    String? bingCookie,
     String? reasoningEffort,
     bool? isLoaded,
   }) {
@@ -49,6 +52,7 @@ class AppSettings {
       googleSearchApiKey: googleSearchApiKey ?? this.googleSearchApiKey,
       googleSearchBaseUrl: googleSearchBaseUrl ?? this.googleSearchBaseUrl,
       googleSearchModel: googleSearchModel ?? this.googleSearchModel,
+      bingCookie: bingCookie ?? this.bingCookie,
       reasoningEffort: reasoningEffort ?? this.reasoningEffort,
       isLoaded: isLoaded ?? this.isLoaded,
     );
@@ -64,6 +68,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _googleSearchModelKey = 'google_search_model';
   static const _reasoningEffortKey = 'reasoning_effort';
   static const _googleSearchApiKeySecureKey = 'google_search_api_key';
+  static const _bingCookieSecureKey = 'bing_cookie';
 
   final SecureStorageService _secureStorage;
   bool isLoaded = false;
@@ -77,6 +82,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final apiKey = await _secureStorage.read(_googleSearchApiKeySecureKey) ?? '';
+      final bingCookie = await _secureStorage.read(_bingCookieSecureKey) ?? '';
       if (!mounted) return;
       isLoaded = true;
       state = AppSettings(
@@ -87,6 +93,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         googleSearchApiKey: apiKey,
         googleSearchBaseUrl: prefs.getString(_googleSearchBaseUrlKey) ?? 'https://generativelanguage.googleapis.com',
         googleSearchModel: prefs.getString(_googleSearchModelKey) ?? 'gemini-2.5-flash',
+        bingCookie: bingCookie,
         reasoningEffort: prefs.getString(_reasoningEffortKey) ?? 'medium',
         isLoaded: true,
       );
@@ -147,6 +154,13 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_googleSearchModelKey, model);
+    } catch (_) {}
+  }
+
+  Future<void> updateBingCookie(String cookie) async {
+    state = state.copyWith(bingCookie: cookie);
+    try {
+      await _secureStorage.write(_bingCookieSecureKey, cookie);
     } catch (_) {}
   }
 

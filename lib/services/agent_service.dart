@@ -223,6 +223,7 @@ class AgentService {
     String? googleApiKey,
     String? googleBaseUrl,
     String? googleSearchModel,
+    String? bingCookie,
     String? reasoningEffort,
     CancelToken? cancelToken,
   }) async* {
@@ -277,6 +278,7 @@ class AgentService {
           googleApiKey: googleApiKey,
           googleBaseUrl: googleBaseUrl,
           googleSearchModel: googleSearchModel,
+          bingCookie: bingCookie,
         );
       } on SearchException catch (e) {
         results = [];
@@ -341,6 +343,7 @@ class AgentService {
         googleApiKey: googleApiKey,
         googleBaseUrl: googleBaseUrl,
         googleSearchModel: googleSearchModel,
+        bingCookie: bingCookie,
         reasoningEffort: reasoningEffort,
         cancelToken: cancelToken,
       );
@@ -543,6 +546,7 @@ class AgentService {
           googleApiKey: googleApiKey,
           googleBaseUrl: googleBaseUrl,
           googleSearchModel: googleSearchModel,
+          bingCookie: bingCookie,
           reasoningEffort: reasoningEffort,
           cancelToken: cancelToken,
         );
@@ -564,6 +568,7 @@ class AgentService {
     String? googleApiKey,
     String? googleBaseUrl,
     String? googleSearchModel,
+    String? bingCookie,
     String? reasoningEffort,
     CancelToken? cancelToken,
   }) async* {
@@ -578,6 +583,7 @@ class AgentService {
       googleApiKey: googleApiKey,
       googleBaseUrl: googleBaseUrl,
       googleSearchModel: googleSearchModel,
+      bingCookie: bingCookie,
       reasoningEffort: reasoningEffort,
       cancelToken: cancelToken,
       toolRound: 0,
@@ -596,6 +602,7 @@ class AgentService {
     String? googleApiKey,
     String? googleBaseUrl,
     String? googleSearchModel,
+    String? bingCookie,
     String? reasoningEffort,
     CancelToken? cancelToken,
     int toolRound = 0,
@@ -787,6 +794,7 @@ class AgentService {
               googleApiKey: googleApiKey,
               googleBaseUrl: googleBaseUrl,
               googleSearchModel: googleSearchModel,
+              bingCookie: bingCookie,
             );
           } on SearchException catch (e) {
             results = [];
@@ -849,6 +857,7 @@ class AgentService {
         googleApiKey: googleApiKey,
         googleBaseUrl: googleBaseUrl,
         googleSearchModel: googleSearchModel,
+        bingCookie: bingCookie,
         reasoningEffort: reasoningEffort,
         cancelToken: cancelToken,
         toolRound: toolRound + 1,
@@ -920,6 +929,7 @@ class AgentService {
                 googleApiKey: googleApiKey,
                 googleBaseUrl: googleBaseUrl,
                 googleSearchModel: googleSearchModel,
+                bingCookie: bingCookie,
               );
             } on SearchException catch (e) {
               results = [];

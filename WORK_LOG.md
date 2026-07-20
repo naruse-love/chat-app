@@ -1,3 +1,21 @@
+## 2026-07-20 Fixes & Improvements: System Prompt Dialog Fix, Default System Prompt Template, Bing Cookie & Search Optimization
+
+### 变更文件
+- `lib/screens/home_screen.dart`: `_showSystemPromptBottomSheet` 改用 `await showModalBottomSheet` 配合 300ms 延迟释放 `controller`，解决关闭动画中依赖泄露导致的 `_dependents.isEmpty: is not true` 框架断言崩溃。
+- `lib/screens/system_prompt_screen.dart`: 为每个系统提示词增加“设为默认系统提示词”菜单项；对于当前默认的系统提示词增加 `[默认]` Chip 视觉标识。
+- `lib/providers/settings_provider.dart`: `AppSettings` 与 `SettingsNotifier` 增加 `bingCookie` 状态，使用 `SecureStorageService` 进行安全存储。
+- `lib/screens/settings_screen.dart`: 在网络搜索设置部分新增“Bing 登录 Cookie (可选)”带明文/密文切换的输入框。
+- `lib/services/search_service.dart`: `_searchBing` 支持在 Request Headers 中注入 `Cookie`；实现 `_decodeBingUrl` 自动解密 Bing 重定向短链（如 `/ck/a?!...&u=a1...`）为真实目标网页 URL；完善 DOM 多节点回退提取选择器。
+- `lib/services/agent_service.dart` & `lib/providers/chat_provider.dart`: 将 `settings.bingCookie` 透传至 `chatAndSearchStream` 与 `SearchService.search`。
+- `test/*`: 补充/更新 Mock 签名与测试用例，全套 159 个单元测试 100% 通过。
+
+### 核心改进
+1. **彻底修复系统提示词编辑崩溃**：消除了 Flutter BottomSheet 关闭动画过程中的 Controller 提前 dispose 崩溃。
+2. **默认系统提示词管理**：用户可以在模板列表自由指定任意提示词为全局默认提示词，并在界面上实时呈现 `[默认]` 标识。
+3. **Bing 搜索质量与反爬解封**：支持填入 Bing 登录 Cookie 恢复完整搜素与个人账号，自动解密 Base64 编码的 Bing 跟踪重定向链接为真实 URL，并提供增强版 DOM 解析机制。
+
+---
+
 ## 2026-07-20 Features & Fixes: Selection Box, Search Decoupling, OpenCode Reasoning Effort, URL Fetch Markdown, Switching Deadlock Fix
 
 ### 变更文件

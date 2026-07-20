@@ -92,6 +92,7 @@ class MockSearchService extends SearchService {
     String? googleApiKey,
     String? googleBaseUrl,
     String? googleSearchModel,
+    String? bingCookie,
   }) async {
     if (searchHandler != null) {
       return searchHandler!(query);

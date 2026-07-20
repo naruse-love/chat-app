@@ -68,6 +68,7 @@ class MockSearchService extends SearchService {
     String? googleApiKey,
     String? googleBaseUrl,
     String? googleSearchModel,
+    String? bingCookie,
   }) {
     searchCallCount++;
     if (searchHandler != null) {

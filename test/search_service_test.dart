@@ -240,8 +240,38 @@ void main() {
       } on SearchException catch (e) {
         expect(e.source, 'Bing');
         expect(e.message, contains('Bing 搜索失败'));
-        expect(e.message, contains('建议改用 SearXNG'));
       }
+    });
+
+    test('Bing search passes bingCookie in headers and decodes redirect URLs', () async {
+      String? sentCookie;
+      mockAdapter.handler = (options) {
+        sentCookie = options.headers['Cookie'];
+        const mockHtml = '''
+<html>
+  <body>
+    <ol id="b_results">
+      <li class="b_algo">
+        <h2><a href="/ck/a?!&u=a1aHR0cHM6Ly9leGFtcGxlLmNvbS9hcnRpY2xl">Redirect Link</a></h2>
+        <div class="b_caption"><p>Snippet content</p></div>
+      </li>
+    </ol>
+  </body>
+</html>
+''';
+        return ResponseBody.fromString(mockHtml, 200);
+      };
+
+      final results = await searchService.search(
+        query: 'test',
+        searchBackend: 'bing',
+        bingCookie: 'MUID=123456; SRCHD=AF=NOFORM;',
+      );
+
+      expect(sentCookie, equals('MUID=123456; SRCHD=AF=NOFORM;'));
+      expect(results, hasLength(1));
+      expect(results[0].title, equals('Redirect Link'));
+      expect(results[0].url, equals('https://example.com/article'));
     });
 
     test('Bing search HTTP error throws SearchException', () async {

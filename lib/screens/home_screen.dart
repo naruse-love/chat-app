@@ -424,15 +424,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _showSystemPromptEditor(BuildContext context) {
     final settings = ref.read(settingsProvider);
     final activeConv = ref.read(conversationProvider).activeConversation;
+    _showSystemPromptBottomSheet(context, activeConv, settings);
+  }
 
-    // Initial value: conversation-level > default
+  void _showSystemPromptBottomSheet(
+    BuildContext context,
+    Conversation? activeConv,
+    AppSettings settings,
+  ) async {
     final initialText = (activeConv?.systemPrompt?.trim().isNotEmpty == true)
         ? activeConv!.systemPrompt!
         : settings.defaultSystemPrompt;
 
     final controller = TextEditingController(text: initialText);
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -561,7 +567,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         );
       },
-    ).then((_) => controller.dispose());
+    );
+    await Future.delayed(const Duration(milliseconds: 300));
+    controller.dispose();
   }
 
   void _showEditDialog(BuildContext context, ChatMessage message) async {

@@ -317,6 +317,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         googleApiKey: settings.googleSearchApiKey.isNotEmpty ? settings.googleSearchApiKey : null,
         googleBaseUrl: settings.googleSearchBaseUrl.isNotEmpty ? settings.googleSearchBaseUrl : null,
         googleSearchModel: settings.googleSearchModel.isNotEmpty ? settings.googleSearchModel : null,
+        bingCookie: settings.bingCookie.isNotEmpty ? settings.bingCookie : null,
         reasoningEffort: settings.reasoningEffort,
         cancelToken: _cancelToken,
       );

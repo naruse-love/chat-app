@@ -11,6 +11,7 @@ class SystemPromptScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final templates = ref.watch(systemPromptsProvider);
+    final settings = ref.watch(settingsProvider);
     final activeConv = ref.watch(conversationProvider).activeConversation;
     final theme = Theme.of(context);
 
@@ -26,6 +27,7 @@ class SystemPromptScreen extends ConsumerWidget {
               itemBuilder: (context, index) {
                 final template = templates[index];
                 final isApplied = activeConv?.systemPrompt == template.content;
+                final isDefault = settings.defaultSystemPrompt == template.content;
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -36,11 +38,33 @@ class SystemPromptScreen extends ConsumerWidget {
                         : BorderSide(color: theme.colorScheme.outlineVariant),
                   ),
                   child: ListTile(
-                    title: Text(
-                      template.title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    title: Row(
+                      children: [
+                        Text(
+                          template.title,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (isDefault) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '默认',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: theme.colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -76,7 +100,14 @@ class SystemPromptScreen extends ConsumerWidget {
                     ),
                     trailing: PopupMenuButton<String>(
                       onSelected: (value) async {
-                        if (value == 'apply') {
+                        if (value == 'set_default') {
+                          await ref.read(settingsProvider.notifier).updateDefaultSystemPrompt(template.content);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('已将「${template.title}」设为默认系统提示词！')),
+                            );
+                          }
+                        } else if (value == 'apply') {
                           if (activeConv != null) {
                             await ref.read(conversationProvider.notifier).updateConversation(
                               activeConv.copyWith(systemPrompt: template.content),
@@ -98,6 +129,10 @@ class SystemPromptScreen extends ConsumerWidget {
                         }
                       },
                       itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'set_default',
+                          child: Text('设为默认系统提示词'),
+                        ),
                         const PopupMenuItem(
                           value: 'apply',
                           child: Text('应用到当前对话'),

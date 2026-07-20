@@ -91,10 +91,11 @@ class SearchService {
     String? googleApiKey,
     String? googleBaseUrl,
     String? googleSearchModel,
+    String? bingCookie,
   }) async {
     switch (searchBackend) {
       case 'bing':
-        return _searchBing(query);
+        return _searchBing(query, bingCookie);
       case 'google':
         return _searchGoogle(query, googleApiKey, googleBaseUrl, googleSearchModel);
       case 'google_bing':
@@ -103,7 +104,7 @@ class SearchService {
               developer.log('Dual search (Google part) failed: $e', name: 'SearchService');
               return <SearchResult>[];
             });
-        final bingFuture = _searchBing(query)
+        final bingFuture = _searchBing(query, bingCookie)
             .catchError((e) {
               developer.log('Dual search (Bing part) failed: $e', name: 'SearchService');
               return <SearchResult>[];
@@ -213,17 +214,25 @@ class SearchService {
     }
   }
 
-  /// Searches via Bing (experimental) — scrapes the HTML search results page.
-  Future<List<SearchResult>> _searchBing(String query) async {
+  /// Searches via Bing — scrapes the HTML search results page with Cookie support.
+  Future<List<SearchResult>> _searchBing(String query, String? bingCookie) async {
     try {
+      final headers = <String, String>{
+        ..._browserHeaders,
+      };
+      if (bingCookie != null && bingCookie.trim().isNotEmpty) {
+        headers['Cookie'] = bingCookie.trim();
+      }
+
       final response = await _dio.get(
         'https://www.bing.com/search',
         queryParameters: {
           'q': query,
           'setlang': 'zh-Hans',
+          'FORM': 'HDRSC1',
         },
         options: Options(
-          headers: {..._browserHeaders},
+          headers: headers,
         ),
       );
 
@@ -231,7 +240,7 @@ class SearchService {
         throw SearchException(
           source: 'Bing',
           statusCode: response.statusCode,
-          message: 'Bing 搜索失败（可能被反爬拦截）。建议改用 SearXNG。',
+          message: 'Bing 搜索失败（HTTP ${response.statusCode}）。可尝试设置 Bing Cookie。',
         );
       }
 
@@ -242,7 +251,7 @@ class SearchService {
       if (results.isEmpty) {
         throw SearchException(
           source: 'Bing',
-          message: 'Bing 搜索失败（可能被反爬拦截）。建议改用 SearXNG。',
+          message: 'Bing 搜索失败（未提取到结果）。可在设置中配置 Bing 登录 Cookie。',
         );
       }
 
@@ -251,7 +260,7 @@ class SearchService {
       throw SearchException(
         source: 'Bing',
         statusCode: e.response?.statusCode,
-        message: 'Bing 搜索失败（可能被反爬拦截）。建议改用 SearXNG。',
+        message: 'Bing 搜索失败（网络或反爬拦截）。建议在设置中填入 Bing 登录 Cookie 或改用 SearXNG。',
         details: _extractErrorMessage(e),
       );
     } on SearchException {
@@ -260,43 +269,47 @@ class SearchService {
       developer.log('Bing search failed', error: e, stackTrace: stackTrace, name: 'SearchService');
       throw SearchException(
         source: 'Bing',
-        message: 'Bing 搜索失败（可能被反爬拦截）。建议改用 SearXNG。',
+        message: 'Bing 搜索失败（解析异常）。建议配置 Bing 登录 Cookie。',
         details: e.toString(),
       );
     }
   }
 
-  /// Parses Bing HTML search results page.
+  /// Parses Bing HTML search results page with multi-selector fallbacks & link decoding.
   List<SearchResult> _parseBingResults(html_dom.Document document) {
     final results = <SearchResult>[];
+    final seenUrls = <String>{};
 
-    // Bing common structure: li.b_algo > h2 > a, .b_caption p, .b_algoSlug
-    final items = document.querySelectorAll('li.b_algo');
+    var items = document.querySelectorAll('li.b_algo');
+    if (items.isEmpty) {
+      items = document.querySelectorAll('ol#b_results > li');
+    }
+
     for (final item in items) {
       try {
-        // Title and URL from <h2><a>
-        final heading = item.querySelector('h2');
-        final link = heading?.querySelector('a');
+        final heading = item.querySelector('h2') ?? item.querySelector('h3') ?? item.querySelector('.b_title');
+        final link = heading?.querySelector('a') ?? item.querySelector('a.tilk') ?? item.querySelector('a');
         final title = link?.text.trim() ?? '';
-        final url = link?.attributes['href']?.trim() ?? '';
+        var rawUrl = link?.attributes['href']?.trim() ?? '';
 
-        if (title.isEmpty || url.isEmpty) continue;
+        if (title.isEmpty || rawUrl.isEmpty) continue;
 
-        // Snippet from .b_caption p or .b_algoSlug
+        final url = _decodeBingUrl(rawUrl);
+        if (seenUrls.contains(url)) continue;
+
         String snippet = '';
-        final caption = item.querySelector('.b_caption p');
-        if (caption != null) {
-          snippet = caption.text.trim();
-        }
-        if (snippet.isEmpty) {
-          final slug = item.querySelector('.b_algoSlug');
-          if (slug != null) {
-            snippet = slug.text.trim();
+        final selectors = ['.b_caption p', '.b_algoSlug', '.b_lineclamp2', '.b_lineclamp3', '.b_snippet', '.b_attribution', 'p'];
+        for (final sel in selectors) {
+          final el = item.querySelector(sel);
+          if (el != null && el.text.trim().isNotEmpty) {
+            snippet = el.text.trim();
+            break;
           }
         }
 
+        seenUrls.add(url);
         results.add(SearchResult(
-          title: title,
+          title: title.replaceAll(RegExp(r'\s+'), ' '),
           url: url,
           content: snippet,
         ));
@@ -306,6 +319,33 @@ class SearchService {
     }
 
     return results;
+  }
+
+  /// Decodes Bing tracking/redirect URLs (e.g., /ck/a?!...&u=a1aHR0cHM6...) to direct URLs.
+  String _decodeBingUrl(String href) {
+    var url = href;
+    if (url.startsWith('/')) {
+      url = 'https://www.bing.com$url';
+    }
+
+    try {
+      final uri = Uri.parse(url);
+      final rawU = uri.queryParameters['u'];
+      if (rawU != null && rawU.isNotEmpty) {
+        var cleanU = rawU;
+        if (cleanU.startsWith('a1')) {
+          cleanU = cleanU.substring(2);
+        }
+        final normalized = base64.normalize(cleanU);
+        final decodedBytes = base64.decode(normalized);
+        final decodedUrl = utf8.decode(decodedBytes, allowMalformed: true);
+        if (decodedUrl.startsWith('http://') || decodedUrl.startsWith('https://')) {
+          return decodedUrl;
+        }
+      }
+    } catch (_) {}
+
+    return url;
   }
 
   /// Formats a list of [SearchResult]s into a markdown-like text structure

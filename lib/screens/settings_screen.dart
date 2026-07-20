@@ -15,7 +15,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _googleApiKeyController;
   late final TextEditingController _googleBaseUrlController;
   late final TextEditingController _googleModelController;
+  late final TextEditingController _bingCookieController;
   bool _obscureGoogleApiKey = true;
+  bool _obscureBingCookie = true;
 
   bool _hasSynced = false;
 
@@ -25,6 +27,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _googleApiKeyController.text = settings.googleSearchApiKey;
       _googleBaseUrlController.text = settings.googleSearchBaseUrl;
       _googleModelController.text = settings.googleSearchModel;
+      _bingCookieController.text = settings.bingCookie;
       _hasSynced = true;
     }
   }
@@ -37,6 +40,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _googleApiKeyController = TextEditingController(text: settings.googleSearchApiKey);
     _googleBaseUrlController = TextEditingController(text: settings.googleSearchBaseUrl);
     _googleModelController = TextEditingController(text: settings.googleSearchModel);
+    _bingCookieController = TextEditingController(text: settings.bingCookie);
     _hasSynced = settings.isLoaded;
   }
 
@@ -46,6 +50,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _googleApiKeyController.dispose();
     _googleBaseUrlController.dispose();
     _googleModelController.dispose();
+    _bingCookieController.dispose();
     super.dispose();
   }
 
@@ -256,6 +261,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       onChanged: (val) {
                         notifier.updateGoogleSearchModel(val.trim());
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (settings.searchBackend == 'bing' || settings.searchBackend == 'google_bing') ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _bingCookieController,
+                      obscureText: _obscureBingCookie,
+                      decoration: InputDecoration(
+                        labelText: 'Bing 登录 Cookie (可选)',
+                        hintText: '粘贴 Bing 登录 Cookie 提升搜索质量与解封',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscureBingCookie ? Icons.visibility_off : Icons.visibility,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscureBingCookie = !_obscureBingCookie;
+                            });
+                          },
+                        ),
+                      ),
+                      onChanged: (val) {
+                        notifier.updateBingCookie(val.trim());
                       },
                     ),
                   ),
