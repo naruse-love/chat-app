@@ -85,6 +85,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   Future<void> loadMessages(String conversationId) async {
+    final activeConvId = _ref.read(conversationProvider).activeConversation?.id;
+    // If a send or generation is in progress for the SAME conversation, do not interrupt or wipe state
+    if ((_sendingInProgress || state.isGenerating) &&
+        (activeConvId == conversationId || state.messages.any((m) => m.conversationId == conversationId))) {
+      return;
+    }
     if (_sendingInProgress || state.isGenerating) {
       cancelGeneration();
       _sendingInProgress = false;
@@ -467,19 +473,21 @@ final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
   ref.listen<Conversation?>(
     conversationProvider.select((s) => s.activeConversation),
     (previous, next) {
-      if (next != null) {
-        notifier.loadMessages(next.id);
-        // Restore the model used for this conversation
-        final modelState = ref.read(modelProvider);
-        final matchingModels = modelState.models.where((m) => m.id == next.modelId);
-        if (matchingModels.isNotEmpty) {
-          ref.read(modelProvider.notifier).selectModel(matchingModels.first);
+      if (previous?.id != next?.id) {
+        if (next != null) {
+          notifier.loadMessages(next.id);
+          // Restore the model used for this conversation
+          final modelState = ref.read(modelProvider);
+          final matchingModels = modelState.models.where((m) => m.id == next.modelId);
+          if (matchingModels.isNotEmpty) {
+            ref.read(modelProvider.notifier).selectModel(matchingModels.first);
+          } else {
+            // Model not found in list, try adding as custom model
+            ref.read(modelProvider.notifier).addCustomModel(next.modelId);
+          }
         } else {
-          // Model not found in list, try adding as custom model
-          ref.read(modelProvider.notifier).addCustomModel(next.modelId);
+          notifier.clearChat();
         }
-      } else {
-        notifier.clearChat();
       }
     },
   );

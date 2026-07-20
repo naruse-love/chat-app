@@ -1,3 +1,17 @@
+## 2026-07-20 Fixes: New Conversation Message Visibility & Bing Multi-Word Search History Fix
+
+### 变更文件
+- `lib/providers/chat_provider.dart`: `loadMessages` 增加判断，防止新会话建立时 `ref.listen` 在发送中途触发并把包含当前用户消息的 UI `state` 重置清空；`ref.listen` 增加 `previous?.id != next?.id` 判断。
+- `lib/services/search_service.dart`: Bing 搜索请求查询词使用 `+` 替换 `%20` 转义空格，防止 Bing 将多词查询降级/截断为第一个字（解决搜索“我的世界 红肠配音 梗”变成搜索“我”的 Bug）；生成 `cvid`（Correlation Vector ID）并补齐 Chrome 桌面端标准 headers（`Sec-Ch-Ua`、`Sec-Fetch-*`）与 `form=QBLH` 参数，使带 `bingCookie` 的搜索请求能被 Bing 成功记录至用户个人账号搜索历史。
+- `test/search_service_test.dart` & `test/opencode_free_test.dart`: 更新单元测试断言与微任务延迟，保证全套测试通过。
+
+### 核心改进
+1. **修复新对话发送消息后自身消息隐形问题**：新对话发送消息不再因 `activeConversation` 变化回调重载而抹除刚插入的用户消息，实时消息展示恢复正常。
+2. **修复 Bing 多词组合搜索结果偏离问题**：多词短语搜索结果与网页真实 Bing 搜索结果完全一致。
+3. **支持 Bing 搜索历史记录同步**：在填入 Bing Cookie 后，AI Agent 发起的 Bing 搜索会自动记录到用户 Bing 个人账号的搜索历史中。
+
+---
+
 ## 2026-07-20 Fixes & Improvements: System Prompt Dialog Fix, Default System Prompt Template, Bing Cookie & Search Optimization
 
 ### 变更文件

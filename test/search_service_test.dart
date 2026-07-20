@@ -177,9 +177,8 @@ void main() {
 
     test('Bing search succeeds with valid HTML', () async {
       mockAdapter.handler = (options) {
-        expect(options.path, 'https://www.bing.com/search');
-        expect(options.queryParameters['q'], 'flutter');
-        expect(options.queryParameters['setlang'], 'zh-Hans');
+        expect(options.uri.toString(), startsWith('https://www.bing.com/search'));
+        expect(options.uri.queryParameters['q'], 'flutter');
 
         const mockHtml = '''
 <html>

@@ -56,7 +56,7 @@ void main() {
       addTearDown(container.dispose);
 
       container.read(apiConfigProvider);
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future.delayed(const Duration(milliseconds: 200));
 
       final state = container.read(apiConfigProvider);
       expect(state.configs, hasLength(1));

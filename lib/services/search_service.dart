@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as html_dom;
+import 'package:uuid/uuid.dart';
 
 /// Represents a single search result returned from SearXNG or Bing.
 class SearchResult {
@@ -67,13 +68,6 @@ class SearchService {
     'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'application/json, text/plain, */*',
-  };
-
-  static const Map<String, String> _browserHeaders = {
-    'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'zh-Hans,zh;q=0.9,en;q=0.8',
   };
 
   SearchService({Dio? dio}) : _dio = dio ?? Dio();
@@ -214,25 +208,41 @@ class SearchService {
     }
   }
 
-  /// Searches via Bing — scrapes the HTML search results page with Cookie support.
+  /// Searches via Bing — scrapes the HTML search results page with Cookie support,
+  /// desktop browser headers, and Bing cvid tracking parameters for account search history.
   Future<List<SearchResult>> _searchBing(String query, String? bingCookie) async {
     try {
+      final cleanQuery = query.trim();
+      final encodedQuery = Uri.encodeComponent(cleanQuery).replaceAll('%20', '+');
+      final cvid = const Uuid().v4().replaceAll('-', '');
+
+      final url = 'https://www.bing.com/search?q=$encodedQuery&form=QBLH&pq=$encodedQuery&sc=10-0&qs=n&sk=&cvid=$cvid&sp=-1';
+
       final headers = <String, String>{
-        ..._browserHeaders,
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept':
+            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Sec-Ch-Ua': '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
       };
+
       if (bingCookie != null && bingCookie.trim().isNotEmpty) {
         headers['Cookie'] = bingCookie.trim();
       }
 
       final response = await _dio.get(
-        'https://www.bing.com/search',
-        queryParameters: {
-          'q': query,
-          'setlang': 'zh-Hans',
-          'FORM': 'HDRSC1',
-        },
+        url,
         options: Options(
           headers: headers,
+          followRedirects: true,
         ),
       );
 
