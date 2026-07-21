@@ -1,3 +1,17 @@
+## 2026-07-21 Fixes: Bing User-Agent WAF Block Fix & Version Bump (v1.02.0+3)
+
+### 变更文件
+- `lib/services/search_service.dart`: 修复 Bing 搜索请求头 `User-Agent` 中多余拼接导致格式异常的致命 Bug（将 `Safari/126.0.0.0 Safari/537.36` 还原为标准 Chrome 126 请求头）；将 `Sec-Fetch-Site` 调整为 `none`；新增对微软 Azure FrontDoor WAF 拦截页面 (`The request is blocked`) 的显式捕获与友好中文提示。
+- `test/search_service_test.dart`: 增加 Bing WAF 阻断识别的单元测试。
+- `pubspec.yaml`: 按照 `AGENTS.md` 规则将版本号由 `1.01.0+2` 提升至 `1.02.0+3`。
+- `.agents/context.md` & `WORK_LOG.md`: 追加 Milestone 17 接手上下文记录。
+
+### 核心改进
+1. **彻底修复 Bing 无法搜索（无论填不填 Cookie 都报阻断/空结果）的问题**：由于此前的 User-Agent 字符串拼接有误，被微软 Bing 防火墙一律识别为伪造爬虫机器并在后端直接返回 `The request is blocked.`（导致抽取结果全部为空）。修正 User-Agent 格式后，Bing 搜索恢复全面正常。
+2. **WAF 防火墙拦截异常显示**：万一未来因 IP 封禁或极高频请求被 Bing 再次拦截，能够直观提示 `The request is blocked` 原因。
+
+---
+
 ## 2026-07-20 Fixes & Agent Rule: Bing Cookie Forwarding & Version Increment Rule (v1.01.0+2)
 
 ### 变更文件

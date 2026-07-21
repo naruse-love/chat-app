@@ -253,7 +253,7 @@ class SearchService {
 
       final headers = <String, String>{
         'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/126.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
         'Accept':
             'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -262,7 +262,7 @@ class SearchService {
         'Sec-Ch-Ua-Platform': '"Windows"',
         'Sec-Fetch-Dest': 'document',
         'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-Site': 'none',
         'Sec-Fetch-User': '?1',
         'Upgrade-Insecure-Requests': '1',
       };
@@ -315,6 +315,15 @@ class SearchService {
 
       final body = response.data is String ? response.data as String : json.encode(response.data);
       final document = html_parser.parse(body);
+
+      // Detect WAF block (Azure FrontDoor)
+      final isWafBlocked = body.contains('request is blocked') || body.contains('Ref A:');
+      if (isWafBlocked) {
+        throw SearchException(
+          source: 'Bing',
+          message: 'Bing 搜索请求被防火墙拦截 (The request is blocked)。建议检查 Cookie 或稍后重试。',
+        );
+      }
 
       // Detect anti-bot / CAPTCHA challenge pages
       final isCaptcha = body.contains('g-recaptcha') ||

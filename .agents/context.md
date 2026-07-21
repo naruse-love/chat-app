@@ -36,8 +36,10 @@
 | **14 / 状态加固与新对话异常** | 修复新对话发送消息时由于 `activeConversation` 回调触发 `loadMessages` 覆盖清空 UI `state` 的隐形 Bug（2026-07-20） | ✅ 完成 |
 | **15 / Bing 搜索多词及 Cookie 修复** | Bing 搜索采用 `+` 转义多词空格并在 URL 中追加 `cc=us&setlang=zh-hans`，强制使用全球端点绕过国内关键字截断降级策略；修复 `Dio` 跨域重定向丢失 `Cookie` 的问题，通过 `followRedirects: false` 拦截重定向并手动注入 Cookie，使搜索记录能正确同步至用户账户（2026-07-20） | ✅ 完成 |
 | **16 / Bing Cookie 跨域透传与 Agent 规则加锁** | Bing 搜索新增 Cookie 格式清洗与多重重定向 5-hop 显式转发（含 `Set-Cookie` 动态合并），强化 DOM 选择器与反爬/验证码页面识别，优化已填 Cookie 时的错误提示；`AGENTS.md` 新增约束：每次更新/修复必须递增版本号 0.01（`pubspec.yaml` 升至 `1.01.0+2`）（2026-07-20） | ✅ 完成 |
+| **17 / Bing WAF 误拦修复与版本递增** | 修复 Bing 搜索请求头 `User-Agent` 中的拼接错误（格式异常引发微软 FrontDoor WAF 直接阻断），调整 `Sec-Fetch-Site` 为 `none`；新增 WAF 阻断 (`The request is blocked`) 明确识别；项目版本递增至 `1.02.0+3`（2026-07-21） | ✅ 完成 |
 
-**当前测试状态：162 / 162 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.01.0+2。**
+**当前测试状态：163 / 163 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.02.0+3。**
+
 
 
 ---

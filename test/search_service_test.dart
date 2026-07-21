@@ -343,6 +343,21 @@ void main() {
         }
       });
 
+      test('Bing WAF block detection throws SearchException', () async {
+        mockAdapter.handler = (options) {
+          const wafHtml = "<html><body><h2>The request is blocked.</h2><div id='errorref'>Ref A: 123</div></body></html>";
+          return ResponseBody.fromString(wafHtml, 200);
+        };
+
+        try {
+          await searchService.search(query: 'test', searchBackend: 'bing');
+          fail('Expected exception');
+        } on SearchException catch (e) {
+          expect(e.source, equals('Bing'));
+          expect(e.message, contains('The request is blocked'));
+        }
+      });
+
     test('Bing search HTTP error throws SearchException', () async {
       mockAdapter.handler = (options) {
         return ResponseBody.fromString(
