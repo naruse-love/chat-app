@@ -38,8 +38,9 @@
 | **16 / Bing Cookie 跨域透传与 Agent 规则加锁** | Bing 搜索新增 Cookie 格式清洗与多重重定向 5-hop 显式转发（含 `Set-Cookie` 动态合并），强化 DOM 选择器与反爬/验证码页面识别，优化已填 Cookie 时的错误提示；`AGENTS.md` 新增约束：每次更新/修复必须递增版本号 0.01（`pubspec.yaml` 升至 `1.01.0+2`）（2026-07-20） | ✅ 完成 |
 | **17 / Bing WAF 误拦修复与版本递增** | 修复 Bing 搜索请求头 `User-Agent` 中的拼接错误（格式异常引发微软 FrontDoor WAF 直接阻断），调整 `Sec-Fetch-Site` 为 `none`；新增 WAF 阻断 (`The request is blocked`) 明确识别；项目版本递增至 `1.02.0+3`（2026-07-21） | ✅ 完成 |
 | **18 / Settings 竞态修复与 DSML 伪 XML 语法支持** | 修复 Settings 异步加载时 `isLoaded` 提前写 true 的竞态问题（导致首次搜索无法应用 Bing Cookie 等配置）；支持解析与剥离 DSML (`<｜｜DSML｜｜tool_calls>`) 格式工具调用；修复伪 XML 兜底分支递归丢失 `bingCookie` 等参数的问题；将默认工具链调用次数上限提升至 100 轮（支持参数配置）；项目版本递增至 `1.03.0+4`（2026-07-21） | ✅ 完成 |
+| **19 / Bing 首次搜索 Cookie 穿透与 AI 总结强化** | 修复首次 AI 工具调用自动搜索时未向下传递 `bingCookie` 参数的重大 Bug；强化 Bing 搜索，增加对 `.cht_root` / `[data-scenario="nrt"]` 智能 AI 总结栏内容的提取并前置作为 SearchResult；在 `HomeScreen` 中增加 `ref.listen` 对 `ChatState.error` 错误的全局监听并显示为 SnackBar，完美向用户反馈调用失败原因；项目版本递增至 `1.04.0+5`（2026-07-21） | ✅ 完成 |
 
-**当前测试状态：166 / 166 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.03.0+4。**
+**当前测试状态：164 / 164 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.04.0+5。**
 
 
 

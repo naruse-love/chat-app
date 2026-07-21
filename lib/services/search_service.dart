@@ -376,6 +376,24 @@ class SearchService {
     final results = <SearchResult>[];
     final seenUrls = <String>{};
 
+    // Try to extract Bing AI summary from `.cht_root` or `div[data-scenario="nrt"]` or `[data-scenario="nrt"]`
+    final chatRoot = document.querySelector('.cht_root') ??
+        document.querySelector('div[data-scenario="nrt"]') ??
+        document.querySelector('[data-scenario="nrt"]');
+    if (chatRoot != null) {
+      final tempDiv = chatRoot.clone(true);
+      tempDiv.querySelectorAll('script, style, noscript').forEach((el) => el.remove());
+      final summaryText = tempDiv.text.trim();
+      if (summaryText.isNotEmpty) {
+        final cleanSummary = summaryText.replaceAll(RegExp(r'\s+'), ' ');
+        results.add(SearchResult(
+          title: 'Bing AI 搜索总结',
+          url: '',
+          content: cleanSummary,
+        ));
+      }
+    }
+
     var items = document.querySelectorAll('li.b_algo');
     if (items.isEmpty) {
       items = document.querySelectorAll('.b_algo');

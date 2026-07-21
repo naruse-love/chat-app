@@ -1,3 +1,21 @@
+## 2026-07-21 Fixes: Bing Cookie Propagation Fix, Bing AI Summary, & UI Error SnackBar (v1.04.0+5)
+
+### 变更文件
+- `lib/services/agent_service.dart`: 修复在流式生成开始的第一个 AI 自动搜索步骤（`_streamCompletionsLoop` 内部）忘记传递 `bingCookie` 的致命 Bug，确保所有搜索请求均正确携带 Cookie。
+- `lib/services/search_service.dart`: 增强 Bing 搜索 HTML 解析，新增提取微软官方 AI 总结栏（`.cht_root` / `[data-scenario="nrt"]`）内容并作为首要 `SearchResult` 插入上下文的逻辑。
+- `lib/providers/chat_provider.dart`: 精确等待设置项完全载入，在 `_startStreaming` 中使用 `settings.isLoaded` 属性，保证获取到最新的 cookie 等设置值。
+- `lib/screens/home_screen.dart`: 在 `build` 中使用 `ref.listen` 全局监听 `ChatState.error`，在请求或流传输失败时自动展示 SnackBar 提示，解决了之前报错静默失败、用户界面无感知的重大 Bug。
+- `test/search_service_test.dart`: 增加提取 Bing 搜索 AI 总结（`.cht_root`）的单元测试。
+- `pubspec.yaml`: 按照 `AGENTS.md` 规则将版本号由 `1.03.0+4` 提升至 `1.04.0+5`。
+- `.agents/context.md` & `WORK_LOG.md`: 追加 Milestone 19 记录。
+
+### 核心改进
+1. **彻底解决首次 AI 搜索不带 Cookie 的隐藏 Bug**：通过修复 `agent_service.dart` 内部首轮自动搜索调用 Dio/SearchService 时遗漏 `bingCookie` 的问题，确保无论是在手动搜索还是自动 AI 多轮调用中，均能百分之百注入 Bing Cookie。
+2. **提取 Bing 搜索内置 AI 总结栏**：将 Bing 页面顶部的微软 AI 生成总结以 “Bing AI 搜索总结” 为标题注入搜索结果，极大提升了 AI 获取高价值参考资料的精度和速度。
+3. **新增全局错误 SnackBar 反馈**：当模型请求失败时，不再发生静默转圈/退回重新响应的诡异无提示现象，而是会在页面底端清晰直观地弹出 SnackBar 错误横幅反馈（如 API key 错误、网络超时等），优化了交互体验。
+
+---
+
 ## 2026-07-21 Fixes: Settings Loader Race, DSML parser & Call Limits (v1.03.0+4)
 
 ### 变更文件

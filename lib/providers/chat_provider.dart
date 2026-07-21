@@ -281,11 +281,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final activeConfig = _ref.read(apiConfigProvider).activeConfig;
     final selectedModel = _ref.read(modelProvider).selectedModel;
     
-    final settingsNotifier = _ref.read(settingsProvider.notifier);
-    if (!settingsNotifier.isLoaded) {
-      await settingsNotifier.initialization;
+    var settings = _ref.read(settingsProvider);
+    if (!settings.isLoaded) {
+      await _ref.read(settingsProvider.notifier).initialization;
+      settings = _ref.read(settingsProvider);
     }
-    final settings = _ref.read(settingsProvider);
     
     final activeConv = _ref.read(conversationProvider).activeConversation;
 

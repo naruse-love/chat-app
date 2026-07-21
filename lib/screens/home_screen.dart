@@ -56,8 +56,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final convState = ref.watch(conversationProvider);
     final theme = Theme.of(context);
 
-    // Set up auto scroll listener
+    // Set up auto scroll listener and error display
     ref.listen<ChatState>(chatProvider, (prev, next) {
+      if (next.error != null && next.error != prev?.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: theme.colorScheme.error,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
       final isNewMessageList = prev == null ||
           (prev.messages.isEmpty && next.messages.isNotEmpty) ||
           (prev.messages.isNotEmpty && next.messages.isNotEmpty && prev.messages.first.id != next.messages.first.id);

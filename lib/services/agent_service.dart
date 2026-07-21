@@ -528,6 +528,7 @@ class AgentService {
                 googleApiKey: googleApiKey,
                 googleBaseUrl: googleBaseUrl,
                 googleSearchModel: googleSearchModel,
+                bingCookie: bingCookie,
               );
             } on SearchException catch (e) {
               results = [];

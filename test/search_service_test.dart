@@ -321,6 +321,41 @@ void main() {
         expect(results[0].title, equals('Target Page'));
       });
 
+      test('Bing search extracts AI summary from .cht_root', () async {
+        mockAdapter.handler = (options) {
+          const mockHtml = '''
+<html>
+  <body>
+    <div class="cht_root" data-scenario="nrt" data-appns="SERP" data-k="5429">
+      <style>.some-css { color: red; }</style>
+      This is a rich AI summary from Bing.
+      <script>console.log("hello");</script>
+    </div>
+    <ol id="b_results">
+      <li class="b_algo">
+        <h2><a href="https://example.com">Regular Link</a></h2>
+        <div class="b_caption"><p>Snippet content</p></div>
+      </li>
+    </ol>
+  </body>
+</html>
+''';
+          return ResponseBody.fromString(mockHtml, 200);
+        };
+
+        final results = await searchService.search(
+          query: 'test',
+          searchBackend: 'bing',
+          bingCookie: 'MUID=123',
+        );
+
+        expect(results, hasLength(2));
+        expect(results[0].title, equals('Bing AI 搜索总结'));
+        expect(results[0].url, isEmpty);
+        expect(results[0].content, equals('This is a rich AI summary from Bing.'));
+        expect(results[1].title, equals('Regular Link'));
+      });
+
       test('Bing empty results differentiates between cookie set or not', () async {
         mockAdapter.handler = (options) {
           return ResponseBody.fromString('<html><body></body></html>', 200);
