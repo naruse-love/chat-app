@@ -2110,6 +2110,7 @@ void main() {
         apiKey: 'key',
         model: 'model',
         messages: messages,
+        maxToolRounds: 10,
       ).toList();
 
       // Max 10 total tool rounds: 1 from chatAndSearchStream + 9 from _streamCompletionsLoop
@@ -2169,6 +2170,36 @@ void main() {
         '<tool_call>\n<function=web_search>\n<parameter=query>test</parameter>\n</function>\n</tool_call>'
       );
       expect(emptyStripped, isEmpty);
+
+      // DSML format parsing with full-width Chinese separator ｜
+      final dsmlResult1 = AgentService.parsePseudoXmlToolCalls(
+        '<｜｜DSML｜｜tool_calls>\n'
+        '<｜｜DSML｜｜invoke name="bing_search">\n'
+        '<｜｜DSML｜｜parameter name="query" string="true">红肠 韩语 谐音 脏话</｜｜DSML｜｜parameter>\n'
+        '</｜｜DSML｜｜invoke>\n'
+        '</｜｜DSML｜｜tool_calls>'
+      );
+      expect(dsmlResult1, hasLength(1));
+      expect(dsmlResult1[0]['name'], 'bing_search');
+      expect((dsmlResult1[0]['params'] as Map)['query'], '红肠 韩语 谐音 脏话');
+
+      // DSML format parsing with standard separator |
+      final dsmlResult2 = AgentService.parsePseudoXmlToolCalls(
+        '<||DSML||tool_calls>\n'
+        '<||DSML||invoke name="web_search">\n'
+        '<||DSML||parameter name="query">test query</||DSML||parameter>\n'
+        '</||DSML||invoke>\n'
+        '</||DSML||tool_calls>'
+      );
+      expect(dsmlResult2, hasLength(1));
+      expect(dsmlResult2[0]['name'], 'web_search');
+      expect((dsmlResult2[0]['params'] as Map)['query'], 'test query');
+
+      // DSML format stripping
+      final dsmlStripped = AgentService.stripPseudoXmlToolCalls(
+        'Some text <｜｜DSML｜｜tool_calls><｜｜DSML｜｜invoke name="bing_search"><｜｜DSML｜｜parameter name="query">test</｜｜DSML｜｜parameter></｜｜DSML｜｜invoke></｜｜DSML｜｜tool_calls> more text'
+      );
+      expect(dsmlStripped, 'Some text more text');
     });
   });
 }

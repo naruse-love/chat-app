@@ -84,7 +84,6 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       final apiKey = await _secureStorage.read(_googleSearchApiKeySecureKey) ?? '';
       final bingCookie = await _secureStorage.read(_bingCookieSecureKey) ?? '';
       if (!mounted) return;
-      isLoaded = true;
       state = AppSettings(
         searxngUrl: prefs.getString(_searxngKey) ?? '',
         defaultSystemPrompt: prefs.getString(_systemPromptKey) ?? 'You are a helpful assistant.',
@@ -97,6 +96,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         reasoningEffort: prefs.getString(_reasoningEffortKey) ?? 'medium',
         isLoaded: true,
       );
+      isLoaded = true;
     } catch (_) {
       isLoaded = true;
     }

@@ -1,3 +1,20 @@
+## 2026-07-21 Fixes: Settings Loader Race, DSML parser & Call Limits (v1.03.0+4)
+
+### 变更文件
+- `lib/providers/settings_provider.dart`: 修复 settings 异步加载竞态，只有在 state 完全赋值后才将 `isLoaded` 设置为 `true`。
+- `lib/services/agent_service.dart`: 扩展 `parsePseudoXmlToolCalls` 与 `stripPseudoXmlToolCalls` 函数，完美支持 DeepSeek 等模型输出的 DSML 格式工具调用 (`<｜｜DSML｜｜tool_calls>...`，支持全角及半角斜杠)；修正伪 XML 兜底递归分支中丢失 `bingCookie`、`reasoningEffort` 的 Bug；将 `chatAndSearchStream` 的默认最大工具轮数限制 `maxToolRounds` 扩展至 `100` 轮，事实上解除低上限约束。
+- `test/agent_service_test.dart`: 增加 DSML 格式解析与剥离的单元测试，并在最大轮数限制测试中显式传递 `maxToolRounds: 10`。
+- `pubspec.yaml`: 按照 `AGENTS.md` 规则将版本号由 `1.02.0+3` 提升至 `1.03.0+4`。
+- `.agents/context.md` & `WORK_LOG.md`: 追加 Milestone 18 接手上下文记录。
+
+### 核心改进
+1. **解决首次搜索丢失 Cookie 等配置的问题**：由于 settings 初始化期间 `isLoaded = true` 设置过早（早于 state 变量最终写入和通知），导致第一次触发流时 chatProvider 误读到了空白的默认配置（未带 bingCookie 等参数）。修复后，首次运行便可稳定应用正确配置。
+2. **完美支持 DSML 格式工具调用**：彻底解决了部分接口/模型输出伪 XML 时，因其使用 `<｜｜DSML｜｜tool_calls>` 自定义标志导致解析器未匹配到工具而自动中断响应的 Bug。
+3. **修复多轮递归丢失 Cookie 等参数的问题**：修复了在伪 XML 兜底的多次递归中，前一轮搜索携带的 `bingCookie` 和 `reasoningEffort` 在后面的循环迭代中未往下传的隐藏 Bug。
+4. **提升调用上限**：默认最大轮数上限提至 100 轮，不再局限于 10 轮。
+
+---
+
 ## 2026-07-21 Fixes: Bing User-Agent WAF Block Fix & Version Bump (v1.02.0+3)
 
 ### 变更文件

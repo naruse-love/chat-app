@@ -191,9 +191,12 @@ class AgentService {
   );
 
   /// Extracts pseudo-XML tool calls from [content].
+  /// Supports both standard <tool_call> and DSML (<｜｜DSML｜｜tool_calls> or <||DSML||tool_calls>) formats.
   /// Returns a list of maps with 'name' (String) and 'params' (Map<String, String>).
   static List<Map<String, dynamic>> parsePseudoXmlToolCalls(String content) {
     final results = <Map<String, dynamic>>[];
+    
+    // 1. Standard <tool_call> parsing
     for (final match in _pseudoXmlToolCallRegex.allMatches(content)) {
       final name = match.group(1) ?? '';
       final paramName = match.group(2) ?? '';
@@ -203,12 +206,53 @@ class AgentService {
         'params': {paramName: paramValue},
       });
     }
+
+    // 2. DSML tool calls parsing (DeepSeek Model Language)
+    // Matches: <||DSML||tool_calls> ... </||DSML||tool_calls> (supports both standard | and full-width ｜)
+    final dsmlBlockRegex = RegExp(
+      r'<[|｜]{2}DSML[|｜]{2}tool_calls>([\s\S]*?)</[|｜]{2}DSML[|｜]{2}tool_calls>',
+      multiLine: true,
+    );
+    for (final blockMatch in dsmlBlockRegex.allMatches(content)) {
+      final blockContent = blockMatch.group(1) ?? '';
+      
+      final invokeRegex = RegExp(
+        r'<[|｜]{2}DSML[|｜]{2}invoke name="(\w+)">([\s\S]*?)</[|｜]{2}DSML[|｜]{2}invoke>',
+        multiLine: true,
+      );
+      for (final invokeMatch in invokeRegex.allMatches(blockContent)) {
+        final funcName = invokeMatch.group(1) ?? '';
+        final invokeContent = invokeMatch.group(2) ?? '';
+        
+        final paramMap = <String, String>{};
+        final paramRegex = RegExp(
+          r'<[|｜]{2}DSML[|｜]{2}parameter name="(\w+)"[^>]*>([\s\S]*?)</[|｜]{2}DSML[|｜]{2}parameter>',
+          multiLine: true,
+        );
+        for (final paramMatch in paramRegex.allMatches(invokeContent)) {
+          final paramName = paramMatch.group(1) ?? '';
+          final paramValue = paramMatch.group(2)?.trim() ?? '';
+          paramMap[paramName] = paramValue;
+        }
+        results.add({
+          'name': funcName,
+          'params': paramMap,
+        });
+      }
+    }
+
     return results;
   }
 
-  /// Removes pseudo-XML tool_call blocks from [content].
+  /// Removes pseudo-XML and DSML tool_call blocks from [content].
   static String stripPseudoXmlToolCalls(String content) {
-    return content.replaceAll(_pseudoXmlToolCallRegex, '').replaceAll(RegExp(r'\s+'), ' ').trim();
+    var cleaned = content.replaceAll(_pseudoXmlToolCallRegex, '');
+    final dsmlBlockRegex = RegExp(
+      r'<[|｜]{2}DSML[|｜]{2}tool_calls>[\s\S]*?</[|｜]{2}DSML[|｜]{2}tool_calls>',
+      multiLine: true,
+    );
+    cleaned = cleaned.replaceAll(dsmlBlockRegex, '');
+    return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   /// Main entry point coordinating completion streaming, tool execution, and manual trigger.
@@ -226,6 +270,7 @@ class AgentService {
     String? bingCookie,
     String? reasoningEffort,
     CancelToken? cancelToken,
+    int maxToolRounds = 100,
   }) async* {
     // Inject system prompt if provided (prepend after removing any existing system messages)
     List<ChatMessage> effectiveMessages;
@@ -346,6 +391,7 @@ class AgentService {
         bingCookie: bingCookie,
         reasoningEffort: reasoningEffort,
         cancelToken: cancelToken,
+        maxToolRounds: maxToolRounds,
       );
     } else {
       final accumulatedToolCalls = <int, _ToolCallAccumulator>{};
@@ -549,6 +595,7 @@ class AgentService {
           bingCookie: bingCookie,
           reasoningEffort: reasoningEffort,
           cancelToken: cancelToken,
+          maxToolRounds: maxToolRounds,
         );
       }
     }
@@ -571,6 +618,7 @@ class AgentService {
     String? bingCookie,
     String? reasoningEffort,
     CancelToken? cancelToken,
+    int maxToolRounds = 100,
   }) async* {
     yield* _streamCompletionsLoop(
       baseUrl: baseUrl,
@@ -587,6 +635,7 @@ class AgentService {
       reasoningEffort: reasoningEffort,
       cancelToken: cancelToken,
       toolRound: 0,
+      maxToolRounds: maxToolRounds,
     );
   }
 
@@ -606,9 +655,10 @@ class AgentService {
     String? reasoningEffort,
     CancelToken? cancelToken,
     int toolRound = 0,
+    int maxToolRounds = 100,
   }) async* {
-    // Max 10 total tool rounds: 1 from chatAndSearchStream + 9 follow-up rounds
-    if (toolRound >= 9) {
+    // Max total tool rounds check
+    if (toolRound >= maxToolRounds - 1) {
       int? finalPromptTokens;
       int? finalCompletionTokens;
       final finalMessages = [
@@ -861,6 +911,7 @@ class AgentService {
         reasoningEffort: reasoningEffort,
         cancelToken: cancelToken,
         toolRound: toolRound + 1,
+        maxToolRounds: maxToolRounds,
       );
     } else {
       // --- No standard tool_calls; check for pseudo-XML fallback ---
@@ -996,8 +1047,11 @@ class AgentService {
             googleApiKey: googleApiKey,
             googleBaseUrl: googleBaseUrl,
             googleSearchModel: googleSearchModel,
+            bingCookie: bingCookie,
+            reasoningEffort: reasoningEffort,
             cancelToken: cancelToken,
             toolRound: toolRound + 1,
+            maxToolRounds: maxToolRounds,
           );
           return; // Prevent fall-through to buffered content yield
         }
