@@ -657,77 +657,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isSelected = active?.id == c.id;
     final theme = Theme.of(context);
 
-    return Dismissible(
-      key: Key(c.id),
-      background: Container(
-        color: Colors.green,
-        alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.only(left: 20.0),
-        child: const Icon(Icons.push_pin, color: Colors.white),
+    return ListTile(
+      title: Text(
+        c.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
       ),
-      secondaryBackground: Container(
-        color: Colors.red,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20.0),
-        child: const Icon(Icons.delete, color: Colors.white),
+      selected: isSelected,
+      selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.08),
+      leading: Icon(
+        c.isPinned ? Icons.push_pin : Icons.chat_bubble_outline,
+        color: isSelected ? theme.colorScheme.primary : null,
       ),
-      confirmDismiss: (direction) async {
-        if (direction == DismissDirection.startToEnd) {
-          await ref.read(conversationProvider.notifier).togglePin(c.id);
-          return false;
-        } else {
-          await ref.read(conversationProvider.notifier).deleteConversation(c.id);
-          return true;
-        }
-      },
-      child: ListTile(
-        title: Text(
-          c.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-        selected: isSelected,
-        selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.08),
-        leading: Icon(
-          c.isPinned ? Icons.push_pin : Icons.chat_bubble_outline,
-          color: isSelected ? theme.colorScheme.primary : null,
-        ),
-        trailing: PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert, size: 20),
-          onSelected: (value) async {
-            if (value == 'pin') {
-              await ref.read(conversationProvider.notifier).togglePin(c.id);
-            } else if (value == 'archive') {
-              await ref.read(conversationProvider.notifier).toggleArchive(c.id);
-            } else if (value == 'delete') {
-              await ref.read(conversationProvider.notifier).deleteConversation(c.id);
-            }
-          },
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              value: 'pin',
-              child: Text(c.isPinned ? '取消置顶' : '置顶'),
-            ),
-            PopupMenuItem(
-              value: 'archive',
-              child: Text(c.isArchived ? '取消归档' : '归档'),
-            ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Text('删除'),
-            ),
-          ],
-        ),
-        onTap: () {
-          ref.read(conversationProvider.notifier).setActiveConversation(c);
-          if (MediaQuery.of(context).size.width <= 800) {
-            Navigator.pop(context);
+      trailing: PopupMenuButton<String>(
+        icon: const Icon(Icons.more_vert, size: 20),
+        onSelected: (value) async {
+          if (value == 'pin') {
+            await ref.read(conversationProvider.notifier).togglePin(c.id);
+          } else if (value == 'archive') {
+            await ref.read(conversationProvider.notifier).toggleArchive(c.id);
+          } else if (value == 'delete') {
+            await ref.read(conversationProvider.notifier).deleteConversation(c.id);
           }
         },
+        itemBuilder: (context) => [
+          PopupMenuItem(
+            value: 'pin',
+            child: Text(c.isPinned ? '取消置顶' : '置顶'),
+          ),
+          PopupMenuItem(
+            value: 'archive',
+            child: Text(c.isArchived ? '取消归档' : '归档'),
+          ),
+          const PopupMenuItem(
+            value: 'delete',
+            child: Text('删除'),
+          ),
+        ],
       ),
+      onTap: () {
+        ref.read(conversationProvider.notifier).setActiveConversation(c);
+        if (MediaQuery.of(context).size.width <= 800) {
+          Navigator.pop(context);
+        }
+      },
     );
   }
 }

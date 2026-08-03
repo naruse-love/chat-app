@@ -2201,5 +2201,15 @@ void main() {
       );
       expect(dsmlStripped, 'Some text more text');
     });
+
+    test('getEffectiveTools returns only urlFetchTool when enableAutoSearch is false', () {
+      final toolsDisabled = AgentService.getEffectiveTools('searxng', enableAutoSearch: false);
+      expect(toolsDisabled, equals([AgentService.urlFetchTool]));
+      expect(toolsDisabled, isNot(contains(AgentService.webSearchTool)));
+
+      final googleDisabled = AgentService.getEffectiveTools('google', enableAutoSearch: false);
+      expect(googleDisabled, equals([AgentService.urlFetchTool]));
+      expect(googleDisabled, isNot(contains(AgentService.googleSearchTool)));
+    });
   });
 }

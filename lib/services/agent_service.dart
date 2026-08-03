@@ -164,7 +164,10 @@ class AgentService {
     },
   };
 
-  static List<Map<String, dynamic>> getEffectiveTools(String searchBackend) {
+  static List<Map<String, dynamic>> getEffectiveTools(String searchBackend, {bool enableAutoSearch = true}) {
+    if (!enableAutoSearch) {
+      return [urlFetchTool];
+    }
     switch (searchBackend) {
       case 'google':
         return [googleSearchTool, urlFetchTool];
@@ -269,6 +272,7 @@ class AgentService {
     String? googleSearchModel,
     String? bingCookie,
     String? reasoningEffort,
+    bool enableAutoSearch = true,
     CancelToken? cancelToken,
     int maxToolRounds = 100,
   }) async* {
@@ -301,7 +305,7 @@ class AgentService {
     final isManualSearch = lastMessage.role == 'user' &&
         lastMessage.content.trim().startsWith('@search');
 
-    final effectiveTools = getEffectiveTools(searchBackend);
+    final effectiveTools = getEffectiveTools(searchBackend, enableAutoSearch: enableAutoSearch);
 
     if (isManualSearch) {
       final query = lastMessage.content.trim().substring(7).trim();
@@ -618,6 +622,7 @@ class AgentService {
     String? googleSearchModel,
     String? bingCookie,
     String? reasoningEffort,
+    bool enableAutoSearch = true,
     CancelToken? cancelToken,
     int maxToolRounds = 100,
   }) async* {
@@ -626,7 +631,7 @@ class AgentService {
       apiKey: apiKey,
       model: model,
       messages: messages,
-      tools: tools ?? getEffectiveTools(searchBackend),
+      tools: tools ?? getEffectiveTools(searchBackend, enableAutoSearch: enableAutoSearch),
       searxngUrl: searxngUrl,
       searchBackend: searchBackend,
       googleApiKey: googleApiKey,

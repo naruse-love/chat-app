@@ -127,6 +127,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
           ),
+          SwitchListTile(
+            title: const Text('启用 AI 网络搜索'),
+            subtitle: const Text('关闭后 AI 模型回答时将不再调用外部网络搜索工具'),
+            value: settings.enableAutoSearch,
+            onChanged: (value) {
+              notifier.updateEnableAutoSearch(value);
+            },
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
             child: Column(

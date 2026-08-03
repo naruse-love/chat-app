@@ -1,3 +1,21 @@
+## 2026-08-03 Fixes & Feature Enhancements: Disable Session Swipe Gestures, Global Search Toggle & Structured url_fetch Metadata (v1.05.0+6)
+
+### 变更文件
+- `lib/screens/home_screen.dart`: 移除会话列表项上的 `Dismissible` 滑动手势包装器，彻底防止误删对话，置顶/归档/删除功能统一保留在右侧 3 点 PopUp 菜单中。
+- `lib/screens/settings_screen.dart`: 在【网络搜索设置】区域增加「启用 AI 网络搜索」开关 (`enableAutoSearch`)。
+- `lib/services/agent_service.dart` & `lib/providers/chat_provider.dart`: 在 `getEffectiveTools` 及流式生成方法中传递 `enableAutoSearch` 标志；当开关关闭时不再向 AI 模型透传 `web_search` / `google_search` / `bing_search` 搜索 Tool Call。
+- `lib/services/url_fetch_service.dart`: 全面升级网页抓取服务，自动提取 HTML `<title>`、`<meta description/author/keywords/og:*>` 元数据，自动转换 `<table>` 节点为标准 Markdown 表格，并生成包含 Header 与元数据区块的结构化 Markdown 输出；增加现代 User-Agent 头与 HTTP 403 (WAF/Cloudflare) 阻断友善提示。
+- `lib/services/search_service.dart`: 优化搜索关键词清洗与双引擎 (`google_bing`) URL 去重机制。
+- `pubspec.yaml`: 按照 `AGENTS.md` 规则 6，版本号递增至 `1.05.0+6`。
+- `.agents/context.md` & `WORK_LOG.md`: 更新 Milestone 20 记录。
+
+### 核心改进
+1. **彻底解决会话列表误删问题**：移除侧边栏 `Dismissible` 划动手势，置顶与删除统一保留在右侧 3 点菜单，操作更安全可靠。
+2. **新增全局网络搜索控制开关**：用户可在设置中自由开启/关闭 AI 网络搜索。关闭后，Agent 生成过程屏蔽所有搜索工具调用。
+3. **`url_fetch` 抓取结构化与元数据提炼**：使 AI 抓取外部网页时能够清晰直观掌握 Title、Author、Description、Keywords 及表格数据，大幅提升信息提取效率与理解准确度。
+
+---
+
 ## 2026-07-21 Fixes: Bing Cookie Propagation Fix, Bing AI Summary, & UI Error SnackBar (v1.04.0+5)
 
 ### 变更文件

@@ -1,13 +1,13 @@
-# BRIEFING — 2026-07-16T16:57:35+08:00
+# BRIEFING — 2026-08-03T21:44:20+08:00
 
 ## Mission
-Start the Project Orchestrator to integrate public OpenCode Free provider, implement url_fetch tool, and optimize web search retrieval & formatting.
+Start the Project Orchestrator to disable sidebar swipe gesture, add "Enable AI Web Search" toggle in settings, and optimize url_fetch structured metadata extraction & search service.
 
 ## 🔒 My Identity
 - Archetype: sentinel
-- Working directory: d:\work\chat\.agents\sentinel
-- Orchestrator: 3e5a1e9b-3a1f-46aa-95fc-0ab5963a2208
-- Victory Auditor: 429e66ba-133f-479e-bf78-0779908c918d
+- Working directory: D:\work\chat\.agents\sentinel
+- Orchestrator: 6ffb3cc5-66b2-44a6-9f36-b2247f550e33
+- Victory Auditor: to be spawned on victory claim
 
 ## 🔒 Key Constraints
 - No technical decisions — relay only
@@ -15,17 +15,17 @@ Start the Project Orchestrator to integrate public OpenCode Free provider, imple
 - Integrity mode: development
 
 ## User Context
-- **Last user request**: Integrate OpenCode Free provider, implement `url_fetch` tool (8000-char truncation, stripping tags), optimize SearXNG multi-page search & search results formatting.
+- **Last user request**: Disable sidebar session list swipe gesture, add enableAutoSearch toggle in settings and bypass search tool calls when disabled, optimize url_fetch structured metadata/HTML table parsing/error handling, optimize search_service keyword cleaning & deduplication, update pubspec.yaml to 1.05.0+6, flutter analyze 0 issues, flutter test 100% pass, update WORK_LOG.md & context.md.
 - **Pending clarifications**: none
-- **Delivered results**: Milestones 1-8 completed.
+- **Delivered results**: Milestones 1-8 completed previously. Now starting new feature update.
 
 ## Project Status
-- **Phase**: complete
+- **Phase**: in progress
 
 ## Victory Audit Status
-- **Triggered**: yes
-- **Verdict**: VICTORY CONFIRMED
+- **Triggered**: no
+- **Verdict**: pending
 - **Retry count**: 0
 
 ## Artifact Index
-- d:\work\chat\.agents\ORIGINAL_REQUEST.md — Verbatim user request log (agent copy)
+- D:\work\chat\.agents\ORIGINAL_REQUEST.md — Verbatim user request log (agent copy)

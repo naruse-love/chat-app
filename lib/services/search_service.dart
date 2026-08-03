@@ -87,27 +87,42 @@ class SearchService {
     String? googleSearchModel,
     String? bingCookie,
   }) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) {
+      return [];
+    }
+
     switch (searchBackend) {
       case 'bing':
-        return _searchBing(query, bingCookie);
+        return _searchBing(cleanQuery, bingCookie);
       case 'google':
-        return _searchGoogle(query, googleApiKey, googleBaseUrl, googleSearchModel);
+        return _searchGoogle(cleanQuery, googleApiKey, googleBaseUrl, googleSearchModel);
       case 'google_bing':
-        final googleFuture = _searchGoogle(query, googleApiKey, googleBaseUrl, googleSearchModel)
+        final googleFuture = _searchGoogle(cleanQuery, googleApiKey, googleBaseUrl, googleSearchModel)
             .catchError((e) {
               developer.log('Dual search (Google part) failed: $e', name: 'SearchService');
               return <SearchResult>[];
             });
-        final bingFuture = _searchBing(query, bingCookie)
+        final bingFuture = _searchBing(cleanQuery, bingCookie)
             .catchError((e) {
               developer.log('Dual search (Bing part) failed: $e', name: 'SearchService');
               return <SearchResult>[];
             });
         final List<List<SearchResult>> results = await Future.wait([googleFuture, bingFuture]);
-        return [...results[0], ...results[1]];
+        final combined = [...results[0], ...results[1]];
+        final seenUrls = <String>{};
+        final uniqueResults = <SearchResult>[];
+        for (final res in combined) {
+          final normalizedUrl = res.url.trim().toLowerCase();
+          if (normalizedUrl.isEmpty || !seenUrls.contains(normalizedUrl)) {
+            if (normalizedUrl.isNotEmpty) seenUrls.add(normalizedUrl);
+            uniqueResults.add(res);
+          }
+        }
+        return uniqueResults;
       case 'searxng':
       default:
-        return _searchSearxng(query, searxngUrl);
+        return _searchSearxng(cleanQuery, searxngUrl);
     }
   }
 

@@ -153,6 +153,48 @@ Integrity mode: development
 ### Manual Acceptance Criteria
 - [ ] Launching the app on a fresh DB automatically creates the "OpenCode Free" provider.
 - [ ] Selecting "OpenCode Free" lists the free models.
-- [ ] Performing a chat query utilizing web search works, shows the loading status correctly, formats results nicely, and allows tool-calling for `url_fetch`.
+- [ ] Perform a chat query utilizing web search works, shows the loading status correctly, formats results nicely, and allows tool-calling for `url_fetch`.
 
+## Follow-up — 2026-08-03T21:43:57+08:00
 
+Flutter AI Agent 移动端 App（chat-app）：实现禁用侧边栏会话列表滑动手势、在设置中增加「启用 AI 网络搜索」开关、以及全方位优化 url_fetch 网页抓取结构化元数据与搜索后端服务。
+
+Working directory: D:\work\chat
+Integrity mode: development
+
+## Requirements
+
+### R1. 会话列表滑动手势禁防误删
+移除 home_screen.dart 侧边栏会话列表项上的 Dismissible 滑动手势包装器，置顶、归档与删除功能统一仅通过右侧 3 点 PopUp 菜单（PopupMenuButton）操作。
+
+### R2. 全局网络搜索控制与 Agent 工具屏蔽
+在 settings_screen.dart 的【网络搜索设置】添加「启用 AI 网络搜索」开关（enableAutoSearch）。当关闭时，agent_service.dart 和 chat_provider.dart 不向大模型透传任何搜索 Tool Call (web_search / google_search / bing_search)。
+
+### R3. url_fetch 结构化元数据提取与搜索服务优化
+- url_fetch_service.dart 自动解析 HTML <title>、<meta description/author/keywords/og:*> 元数据，将 <table> 解析为 Markdown 表格，提取页面重要链接，并包装为结构化 Markdown 输出。同时强化 User-Agent 头与 403 WAF 阻断/超时/404 容错提示。
+- search_service.dart 优化搜索关键词清洗与结果去重。
+
+### R4. 项目质量与代码规范
+- 遵守 AGENTS.md 规则：pubspec.yaml 版本号递增 0.01（升至 1.05.0+6）。
+- 确保 flutter analyze 保持 0 issues，运行 flutter test 所有测试 100% 通过（0 failures）。
+- 更新 WORK_LOG.md 与 .agents/context.md。
+
+## Acceptance Criteria
+
+### A1. 滑动手势
+- [ ] 会话列表项滑动不再触发删除或置顶操作
+- [ ] 3 点菜单保留置顶/取消置顶、归档/取消归档、删除操作且功能完全正常
+
+### A2. 搜索控制
+- [ ] 设置界面包含“启用 AI 网络搜索”开关
+- [ ] 开关关闭时，AI 消息生成过程中不触发 web_search / google_search / bing_search 工具调用
+
+### A3. 结构化网页抓取
+- [ ] url_fetch 包含网页标题、Description、Author、Keywords 等元数据输出
+- [ ] url_fetch 支持将 HTML 表格格式化为标准 Markdown 表格
+- [ ] 网络超时/403 阻断时返回清晰友好提示
+
+### A4. 代码与测试质量
+- [ ] pubspec.yaml 版本号为 1.05.0+6
+- [ ] flutter analyze 输出 No issues found!
+- [ ] flutter test 所有测试用例 100% 通过（0 failures）

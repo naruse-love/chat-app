@@ -113,5 +113,58 @@ void main() {
       final content = await fetchService.fetchUrlContent('https://example.com/404');
       expect(content, contains('读取网页失败'));
     });
+
+    test('Extracts HTML title, description, author metadata and formats HTML tables into Markdown', () async {
+      mockAdapter.handler = (options) {
+        const html = '''
+<html>
+  <head>
+    <title>Awesome Tech Article</title>
+    <meta name="description" content="A comprehensive guide to Flutter AI agent development." />
+    <meta name="author" content="Antigravity Team" />
+  </head>
+  <body>
+    <p>Introduction text here.</p>
+    <table>
+      <tr><th>Feature</th><th>Status</th></tr>
+      <tr><td>Search</td><td>Enabled</td></tr>
+    </table>
+  </body>
+</html>
+''';
+        return ResponseBody.fromString(
+          html,
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['text/html; charset=utf-8'],
+          },
+        );
+      };
+
+      final content = await fetchService.fetchUrlContent('https://example.com/meta-table');
+      expect(content, contains('# Awesome Tech Article'));
+      expect(content, contains('作者: Antigravity Team'));
+      expect(content, contains('描述: A comprehensive guide to Flutter AI agent development.'));
+      expect(content, contains('| Feature | Status |'));
+      expect(content, contains('| Search | Enabled |'));
+    });
+
+    test('Handles 403 WAF response with friendly Chinese message', () async {
+      mockAdapter.handler = (options) {
+        throw DioException(
+          requestOptions: options,
+          type: DioExceptionType.badResponse,
+          response: Response(
+            requestOptions: options,
+            statusCode: 403,
+            statusMessage: 'Forbidden',
+          ),
+        );
+      };
+
+      final content = await fetchService.fetchUrlContent('https://example.com/forbidden');
+      expect(content, contains('读取网页被阻断'));
+      expect(content, contains('HTTP 403'));
+    });
   });
 }

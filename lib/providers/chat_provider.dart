@@ -325,6 +325,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         googleSearchModel: settings.googleSearchModel.isNotEmpty ? settings.googleSearchModel : null,
         bingCookie: settings.bingCookie.isNotEmpty ? settings.bingCookie : null,
         reasoningEffort: settings.reasoningEffort,
+        enableAutoSearch: settings.enableAutoSearch,
         cancelToken: _cancelToken,
       );
 
