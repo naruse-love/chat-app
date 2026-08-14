@@ -1,3 +1,17 @@
+## 2026-08-14 Documentation & Quality: Comprehensive README.md Overhaul (v1.06.0+7)
+
+### 变更文件
+- `README.md`: 全面重构并丰富项目文档，新增项目 Badges 状态标识、核心功能亮点（OpenAI 全兼容、免 Key 直连、多轮 Agent Tool Calling、DSML/XML 兜底、SearXNG/Bing/Google 搜索、结构化 url_fetch 网页抓取、深度思考链可视化、企业级自愈架构）、系统架构 Mermaid 拓扑图、代码目录结构树、环境配置与快速开始、全套 167 个单元与集成测试矩阵、网络搜索与提示词配置指南、稳定性自愈设计、路线图及开发协作规范。
+- `pubspec.yaml`: 按照 `AGENTS.md` 规则 6，版本号递增至 `1.06.0+7`。
+- `.agents/context.md` & `WORK_LOG.md`: 更新 Milestone 21 记录与当前版本状态。
+
+### 核心改进
+1. **完善全景项目文档**：将原本简陋的默认 Flutter 模板升级为企业级开源规范的 README 文档，大幅提升项目的可读性、展示度与上手易用性。
+2. **详尽的配置与架构说明**：系统化阐述了数据模型、DAO、Riverpod Provider、Service 架构与核心功能配置（如 Bing Cookie 提取、SearXNG 私有部署、系统提示词模板等）。
+3. **测试质量公示**：明确标注全套 167 个单元/集成测试用例覆盖范围及静态分析 0 issues 质量保证。
+
+---
+
 ## 2026-08-03 Fixes & Feature Enhancements: Disable Session Swipe Gestures, Global Search Toggle & Structured url_fetch Metadata (v1.05.0+6)
 
 ### 变更文件
