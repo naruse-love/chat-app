@@ -145,12 +145,13 @@ class AgentService {
     },
   };
 
-  /// OpenAI-compatible Tool definition for fetching full-text webpage content.
+  /// OpenAI-compatible Tool definition for fetching structured webpage content.
   static const Map<String, dynamic> urlFetchTool = {
     'type': 'function',
     'function': {
       'name': 'url_fetch',
-      'description': 'Fetch and extract plain text body content from a specified webpage URL.',
+      'description':
+          'Fetch and extract structured content from a webpage URL. Returns metadata (title, author, published date, site name, language), page type diagnosis (article/doc/captcha/login_wall/nav_hub), truncation status & limits, link statistics, and cleaned main content in Markdown.',
       'parameters': {
         'type': 'object',
         'properties': {

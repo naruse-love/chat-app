@@ -1,3 +1,27 @@
+## 2026-08-16 Feature: UrlFetchService v2 Intelligent Webpage Extraction & Diagnosis (v1.07.0+8)
+
+### 变更文件
+- `lib/models/fetch_result.dart`: 新增结构化网页抓取结果模型 `FetchResult` 与 `FetchMetadata`，支持标题、描述、作者、发布日期、语言、站点名、关键词、OG 协议标签、JSON-LD 数据、页面类型诊断（`article` / `doc` / `nav_hub` / `login_wall` / `captcha` / `error_page`）、截断感知标记及站内/站外链接统计。
+- `lib/services/url_fetch_service.dart`: 全面重构升级 `UrlFetchService`：
+  1. **截断感知与上限提升**：内容提取上限由 8000 字符提升至 15000 字符，超限时追加明确的 Markdown 截断警告与原始字符统计；
+  2. **页面安全与类型诊断**：精准识别 Cloudflare/极验人机验证挑战（`captcha`）、知乎等登录墙（`login_wall`）、门户/导航合集（`nav_hub`）、文档代码页（`doc`）与文章（`article`），输出诊断警告提示；
+  3. **丰富元数据提取**：深度解析 OpenGraph (`og:*`)、Twitter Card、HTML5 `<time>`、`<html lang>` 以及 `<script type="application/ld+json">` 结构化数据并智能回填补充；
+  4. **正文优先提取与噪音剥离**：优先提取 `<article>`、`<main>`、`[role="main"]`、`.markdown-body` 等语义正文容器，解析前彻底剔除 `<nav>`、`<header>`、`<footer>`、`<aside>`、侧边栏及广告区块；
+  5. **链接结构分析**：自动统计全页链接总数并区分站内链接与站外链接；
+  6. **格式化输出**：自动生成结构清晰、分区明确的 Markdown 内容供大模型高效理解。
+- `lib/services/agent_service.dart`: 更新 `urlFetchTool` 的 Function Description，向大模型清晰说明工具支持结构化元数据、截断感知、页面类型诊断与纯净正文提取。
+- `test/url_fetch_service_test.dart`: 全面升级测试用例，覆盖截断警告、未截断状态、验证页检测、登录墙检测、JSON-LD 与 OG 元数据提取、语义正文容器优先与噪音剥离、站内/站外链接分析、导航合集识别以及各类 HTTP 错误状态。
+- `test/gen5_empirical_verification_test.dart`: 同步更新截断上限测试至 15000 字符与截断标记断言。
+- `pubspec.yaml`: 按照 `AGENTS.md` 规则 6，版本号递增至 `1.07.0+8`。
+- `.agents/context.md` & `WORK_LOG.md`: 更新 Milestone 22 记录与当前版本状态。
+
+### 核心改进
+1. **彻底解决大模型被截断内容误导的隐患**：大幅提升正文容量上限至 15000 字符，并在超限时提供明确截断标记，使 Agent 能够准确感知内容完整性。
+2. **彻底解决反爬验证页与登录页误判为正文的问题**：通过多重特征规则检测验证码与登录墙，及时向 Agent 输出诊断警告，避免 Agent 误读无效内容。
+3. **大幅提升正文质量与元数据丰富度**：通过语义容器优先和噪音剥离彻底解决 MDN/维基百科等侧边栏噪音占据 80% Token 的问题；通过 JSON-LD/OG 解析提供作者、发表时间、站点等高价值事实依据。
+
+---
+
 ## 2026-08-14 Documentation & Quality: Comprehensive README.md Overhaul (v1.06.0+7)
 
 ### 变更文件

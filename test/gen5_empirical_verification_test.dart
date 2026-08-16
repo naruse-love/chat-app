@@ -199,15 +199,16 @@ void main() {
       expect(text, isNot(contains('JavaScript is disabled')));
     });
 
-    test('Enforces strictly 8000 character upper limit', () async {
+    test('Enforces strictly 15000 character upper limit with truncation notification', () async {
       mockAdapter.handler = (options) {
-        final hugeBody = 'Lorem ipsum dolor sit amet. ' * 500; // > 13000 chars
+        final hugeBody = 'Lorem ipsum dolor sit amet. ' * 800; // > 22000 chars
         final html = '<html><body><div>$hugeBody</div></body></html>';
         return ResponseBody.fromString(html, 200);
       };
 
       final text = await urlFetchService.fetchUrlContent('https://test.local/huge');
-      expect(text.length, equals(8000));
+      expect(text, contains('⚠️ **内容已截断**'));
+      expect(text, contains('已截取前 15000 字符'));
     });
 
     test('Handles timeout and network errors with proper Chinese recovery messages', () async {

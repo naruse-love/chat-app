@@ -41,11 +41,9 @@
 | **19 / Bing 首次搜索 Cookie 穿透与 AI 总结强化** | 修复首次 AI 工具调用自动搜索时未向下传递 `bingCookie` 参数的重大 Bug；强化 Bing 搜索，增加对 `.cht_root` / `[data-scenario="nrt"]` 智能 AI 总结栏内容的提取并前置作为 SearchResult；在 `HomeScreen` 中增加 `ref.listen` 对 `ChatState.error` 错误的全局监听并显示为 SnackBar，完美向用户反馈调用失败原因；项目版本递增至 `1.04.0+5`（2026-07-21） | ✅ 完成 |
 | **20 / 手势禁用、搜索开关与抓取增强** | 移除会话列表项 `Dismissible` 滑动手势，彻底防止误删对话；设置页增加「启用 AI 网络搜索」开关 (`enableAutoSearch`)，关闭时屏蔽外部搜索 Tool Call；升级 `url_fetch_service` 提取 HTML Title/Description/Author/Keywords 元数据及 `<table>` Markdown 转换，优化 403 阻断提示与关键词去重清洗；项目版本递增至 `1.05.0+6`（2026-08-03） | ✅ 完成 |
 | **21 / 完整文档重构** | 全面重构并丰富 `README.md` 项目说明文档，涵盖架构拓扑、特性矩阵、目录树、快速上手、测试矩阵、配置指南、稳定性自愈设计与开发规范；版本号递增至 `1.06.0+7`（2026-08-14） | ✅ 完成 |
+| **22 / UrlFetchService v2 智能抓取与诊断** | 提升提取上限至 15000 字符，增加截断感知与警告；增加反爬验证页（captcha）、登录墙（login_wall）、导航门户（nav_hub）诊断与警告；提取 JSON-LD、OG 协议与 HTML 元数据；语义容器（article/main）优先提取与 nav/footer/aside 噪音剥离；站内/站外链接统计分析；新增 FetchResult 结构化模型（2026-08-16） | ✅ 完成 |
 
-**当前测试状态：167 / 167 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.06.0+7。**
-
-
-
+**当前测试状态：173 / 173 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.07.0+8。**
 
 ---
 
@@ -57,6 +55,7 @@ lib/
 ├── app.dart                      # MaterialApp 根（含主题、Provider 注入）
 │
 ├── models/                       # 数据模型
+│   ├── fetch_result.dart         # 网页抓取与诊断模型（FetchResult, FetchMetadata）
 │   ├── api_config.dart           # API 配置（name, baseUrl, apiKeyRef, isDefault）
 │   ├── chat_message.dart         # 消息模型（reasoningContent, imagePath, toolCallId, promptTokens, completionTokens）
 │   ├── conversation.dart         # 对话模型（isPinned, isArchived, systemPrompt）
