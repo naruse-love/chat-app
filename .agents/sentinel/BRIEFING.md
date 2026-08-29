@@ -1,13 +1,13 @@
-# BRIEFING — 2026-08-03T21:44:20+08:00
+# BRIEFING — 2026-08-28T20:52:04+08:00
 
 ## Mission
-Start the Project Orchestrator to disable sidebar swipe gesture, add "Enable AI Web Search" toggle in settings, and optimize url_fetch structured metadata extraction & search service.
+Monitor and coordinate the execution of Milestone 23 (Pluggable ToolRegistry architecture, 4 built-in basic tools, AgentLoopGuard, UI & AgentService integration).
 
 ## 🔒 My Identity
 - Archetype: sentinel
 - Working directory: D:\work\chat\.agents\sentinel
-- Orchestrator: 6ffb3cc5-66b2-44a6-9f36-b2247f550e33
-- Victory Auditor: to be spawned on victory claim
+- Orchestrator: 242c8313-c481-4c27-9224-aa6147e81293
+- Victory Auditor: [to be spawned on victory claim]
 
 ## 🔒 Key Constraints
 - No technical decisions — relay only
@@ -15,9 +15,9 @@ Start the Project Orchestrator to disable sidebar swipe gesture, add "Enable AI 
 - Integrity mode: development
 
 ## User Context
-- **Last user request**: Disable sidebar session list swipe gesture, add enableAutoSearch toggle in settings and bypass search tool calls when disabled, optimize url_fetch structured metadata/HTML table parsing/error handling, optimize search_service keyword cleaning & deduplication, update pubspec.yaml to 1.05.0+6, flutter analyze 0 issues, flutter test 100% pass, update WORK_LOG.md & context.md.
+- **Last user request**: 完整实现 Milestone 23：构建统一可插拔的 ToolRegistry 架构底座，实现首批四大基础实用工具（math_eval, time_calculator, weather_query, wiki_lookup），集成 AgentLoopGuard 防死循环机制，并与现有 Agent 调度链路及 UI 无缝集成。
 - **Pending clarifications**: none
-- **Delivered results**: Milestones 1-8 completed previously. Now starting new feature update.
+- **Delivered results**: Previous Milestones completed. Milestone 23 dispatched.
 
 ## Project Status
 - **Phase**: in progress
@@ -27,5 +27,15 @@ Start the Project Orchestrator to disable sidebar swipe gesture, add "Enable AI 
 - **Verdict**: pending
 - **Retry count**: 0
 
+## Routing Decision
+- **Path**: General (`teamwork_preview_orchestrator`)
+- **Rationale**: Milestone 23 is a comprehensive SWE implementation involving models, services, tool registry, built-in tools, loop guard, agent pipeline integration, UI widgets, tests, and documentation.
+
+## Monitoring Tasks
+- Cron 1 (Progress Reporting): task-15 (`*/8 * * * *`)
+- Cron 2 (Liveness Monitoring): task-17 (`*/10 * * * *`)
+
 ## Artifact Index
-- D:\work\chat\.agents\ORIGINAL_REQUEST.md — Verbatim user request log (agent copy)
+- D:\work\chat\.agents\ORIGINAL_REQUEST.md — Verbatim user request log (authoritative)
+- D:\work\chat\.agents\orchestrator_gen8\plan.md — Orchestrator execution plan
+- D:\work\chat\.agents\orchestrator_gen8\progress.md — Orchestrator live progress log

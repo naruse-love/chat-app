@@ -198,3 +198,89 @@ Integrity mode: development
 - [ ] pubspec.yaml 版本号为 1.05.0+6
 - [ ] flutter analyze 输出 No issues found!
 - [ ] flutter test 所有测试用例 100% 通过（0 failures）
+
+## Follow-up — 2026-08-28T20:38:42+08:00
+
+对现有的 Flutter AI 聊天应用进行 Agent 工具生态体系的深度需求搜集、系统架构设计与演进路线规划，输出完备的工具能力矩阵、可插拔注册架构规范与分阶段 Milestone 工作列表。
+
+Working directory: D:\work\chat
+Integrity mode: development
+
+## Requirements
+
+### R1. Agent 工具生态与需求全景搜集 (Tools Taxonomy & Inventory)
+全面梳理并制定 Agent 核心工具库需求清单，至少涵盖四大维度：
+1. **基础实用工具集**：高精数学/表达式计算器、精准时区与相对时间计算、实时天气查询、知识库/维基检索等；
+2. **本地文件与代码执行工具**：本地文件安全读写、沙箱脚本解释执行（如 JS/Dart/Lua 等轻量沙箱）、系统剪贴板交互等；
+3. **MCP (Model Context Protocol) 扩展协议支持**：评估并设计客户端连接外部本地/远程 MCP Server 动态发现与加载工具的机制；
+4. **移动原生设备能力**：日历事件读写、定时提醒与本地通知、通讯录与地理位置等移动端特权功能。
+对每个工具明确定义：工具名称、OpenAI Function Calling JSON Schema、输入参数、输出格式、调用权限级别与异常保底策略。
+
+### R2. 可插拔工具注册架构与执行引擎设计 (Pluggable Tool Registry Architecture)
+设计统一的 Agent 工具注册中心（Tool Registry）与调用分发架构，支持：
+- 静态内置工具（如现有 search / url_fetch 及新增的基础工具）与动态外部工具（MCP / 自定义插件）的统一注册与生命周期管理；
+- 细粒度的工具启用/禁用开关、UI 交互确认（针对高风险操作如文件写/日历写）；
+- 工具调用过程的流式事件反馈（ToolCallStarted / Executing / Completed / Error）及 UI 折叠气泡渲染规范；
+- 工具调用与容错降级机制（参数校验失败、超时重试、超限总结）。
+
+### R3. 详细演进路线图与 Milestone 工作列表制定 (Milestone Work List)
+结合现有项目架构（Riverpod、SQLite DAO、AgentService、Flutter UI），制定结构化、可执行的分阶段演进工作列表（Milestone 23 及后续里程碑），明确：
+- 各 Milestone 的目标、包含的具体工具/功能清单、依赖关系、前后置条件；
+- 预估的代码改动范围、测试策略与质量保障标准（保持 0 analyzer warnings & 100% 测试通过率）。
+
+## Acceptance Criteria
+
+### 需求与架构完备性
+- [ ] 产出完整的工具需求矩阵文档，覆盖基础工具、本地与沙箱执行、MCP 扩展及移动原生四大分类，且每个工具包含合规的 JSON Schema 参数定义。
+- [ ] 提供统一可插拔 Tool Registry 的架构设计与接口契约规范，涵盖工具注册、权限审查、参数校验、执行分发及 UI 状态流转。
+- [ ] 产出针对 MCP (Model Context Protocol) 在 Flutter/Dart 客户端落地的可行性分析与通信协议设计（SSE / Stdio / WebSocket）。
+
+### 工作列表与可操作性
+- [ ] 制定出清晰、解耦、循序渐进的 Milestone 规划清单（从架构底座、基础工具库到 MCP/原生高级能力），且每个阶段具备明确的验收标准与测试保障方案。
+- [ ] 严格遵守项目开发规范与约束（0 analyzer issues，测试 100% 通过，版本号递增策略，中文 UI 适配）。
+
+## Follow-up — 2026-08-28T20:52:04+08:00
+
+在 Flutter AI 聊天应用中完整实现 Milestone 23：构建统一可插拔的 ToolRegistry 架构底座，实现首批四大基础实用工具（数学计算、时区时间、天气查询、维基百科知识检索），集成 AgentLoopGuard 防死循环机制，并与现有 Agent 调度链路无缝集成。
+
+Working directory: D:\work\chat
+Integrity mode: development
+
+## Requirements
+
+### R1. 可插拔工具体系架构与注册中心 (Pluggable Tool Architecture & ToolRegistry)
+- 在 `lib/models/tool/` 与 `lib/services/tool_registry.dart` 中建立标准 `Tool` 抽象基类、`ToolParameter`、`ToolExecutionResult` 与 4 级安全权限模型；
+- 实现 `ToolRegistry` 单例/服务，支持静态/动态工具注册、生命周期管理、根据上下文与模型能力导出 OpenAI Function Calling 规范的 JSON Schema；
+- 将现有的搜索工具（`web_search`, `google_search`, `bing_search`）和网页抓取工具（`url_fetch`）无缝适配包装为标准 `Tool` 实例，保持向下兼容；
+- 实现 Riverpod `toolRegistryProvider` 并在全局状态中提供响应式能力。
+
+### R2. 首批四大内置基础实用工具实现 (Built-in Basic Tools)
+完整实现以下 4 个零权限/安全（Level 0）基础工具，提供健壮的参数校验、异常捕获与 Markdown/JSON 双格式返回：
+1. **`math_eval`**：支持高精度数学表达式、统计函数、三角函数、对数、开方计算与单位换算，针对除零或非法表达式提供友好错误反馈；
+2. **`time_calculator`**：支持全球任意 IANA 时区当前时间查询、跨时区转换、未来/过去相对日期计算与两个时间戳之间的时间差精确计算；
+3. **`weather_query`**：接入免费可靠的天气 API（如 Open-Meteo 等免 Key 开放接口），支持城市地理编码定位、实时天气状况（气温/体感/湿度/风速/天气状况）及未来 7 天逐日天气预报；
+4. **`wiki_lookup`**：接入中文与英文 Wikipedia 开放 API，支持百科条目检索、智能消歧义与高可读性纯净摘要提取。
+
+### R3. 防死循环与调用防护机制 (AgentLoopGuard)
+- 实现 `AgentLoopGuard`，检测多轮工具调用链中的死循环、振荡调用（例如 A→B→A 重复调用）与连续重复入参（基于 MD5 签名）；
+- 默认设置安全调用轮次上限（如 `maxToolRounds = 8`），在超限或检测到循环时强制剥离工具发起最后一次文本总结补全，杜绝 Agent 卡死。
+
+### R4. UI 呈现与现有 Agent 调度无缝对接
+- 在 `AgentService` 中无缝对接 `ToolRegistry` 统一执行分发管道；
+- 支持工具调用过程事件（`ToolCallStartedEvent`, `ToolCallCompletedEvent` 等）在聊天气泡（`ChatBubble`）中以中文标题、状态芯片图标及折叠卡片形式直观渲染；
+- 遵循项目现有规范：`flutter analyze` 0 issues，全套测试 100% 通过（保持原有 173 个测试全部通过并新增 Milestone 23 测试），版本号递增至 `1.08.0+9`，更新 `WORK_LOG.md` 与 `.agents/context.md`。
+
+## Acceptance Criteria
+
+### 功能与架构验收
+- [ ] `ToolRegistry` 支持工具的注册、注销、查询、Schema 导出与统一异步分发执行；
+- [ ] 4 个基础工具（`math_eval`, `time_calculator`, `weather_query`, `wiki_lookup`）均可独立正确执行并返回结构化数据与 Markdown 视图；
+- [ ] 现有 `web_search`、`google_search`、`bing_search` 与 `url_fetch` 均平滑迁移至 `Tool` 体系，不破坏任何既有功能；
+- [ ] `AgentLoopGuard` 能够精准识别循环调用并安全兜底。
+
+### 自动化测试与代码质量
+- [ ] 为 `ToolRegistry`、`AgentLoopGuard` 及 4 个新工具编写完整单元测试，新增测试用例 25+；
+- [ ] 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat test`，所有测试用例 **100% 全部通过（0 failures）**；
+- [ ] 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat analyze`，输出 **`No issues found!`**；
+- [ ] 项目版本号递增为 `1.08.0+9`，并在 `WORK_LOG.md` 顶部与 `.agents/context.md` 中追加 Milestone 23 记录。
+

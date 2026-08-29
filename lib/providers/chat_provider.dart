@@ -8,6 +8,7 @@ import '../data/api_config_dao.dart';
 import '../services/agent_service.dart';
 import '../services/search_service.dart';
 import '../services/url_fetch_service.dart';
+import '../services/tool_registry.dart';
 import 'api_config_provider.dart';
 import 'conversation_provider.dart';
 import 'model_provider.dart';
@@ -30,10 +31,12 @@ final agentServiceProvider = Provider<AgentService>((ref) {
   final chatSvc = ref.watch(chatServiceProvider);
   final searchSvc = ref.watch(searchServiceProvider);
   final urlFetchSvc = ref.watch(urlFetchServiceProvider);
+  final toolRegistry = ref.watch(toolRegistryProvider);
   return AgentService(
     chatService: chatSvc,
     searchService: searchSvc,
     urlFetchService: urlFetchSvc,
+    toolRegistry: toolRegistry,
   );
 });
 

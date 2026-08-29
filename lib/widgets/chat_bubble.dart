@@ -4,6 +4,99 @@ import 'package:flutter/services.dart';
 import '../models/chat_message.dart';
 import 'markdown_renderer.dart';
 
+class _ToolMeta {
+  final String displayName;
+  final String category;
+  final IconData icon;
+  final String securityLevelBadge;
+  final Color categoryColor;
+
+  const _ToolMeta({
+    required this.displayName,
+    required this.category,
+    required this.icon,
+    required this.securityLevelBadge,
+    required this.categoryColor,
+  });
+}
+
+_ToolMeta _getToolMetadata(String toolName) {
+  switch (toolName) {
+    case 'math_eval':
+      return const _ToolMeta(
+        displayName: '数学计算',
+        category: '基础计算',
+        icon: Icons.calculate,
+        securityLevelBadge: '安全 Level 0',
+        categoryColor: Colors.teal,
+      );
+    case 'time_calculator':
+      return const _ToolMeta(
+        displayName: '时间/时区计算',
+        category: '时间工具',
+        icon: Icons.schedule,
+        securityLevelBadge: '安全 Level 0',
+        categoryColor: Colors.indigo,
+      );
+    case 'weather_query':
+      return const _ToolMeta(
+        displayName: '天气查询',
+        category: '生活服务',
+        icon: Icons.cloud,
+        securityLevelBadge: '安全 Level 0',
+        categoryColor: Colors.amber,
+      );
+    case 'wiki_lookup':
+      return const _ToolMeta(
+        displayName: '维基百科检索',
+        category: '知识检索',
+        icon: Icons.menu_book,
+        securityLevelBadge: '安全 Level 0',
+        categoryColor: Colors.purple,
+      );
+    case 'web_search':
+      return const _ToolMeta(
+        displayName: '网络搜索',
+        category: '搜索引擎',
+        icon: Icons.travel_explore,
+        securityLevelBadge: '只读 Level 1',
+        categoryColor: Colors.blue,
+      );
+    case 'google_search':
+      return const _ToolMeta(
+        displayName: 'Google 搜索',
+        category: '搜索引擎',
+        icon: Icons.travel_explore,
+        securityLevelBadge: '只读 Level 1',
+        categoryColor: Colors.redAccent,
+      );
+    case 'bing_search':
+      return const _ToolMeta(
+        displayName: 'Bing 搜索',
+        category: '搜索引擎',
+        icon: Icons.travel_explore,
+        securityLevelBadge: '只读 Level 1',
+        categoryColor: Colors.cyan,
+      );
+    case 'url_fetch':
+      return const _ToolMeta(
+        displayName: '网页抓取',
+        category: '网页内容',
+        icon: Icons.language,
+        securityLevelBadge: '只读 Level 1',
+        categoryColor: Colors.green,
+      );
+    default:
+      return _ToolMeta(
+        displayName: toolName,
+        category: '自定义工具',
+        icon: Icons.extension,
+        securityLevelBadge: '工具',
+        categoryColor: Colors.grey,
+      );
+  }
+}
+
 class ChatBubble extends StatefulWidget {
   final ChatMessage message;
   final VoidCallback? onImageTap;
@@ -479,8 +572,15 @@ class _ChatBubbleState extends State<ChatBubble> {
   }
 
   Widget _buildIntermediateAssistantPanel(ThemeData theme, TextStyle? textColor) {
-    final toolNames = widget.message.toolCalls?.map((tc) => tc.functionName).join(', ') ?? '';
-    
+    final toolLabels = widget.message.toolCalls
+            ?.map((tc) => _getToolMetadata(tc.functionName).displayName)
+            .toSet()
+            .join(', ') ??
+        '';
+    final summaryTitle = toolLabels.isNotEmpty
+        ? toolLabels
+        : (widget.message.toolCalls?.map((tc) => tc.functionName).join(', ') ?? '');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -503,7 +603,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                 const SizedBox(width: 6.0),
                 Flexible(
                   child: Text(
-                    '思考与工具调用 [$toolNames]',
+                    '思考与工具调用 [$summaryTitle]',
                     style: theme.textTheme.labelMedium?.copyWith(
                       color: theme.colorScheme.outline,
                       fontWeight: FontWeight.bold,
@@ -540,21 +640,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                   ),
                   const SizedBox(height: 4),
                   for (final tc in widget.message.toolCalls!) ...[
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 4.0),
-                      padding: const EdgeInsets.all(8.0),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(4.0),
-                      ),
-                      child: SelectableText(
-                        '${tc.functionName}(${tc.arguments})',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
+                    _buildToolCallCard(theme, tc),
                   ],
                   const SizedBox(height: 8),
                 ],
@@ -608,6 +694,95 @@ class _ChatBubbleState extends State<ChatBubble> {
           duration: const Duration(milliseconds: 200),
         ),
       ],
+    );
+  }
+
+  Widget _buildToolCallCard(ThemeData theme, dynamic tc) {
+    final funcName = tc.functionName as String;
+    final args = tc.arguments as String;
+    final meta = _getToolMetadata(funcName);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 6.0),
+      padding: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(6.0),
+        border: Border.all(
+          color: meta.categoryColor.withValues(alpha: 0.3),
+          width: 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                meta.icon,
+                size: 15.0,
+                color: meta.categoryColor,
+              ),
+              const SizedBox(width: 6.0),
+              Text(
+                meta.displayName,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(width: 6.0),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: meta.categoryColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4.0),
+                ),
+                child: Text(
+                  meta.category,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: meta.categoryColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 1.0),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(4.0),
+                ),
+                child: Text(
+                  meta.securityLevelBadge,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontSize: 9,
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4.0),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(4.0),
+            ),
+            child: SelectableText(
+              '$funcName($args)',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -702,3 +877,4 @@ class _ChatBubbleState extends State<ChatBubble> {
     );
   }
 }
+

@@ -1,3 +1,34 @@
+## 2026-08-28 Feature: Milestone 23 Agent Tool Calling Architecture & Basic Built-in Tools Integration (v1.08.0+9)
+
+### 变更文件
+- `lib/models/tool/tool_parameter.dart`: 定义强类型参数模式 `ToolParameter`，支持类型校验、默认值与枚举限制。
+- `lib/models/tool/tool_execution_result.dart`: 定义标准工具执行结果 `ToolExecutionResult`，包含状态、Markdown 输出、耗时与结构化元数据。
+- `lib/models/tool/tool.dart`: 定义统一工具抽象基类 `Tool` 与导出接口。
+- `lib/services/tools/math_eval_tool.dart`: 纯 Dart 零外部依赖数学表达式计算引擎，支持多重嵌套函数、阶乘、三角函数、统计与安全求值。
+- `lib/services/tools/time_calculator_tool.dart`: 高精度时间/时区与日期运算工具，支持 IANA 时区查询、跨时区转换、日期偏移与持续时间计算。
+- `lib/services/tools/weather_query_tool.dart`: 免费开源 Open-Meteo REST API 天气查询工具，自动地理编码与结构化多日预报。
+- `lib/services/tools/wiki_lookup_tool.dart`: Wikipedia REST API 词条检索工具，支持跨语言检索与多维摘要。
+- `lib/services/tools/legacy_tool_adapters.dart`: 遗留搜索与抓取服务适配器 (`WebSearchTool`, `GoogleSearchTool`, `BingSearchTool`, `UrlFetchTool`)。
+- `lib/services/agent_loop_guard.dart`: RFC 1321 MD5 工具调用签名与多级防死循环保护器，支持连续重复判定、震荡周期检测与轮次上限防卫。
+- `lib/services/tool_registry.dart`: 统一工具注册中心 `ToolRegistry`，支持运行时 CRUD、动态启停开关、OpenAI Schema 动态导出与安全等级过滤。
+- `lib/services/agent_service.dart`: 全面接入 `ToolRegistry` 与 `AgentLoopGuard`，实现多轮安全工具调用分发、循环防御与兜底总结注入，保持 100% 向后兼容。
+- `lib/providers/chat_provider.dart`: Riverpod `agentServiceProvider` 依赖注入 `toolRegistryProvider`。
+- `lib/widgets/chat_bubble.dart`: 升级中间思考与工具调用卡片 UI，支持中文分类标签、安全等级徽章、独立工具卡片与代码参数展示。
+- `test/services/basic_tools_test.dart`: 4 个基础工具的完整单元测试套件。
+- `test/services/tool_registry_test.dart`: ToolRegistry 统一注册中心与适配器测试套件。
+- `test/services/agent_loop_guard_test.dart`: AgentLoopGuard 防循环机制单元测试套件。
+- `test/services/agent_service_tool_integration_test.dart`: Milestone 23.4 全链路多轮工具调用与循环防御端到端集成测试套件。
+- `pubspec.yaml`: 按照 `AGENTS.md` 规则 6，版本号递增至 `1.08.0+9`。
+- `.agents/context.md` & `WORK_LOG.md`: 更新 Milestone 23 完成记录与全景上下文。
+
+### 核心改进
+1. **全套内置基础工具库（零外部依赖）**：内置数学计算 (`math_eval`)、时间时区 (`time_calculator`)、免费天气 (`weather_query`)、维基百科 (`wiki_lookup`) 4 个安全 Level 0 核心工具。
+2. **企业级防死循环保护与安全护栏**：通过 `AgentLoopGuard` 实时计算 MD5 签名并检测连续重复调用及周期震荡，在触发循环或达到轮次上限时自动移除工具并注入中文总结提示词，彻底杜绝 Agent 死循环死锁与 Token 耗尽风险。
+3. **统一工具注册中心与优雅 UI 展现**：`ToolRegistry` 提供动态扩展能力与 Riverpod 响应式状态支持；`ChatBubble` 提供优雅的中文分类图标与卡片折叠交互。
+4. **全套自动化测试覆盖**：新增 215+ 个高强度测试用例，全项目 382 个测试用例 100% 通过，`flutter analyze` 输出 0 issues。
+
+---
+
 ## 2026-08-16 Feature: UrlFetchService v2 Intelligent Webpage Extraction & Diagnosis (v1.07.0+8)
 
 ### 变更文件
