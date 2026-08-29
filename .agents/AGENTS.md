@@ -64,18 +64,15 @@
 
 ---
 
-## 📂 保留的 .agents 目录
+## 📂 保留的 .agents 核心文件
 
-| 目录 | 作用 |
+| 文件 | 作用 |
 |------|------|
-| `orchestrator/` | 初代 orchestrator（Milestone 1-2 阶段参考） |
-| `orchestrator_gen3/` | 第三代 orchestrator，含详细 Milestone 1-2 完成记录 |
-| `orchestrator_gen4/` | 第四代 orchestrator，含 Milestone 5-8 完成记录（最终状态） |
-| `sentinel/` | 上层监控 Agent 的 handoff 记录 |
-| `victory_verifier/` | 最终验收 Agent 的记录 |
 | `context.md` | **本项目完整接手上下文**（最重要，必读） |
 | `AGENTS.md` | **本文件**，AI Agent 开发规则 |
 | `ORIGINAL_REQUEST.md` | 用户的原始任务需求（参考用） |
+
+> 注：所有子 Agent 的临时工作子目录已通过 `.gitignore` 忽略，以保持仓库精简。
 
 ---
 
