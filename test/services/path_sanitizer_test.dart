@@ -76,6 +76,10 @@ void main() {
       expect(p.canonicalize(file.path).startsWith(p.canonicalize(tempSandboxDir.path)), isTrue);
       expect(sanitizer.isPathSafe('docs/readme.md'), isTrue);
       expect(sanitizer.isPathSafe('../escape.txt'), isFalse);
+
+      final dir = sanitizer.resolveSafeDirectory('nested/folder');
+      expect(p.canonicalize(dir.path).startsWith(p.canonicalize(tempSandboxDir.path)), isTrue);
+      expect(sanitizer.isPathSafe('nested/folder'), isTrue);
     });
 
     test('rejects resolving sandbox root as a single file', () {
@@ -83,6 +87,38 @@ void main() {
         () => sanitizer.resolveSafeFile('.'),
         throwsA(isA<PathSanitizerException>()),
       );
+    });
+
+    test('blocks tilde and UNC share paths', () {
+      expect(() => sanitizer.sanitizeRelativePath('~/.ssh/id_rsa'), throwsA(isA<PathSanitizerException>()));
+      expect(() => sanitizer.sanitizeRelativePath('//server/share'), throwsA(isA<PathSanitizerException>()));
+      expect(() => sanitizer.sanitizeRelativePath('\\\\server\\share'), throwsA(isA<PathSanitizerException>()));
+    });
+
+    test('PathSanitizerException toString contains error message', () {
+      const ex = PathSanitizerException('测试错误描述');
+      expect(ex.toString(), equals('测试错误描述'));
+    });
+
+
+    test('detects symlink escaping sandbox when symlinks are supported by filesystem', () {
+      final outsideDir = Directory.systemTemp.createTempSync('outside_target_');
+      try {
+        final linkPath = p.join(tempSandboxDir.path, 'escape_link');
+        try {
+          Link(linkPath).createSync(outsideDir.path);
+          expect(
+            () => sanitizer.resolveSafeDirectory('escape_link'),
+            throwsA(isA<PathSanitizerException>()),
+          );
+        } on FileSystemException {
+          // OS privilege restriction on Windows non-developer mode: skip gracefully
+        }
+      } finally {
+        if (outsideDir.existsSync()) {
+          outsideDir.deleteSync(recursive: true);
+        }
+      }
     });
   });
 
@@ -137,3 +173,4 @@ void main() {
     });
   });
 }
+

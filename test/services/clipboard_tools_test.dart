@@ -75,5 +75,17 @@ void main() {
       expect(readRes.content, contains('系统剪贴板当前为空'));
       expect(readRes.rawData['isEmpty'], isTrue);
     });
+
+    test('truncates extremely long clipboard content beyond 8000 runes', () async {
+      final longText = 'A' * 10000;
+      await Clipboard.setData(ClipboardData(text: longText));
+
+      final readRes = await readTool.execute({});
+      expect(readRes.success, isTrue);
+      expect(readRes.content, contains('...[已截断]'));
+      expect(readRes.rawData['length'], equals(10000));
+    });
   });
 }
+
+

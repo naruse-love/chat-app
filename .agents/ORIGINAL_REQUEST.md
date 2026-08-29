@@ -326,3 +326,47 @@ Integrity mode: development
 - [ ] `clipboard`（读/写）工具实现并合规集成；
 - [ ] Level 2 敏感工具能够触发 `ToolConfirmationPendingEvent` 并在 UI 中渲染交互确认卡片；
 - [ ] 代码通过 `flutter analyze` 静态分析（0 warnings, 0 errors），开发代码整洁合规。
+
+## Follow-up — 2026-08-29T18:08:42+08:00
+
+对 Milestone 24（本地文件沙箱、Isolate 代码执行沙箱、系统剪贴板工具、Human-in-the-Loop 交互确认卡片框架与安全截断器）执行全量测试套件构建、对抗性加固验证与最终交付。
+
+Working directory: D:\work\chat
+Integrity mode: development
+
+## Requirements
+
+### R1. 全面构建与执行 Milestone 24 自动化测试矩阵
+针对 Milestone 24 所有核心模块进行深度测试覆盖：
+1. **`PathSanitizer` 安全渗透测试**：
+   - 路径穿越攻击防御测试（`../../etc/passwd`、`../` 逃逸）；
+   - 符号链接真实路径解析与越狱防御测试（`resolveSymbolicLinksSync`）；
+   - 5MB 单文件大小上限与 50MB 总工作区配额限制测试；
+2. **本地文件工具集测试 (`file_read`, `file_write`, `file_list`, `file_delete`)**：
+   - 文件分页读取、行号范围读取、创建/覆盖/追加写入、Diff 快照生成、目录递归遍历与删除保护；
+3. **`CodeExecutionService` & `code_eval` 隔离沙箱与超时测试**：
+   - 独立 Worker Isolate 正常计算与脚本执行测试；
+   - 死循环（`while(true)`）及耗时计算的 3000ms 硬超时强杀（`isolate.kill`）与资源回收测试；
+4. **剪贴板工具测试 (`clipboard_read`, `clipboard_write`)**：
+   - 剪贴板读写与安全隔离测试；
+5. **Human-in-the-Loop 交互确认流与 UI 组件测试**：
+   - `ToolConfirmationPendingEvent` 敏感工具挂起与异步决策恢复测试；
+   - 用户「允许执行」与「拒绝操作」在 `AgentService` 与 `chatProvider` 中的端到端链路测试；
+   - `ToolConfirmationCard` 与 `DiffViewerWidget` 差异对比组件 Widget 渲染与交互测试；
+6. **`RuneSafeJsonTruncator` 字符截断测试**：
+   - Unicode Code Point（Rune）字符边界完整性测试（防止 UTF-16 代理对截断乱码）与未闭合 JSON 自动修复测试。
+
+### R2. 质量门禁与工程交付
+- 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat analyze`，输出 **`No issues found!`**（0 error, 0 warning, 0 lint）；
+- 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat test`，所有测试用例 **100% 全部通过（0 failures）**；
+- 确保版本号更新为 `1.09.0+10`，并在 `WORK_LOG.md` 与 `.agents/context.md` 中完备记录 Milestone 24；
+- 提交 Git 并成功推送至 `origin/main`。
+
+## Acceptance Criteria
+
+### 自动化测试与质量指标
+- [ ] 所有 Milestone 24 专属测试套件（PathSanitizer、文件工具、Isolate 超时强杀、剪贴板、HITL 确认卡片、DiffViewer、RuneSafeTruncator）全部通过；
+- [ ] 现有全部回归测试用例 100% 通过（0 failures）；
+- [ ] 静态分析 `flutter analyze` 结果为 `No issues found!`；
+- [ ] 变更已 commit 并 push 到 Git 远程仓库。
+

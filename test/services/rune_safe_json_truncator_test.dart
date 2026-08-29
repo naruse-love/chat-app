@@ -78,5 +78,30 @@ void main() {
       expect(truncated.last, isA<Map>());
       expect(truncated.last['__truncated__'], contains('剩余 20 项已省略'));
     });
+
+    test('preserves Astral plane rare CJK characters without splitting', () {
+      const rareCjk = '𠮷野家 (U+20BB7) 𪚥 (U+2A6A5)';
+      final truncated = RuneSafeJsonTruncator.truncateString(rareCjk, 5, suffix: '...');
+      expect(() => utf8.encode(truncated), returnsNormally);
+      expect(truncated.startsWith('𠮷野家'), isTrue);
+    });
+
+    test('handles incomplete JSON with escaped characters in trailing string', () {
+      const brokenWithEscapes = '{"filepath": "C:\\\\Program Files\\\\App\\\\test.txt';
+      final repaired = RuneSafeJsonTruncator.truncateJsonString(brokenWithEscapes, 30);
+      expect(() => json.decode(repaired), returnsNormally);
+    });
+
+    test('handles 15 levels deeply nested JSON truncation safely', () {
+      Map<String, dynamic> buildDeep(int depth) {
+        if (depth <= 0) return {'leaf': 'Val'};
+        return {'d_$depth': buildDeep(depth - 1)};
+      }
+
+      final jsonStr = json.encode(buildDeep(15));
+      final repaired = RuneSafeJsonTruncator.truncateJsonString(jsonStr, 50);
+      expect(() => json.decode(repaired), returnsNormally);
+    });
   });
 }
+

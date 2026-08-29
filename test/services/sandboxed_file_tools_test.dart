@@ -105,6 +105,52 @@ void main() {
       expect(res.success, isFalse);
       expect(res.errorMessage, contains('文件未找到'));
     });
+
+    test('read out-of-range start_line and clamped end_line', () async {
+      await writeTool.execute({'path': 'short.txt', 'content': 'Line 1\nLine 2\nLine 3'});
+
+      final outOfRangeRes = await readTool.execute({
+        'path': 'short.txt',
+        'start_line': 100,
+      });
+      expect(outOfRangeRes.success, isTrue);
+      expect(outOfRangeRes.rawData['linesRead'], equals(0));
+
+      final clampedRes = await readTool.execute({
+        'path': 'short.txt',
+        'start_line': 2,
+        'end_line': 1,
+      });
+      expect(clampedRes.success, isTrue);
+      expect(clampedRes.rawData['linesRead'], equals(1));
+    });
+
+    test('read fails when target is a directory or missing', () async {
+      sanitizer.resolveSafeDirectory('some_folder').createSync(recursive: true);
+      final res = await readTool.execute({'path': 'some_folder'});
+      expect(res.success, isFalse);
+      expect(res.errorMessage, isNotEmpty);
+    });
+
+    test('write automatically creates deep intermediate directories', () async {
+      final res = await writeTool.execute({
+        'path': 'deep/nested/sub/folder/file.txt',
+        'content': 'Deep file content',
+        'create_directories': true,
+      });
+      expect(res.success, isTrue);
+      expect(sanitizer.resolveSafeFile('deep/nested/sub/folder/file.txt').existsSync(), isTrue);
+    });
+
+    test('write fails when target path is an existing directory', () async {
+      sanitizer.resolveSafeDirectory('existing_dir').createSync(recursive: true);
+      final res = await writeTool.execute({
+        'path': 'existing_dir',
+        'content': 'data',
+      });
+      expect(res.success, isFalse);
+      expect(res.errorMessage, isNotEmpty);
+    });
   });
 
   group('FileListTool & FileDeleteTool Tests', () {
@@ -129,6 +175,25 @@ void main() {
       expect(dartFilesRes.rawData['count'], equals(2));
     });
 
+    test('list handles empty directory and non-existent directory', () async {
+      sanitizer.resolveSafeDirectory('empty_dir').createSync(recursive: true);
+      final emptyRes = await listTool.execute({'directory': 'empty_dir'});
+      expect(emptyRes.success, isTrue);
+      expect(emptyRes.rawData['count'], equals(0));
+
+      final nonExistentRes = await listTool.execute({'directory': 'ghost_dir'});
+      expect(nonExistentRes.success, isFalse);
+      expect(nonExistentRes.errorMessage, contains('目录未找到'));
+    });
+
+    test('list clamps max_depth to valid range 1 to 10', () async {
+      final res = await listTool.execute({
+        'directory': '.',
+        'max_depth': 99,
+      });
+      expect(res.success, isTrue);
+    });
+
     test('deletes file safely and rejects root directory deletion', () async {
       await writeTool.execute({'path': 'to_delete.txt', 'content': 'temporary'});
 
@@ -142,6 +207,13 @@ void main() {
       expect(rootDeleteRes.success, isFalse);
       expect(rootDeleteRes.errorMessage, contains('禁止删除沙箱根目录'));
     });
+
+    test('delete fails when target does not exist', () async {
+      final res = await deleteTool.execute({'path': 'missing_file.txt'});
+      expect(res.success, isFalse);
+      expect(res.errorMessage, contains('不存在'));
+    });
+
 
     test('directory deletion requires recursive: true for non-empty directory', () async {
       await writeTool.execute({'path': 'folder/nested.txt', 'content': 'nested data'});
@@ -158,3 +230,4 @@ void main() {
     });
   });
 }
+

@@ -84,6 +84,40 @@ void main() {
       expect(container.read(agentProvider).isWaitingConfirmation, isFalse);
     });
 
+    test('ChatNotifier respondToToolConfirmation ignores mismatched request ID', () async {
+      final container = ProviderContainer(
+        overrides: [
+          messageDaoProvider.overrideWithValue(MockMessageDao()),
+          apiConfigDaoProvider.overrideWithValue(MockApiConfigDao()),
+          agentServiceProvider.overrideWithValue(MockAgentService()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final chatNotifier = container.read(chatProvider.notifier);
+      final agentNotifier = container.read(agentProvider.notifier);
+
+      final req = ToolConfirmationRequest(
+        confirmationId: 'conf_expected',
+        toolCallId: 't_1',
+        toolName: 'file_delete',
+        displayName: '沙箱文件删除',
+        securityLevel: ToolSecurityLevel.sensitiveConfirm,
+        arguments: {'path': 'important.dat'},
+      );
+
+      agentNotifier.setPendingConfirmation(req);
+      expect(container.read(agentProvider).isWaitingConfirmation, isTrue);
+
+      // Wrong ID must not clear the pending confirmation
+      chatNotifier.respondToToolConfirmation('conf_wrong', allow: true);
+      expect(container.read(agentProvider).isWaitingConfirmation, isTrue);
+
+      // Correct ID clears it
+      chatNotifier.respondToToolConfirmation('conf_expected', allow: false, reason: '用户拒绝');
+      expect(container.read(agentProvider).isWaitingConfirmation, isFalse);
+    });
+
     test('ChatNotifier cancelGeneration clears pending confirmation state', () async {
       final container = ProviderContainer(
         overrides: [
@@ -117,3 +151,4 @@ void main() {
     });
   });
 }
+

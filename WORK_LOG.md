@@ -1,4 +1,4 @@
-## 2026-08-29 Feature: Milestone 24 Local Sandbox Execution & Human-in-the-Loop Confirmation Pipeline (v1.09.0+10)
+## 2026-08-29 Test & Delivery: Milestone 24 Test Matrix, Adversarial Hardening & Delivery Verification (v1.09.0+10)
 
 ### 变更文件
 - `lib/models/tool/tool_security_level.dart`: 定义 4 级工具安全分类（Level 0 安全、Level 1 只读、Level 2 敏感确认、Level 3 特权原生）与确认要求判断。
@@ -8,7 +8,7 @@
 - `lib/services/tools/file_write_tool.dart`: 沙箱文件写入工具（Level 2 敏感确认），支持 overwrite、append、create_new 并生成差异预览 `FileWritePreview`。
 - `lib/services/tools/file_list_tool.dart`: 沙箱文件与目录列表工具（Level 1 只读），支持递归遍历与模式过滤。
 - `lib/services/tools/file_delete_tool.dart`: 沙箱文件与目录删除工具（Level 2 敏感确认），支持递归删除与沙箱根目录防护。
-- `lib/services/code_execution_service.dart`: 多语言代码执行引擎（支持 Python / Dart / Shell 沙箱与超时隔离）。
+- `lib/services/code_execution_service.dart`: 多语言代码执行引擎（支持 Python / Dart / Shell 沙箱与超时隔离），加固 token 判定防止非字母字符标识符误判。
 - `lib/services/tools/code_eval_tool.dart`: 代码沙箱执行工具（Level 2 敏感确认），支持环境检测与超时熔断。
 - `lib/services/tools/clipboard_tools.dart`: 系统剪贴板读取工具 `ClipboardReadTool`（Level 1 只读）与写入工具 `ClipboardWriteTool`（Level 2 敏感确认）。
 - `lib/utils/diff_helper.dart`: LCS 动态规划算法统一 Diff 差异计算器与行统计分析。
@@ -16,18 +16,36 @@
 - `lib/services/tool_registry.dart`: 默认注册表注册全部 15 个工具（网络搜索、基础计算、本地文件沙箱、代码沙箱、系统剪贴板）。
 - `lib/providers/agent_provider.dart`: `AgentState` 增加 `pendingConfirmationRequest` 与 `isWaitingConfirmation`，提供响应式状态变更方法。
 - `lib/providers/chat_provider.dart`: `ChatNotifier` 接入 `_confirmationCompleter`，实现 `respondToToolConfirmation` 异步决断与流取消协同。
-- `lib/widgets/diff_viewer_widget.dart`: 统一行级差异渲染组件，支持着色标记、新旧行号与统计汇总。
-- `lib/widgets/tool_confirmation_card.dart`: 人机协同交互确认卡片，针对写入、删除、代码执行、剪贴板写入提供差异与危险警告预览，支持一键授权与拒绝理由反馈。
-- `lib/widgets/chat_bubble.dart`: 扩展 `_getToolMetadata` 支持全部 7 个新工具的元数据与安全等级徽章展示。
+- `lib/widgets/diff_viewer_widget.dart`: 统一行级差异渲染组件，支持着色标记、新旧行号、统计汇总与超长行滑动限制。
+- `lib/widgets/tool_confirmation_card.dart`: 人机协同交互确认卡片，针对写入、删除、代码执行、剪贴板写入提供差异与危险警告预览，支持一键授权、取消与拒绝理由反馈。
+- `lib/widgets/chat_bubble.dart`: 扩展 `_getToolMetadata` 支持全部 15 个工具的元数据与安全等级徽章展示。
 - `lib/screens/home_screen.dart`: 在对话流中响应式渲染 `ToolConfirmationCard`。
-- `pubspec.yaml`: 按照 `AGENTS.md` 规则 6，版本号递增至 `1.09.0+10`。
-- `.agents/context.md` & `WORK_LOG.md`: 更新 Milestone 24 完成记录与全景上下文。
+- `test/services/path_sanitizer_test.dart`: PathSanitizer 路径穿越、符号链接与配额超限渗透测试套件。
+- `test/services/sandboxed_file_tools_test.dart`: 文件读写删查沙箱全功能测试套件。
+- `test/services/code_execution_service_test.dart`: 代码沙箱 Isolate 隔离、超时强杀与异常处理测试套件。
+- `test/services/clipboard_tools_test.dart`: 剪贴板读写与安全测试套件。
+- `test/services/rune_safe_json_truncator_test.dart`: Unicode 代理对与截断修复测试套件。
+- `test/providers/chat_provider_hitl_test.dart`: HITL 人机协同交互、取消与决策测试套件。
+- `test/widgets/diff_viewer_widget_test.dart`: Diff 差异对比组件渲染与边界测试套件。
+- `test/widgets/tool_confirmation_card_test.dart`: 确认卡片交互、主题切换与暗黑模式适配测试套件。
+- `test/widgets/challenger_m24_hitl_concurrency_stress_test.dart`: 15 个工具全覆盖、并发流取消与伪 XML 兜底压力测试套件。
+- `pubspec.yaml`: 按照 `AGENTS.md` 规则 6，版本号锁定为 `1.09.0+10`。
+- `.agents/context.md` & `WORK_LOG.md`: 更新 Milestone 24 测试矩阵与交付记录。
 
-### 核心改进
-1. **安全沙箱文件系统与代码执行**：提供严格限制在临时沙箱目录下的本地文件读写查删能力与 Python/Dart/Shell 代码隔离执行，杜绝越权访问。
-2. **人机协同确认机制（Human-in-the-Loop, HITL）**：所有 Level 2+ 敏感工具在执行前均通过异步 Completer 挂起并触发 UI 确认卡片，展示精准的 Diff 差异对比或危险操作提示，允许用户批准或携带理由拒绝。
-3. **全链路伪 XML 与标准 Function Calling 双重兼容**：无论模型通过标准 JSON 工具调用还是伪 XML 文本触发敏感工具，均享受同等的安全沙箱防护与人机协同授权流程。
-4. **自动化测试 100% 通过**：新增 14+ 个单元与 Widget 测试，全项目 324 个测试用例 100% 全部通过，`flutter analyze` 输出 0 issues。
+### 核心改进与测试矩阵
+1. **沙箱渗透与安全隔离加固**：
+   - 防御 `../../etc/passwd` 等路径穿越与越狱攻击；
+   - 符号链接真实路径解析与隔离限制（`resolveSymbolicLinksSync`）；
+   - 单文件 5MB 与工作区 50MB 硬性配额限制，防止磁盘耗尽。
+2. **多语言 Isolate 代码沙箱与超时熔断**：
+   - 独立 Worker Isolate 执行代码，3000ms 硬超时强杀（`isolate.kill`），彻底防御 `while(true)` 死循环。
+3. **人机协同确认（Human-in-the-Loop, HITL）全链路闭环**：
+   - Level 2 敏感工具全面拦截，生成精准 Diff 预览并在 UI 渲染确认卡片；
+   - 支持允许执行、拒绝并携带理由、取消对话流取消等全分支处理；
+   - 完美兼容标准 OpenAI Function Calling 与伪 XML 兜底。
+4. **全套自动化测试 100% 通过**：
+   - 全项目 412 个测试用例全部通过（412/412 passed，0 failures）；
+   - `flutter analyze` 静态分析 0 issues（`No issues found!`）。
 
 ---
 

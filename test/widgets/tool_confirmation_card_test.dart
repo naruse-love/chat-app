@@ -176,5 +176,90 @@ void main() {
       expect(find.text('写入系统剪贴板内容:'), findsOneWidget);
       expect(find.text('copied token 123456'), findsOneWidget);
     });
+
+    testWidgets('Triggers onCancel callback when close icon button is tapped', (tester) async {
+      bool cancelCalled = false;
+      final request = ToolConfirmationRequest(
+        confirmationId: 'req_canc',
+        toolCallId: 'call_canc',
+        toolName: 'file_delete',
+        displayName: '沙箱文件删除',
+        securityLevel: ToolSecurityLevel.sensitiveConfirm,
+        arguments: {'path': 'cancel_me.txt'},
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ToolConfirmationCard(
+              request: request,
+              onDecision: ({required bool allow, String? reason}) {},
+              onCancel: () {
+                cancelCalled = true;
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byTooltip('取消'));
+      await tester.pumpAndSettle();
+      expect(cancelCalled, isTrue);
+    });
+
+    testWidgets('Renders default fallback description when request description is null', (tester) async {
+      final request = ToolConfirmationRequest(
+        confirmationId: 'req_nodesc',
+        toolCallId: 'call_nodesc',
+        toolName: 'custom_native_tool',
+        displayName: '自定义特权工具',
+        securityLevel: ToolSecurityLevel.privilegedNative,
+        arguments: {'action': 'reboot', 'force': true},
+        description: null,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ToolConfirmationCard(
+              request: request,
+              onDecision: ({required bool allow, String? reason}) {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('模型请求执行受限操作，需要您的明确确认。'), findsOneWidget);
+      expect(find.text('特权原生'), findsOneWidget);
+      expect(find.textContaining('action: reboot'), findsOneWidget);
+    });
+
+    testWidgets('Renders properly in Dark Theme without overflow', (tester) async {
+      final request = ToolConfirmationRequest(
+        confirmationId: 'req_dark',
+        toolCallId: 'call_dark',
+        toolName: 'code_eval',
+        displayName: '代码沙箱执行',
+        securityLevel: ToolSecurityLevel.sensitiveConfirm,
+        arguments: {'code': 'return 42;'},
+        description: '暗色主题测试',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: Scaffold(
+            body: ToolConfirmationCard(
+              request: request,
+              onDecision: ({required bool allow, String? reason}) {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('代码沙箱执行'), findsOneWidget);
+      expect(find.text('暗色主题测试'), findsOneWidget);
+    });
   });
 }
+

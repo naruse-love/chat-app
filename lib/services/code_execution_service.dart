@@ -521,7 +521,11 @@ class _Parser {
   _ScriptToken get _cur => _idx < tokens.length ? tokens[_idx] : tokens.last;
   _ScriptToken get _prev => _idx > 0 ? tokens[_idx - 1] : tokens.first;
 
-  bool _check(String text) => _cur.text == text && _cur.type != _TokenType.eof;
+  bool _check(String text) =>
+      _cur.text == text &&
+      _cur.type != _TokenType.string &&
+      _cur.type != _TokenType.number &&
+      _cur.type != _TokenType.eof;
   bool get _isAtEnd => _cur.type == _TokenType.eof;
 
   _ScriptToken _advance() {

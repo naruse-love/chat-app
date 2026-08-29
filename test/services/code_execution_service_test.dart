@@ -71,6 +71,82 @@ return {
       expect(res.errorMessage, contains('除数不能为零'));
     });
 
+    test('supports comprehensive math functions and rounding', () async {
+      const code = '''
+var p = pow(2, 8);
+var mn = min(10, 5);
+var mx = max(10, 5);
+var r = round(3.7);
+var f = floor(3.7);
+var c = ceil(3.2);
+return {
+  "pow": p,
+  "min": mn,
+  "max": mx,
+  "round": r,
+  "floor": f,
+  "ceil": c
+};
+''';
+      final res = await service.execute(code: code);
+      expect(res.success, isTrue);
+      final map = res.result as Map;
+      expect(map['pow'], equals(256));
+      expect(map['min'], equals(5));
+      expect(map['max'], equals(10));
+      expect(map['round'], equals(4));
+      expect(map['floor'], equals(3));
+      expect(map['ceil'], equals(4));
+    });
+
+    test('supports string methods and manipulations', () async {
+      const code = '''
+var str = "  Hello, Dart & Flutter!  ";
+var trimmed = str.trim();
+var upper = trimmed.toUpperCase();
+var hasDart = trimmed.contains("Dart");
+var parts = trimmed.split(" ");
+return {
+  "trimmed": trimmed,
+  "upper": upper,
+  "hasDart": hasDart,
+  "partCount": parts.length
+};
+''';
+      final res = await service.execute(code: code);
+      expect(res.success, isTrue);
+      final map = res.result as Map;
+      expect(map['trimmed'], equals('Hello, Dart & Flutter!'));
+      expect(map['upper'], equals('HELLO, DART & FLUTTER!'));
+      expect(map['hasDart'], isTrue);
+      expect(map['partCount'], equals(4));
+    });
+
+    test('supports list and map methods', () async {
+      const code = '''
+var numbers = [1, 2, 3];
+numbers.add(4);
+var hasThree = numbers.contains(3);
+var joined = numbers.join(",");
+var person = {"name": "Alice", "age": 30};
+var hasAge = person.containsKey("age");
+return {
+  "length": numbers.length,
+  "hasThree": hasThree,
+  "joined": joined,
+  "hasAge": hasAge
+};
+''';
+      final res = await service.execute(code: code);
+      expect(res.success, isTrue, reason: res.errorMessage);
+      final map = res.result as Map;
+      expect(map['length'], equals(4));
+      expect(map['hasThree'], isTrue, reason: res.errorMessage);
+      expect(map['joined'], equals('1,2,3,4'), reason: res.errorMessage);
+      expect(map['hasAge'], isTrue, reason: res.errorMessage);
+    });
+
+
     test('enforces hard timeout and terminates infinite loop without freezing UI', () async {
       const infiniteLoop = '''
 while (true) {
@@ -108,6 +184,20 @@ while (true) {
       expect(res.content, contains('200'));
     });
 
+    test('clamps timeout parameter between 500ms and 5000ms', () async {
+      final resLow = await evalTool.execute({
+        'code': 'return 1;',
+        'timeout_ms': 50, // Below 500ms
+      });
+      expect(resLow.success, isTrue);
+
+      final resHigh = await evalTool.execute({
+        'code': 'return 2;',
+        'timeout_ms': 10000, // Above 5000ms
+      });
+      expect(resHigh.success, isTrue);
+    });
+
     test('rejects empty code with clear error', () async {
       final res = await evalTool.execute({'code': '   '});
       expect(res.success, isFalse);
@@ -115,3 +205,4 @@ while (true) {
     });
   });
 }
+
