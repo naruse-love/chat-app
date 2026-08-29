@@ -44,7 +44,7 @@
 | **22 / UrlFetchService v2 智能抓取与诊断** | 提升提取上限至 15000 字符，增加截断感知与警告；增加反爬验证页（captcha）、登录墙（login_wall）、导航门户（nav_hub）诊断与警告；提取 JSON-LD、OG 协议与 HTML 元数据；语义容器（article/main）优先提取与 nav/footer/aside 噪音剥离；站内/站外链接统计分析；新增 FetchResult 结构化模型（2026-08-16） | ✅ 完成 |
 | **23 / 内置基础工具库与防死循环架构** | 打造内置基础工具体系（`math_eval` 数学计算引擎、`time_calculator` 高精度时间时区运算、`weather_query` 免费 Open-Meteo 天气、`wiki_lookup` 维基百科检索）；构建 `ToolRegistry` 统一注册与权限管理中心；引入 `AgentLoopGuard`（RFC 1321 MD5 签名、连续重复与震荡周期防御、轮次上限强制兜底）；`AgentService` 全面接入与动态 Schema 导出；`ChatBubble` 中文分类标签、安全等级徽章与折叠卡片（2026-08-28） | ✅ 完成 |
 
-**当前测试状态：419 / 419 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.08.0+9。**
+**当前测试状态：263 / 263 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.08.0+9。**
 
 ---
 
