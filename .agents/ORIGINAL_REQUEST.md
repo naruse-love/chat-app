@@ -283,4 +283,46 @@ Integrity mode: development
 - [ ] 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat test`，所有测试用例 **100% 全部通过（0 failures）**；
 - [ ] 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat analyze`，输出 **`No issues found!`**；
 - [ ] 项目版本号递增为 `1.08.0+9`，并在 `WORK_LOG.md` 顶部与 `.agents/context.md` 中追加 Milestone 23 记录。
+## Follow-up — 2026-08-29T13:03:35+08:00
 
+在 Flutter AI 聊天应用中实现 Milestone 24：构建本地文件系统沙箱（PathSanitizer、文件读写/检索/删除）、Worker Isolate 代码解释执行沙箱（code_eval）、系统剪贴板工具，以及敏感工具调用的 Human-in-the-Loop 交互确认卡片框架。（注意：完成全套核心功能开发与初步静态检查，进入全面测试前暂停并汇报）。
+
+Working directory: D:\work\chat
+Integrity mode: development
+
+## Requirements
+
+### R1. 本地文件系统安全沙箱与文件操作工具库 (Sandboxed File System Tools)
+- 实现 `PathSanitizer` 安全路径检查器：禁止绝对路径越权与 `../` 目录遍历攻击，通过 `resolveSymbolicLinksSync()` 防范符号链接逃逸，限制单文件最大 5MB、总工作区上限 50MB；
+- 实现 4 个本地文件操作标准 `Tool`：
+  1. `file_read` [Level 1 只读]：安全读取沙箱内文件内容，支持按起始行/结束行分块分页读取；
+  2. `file_write` [Level 2 敏感确认]：创建或覆盖/追加写入沙箱文件，生成变更 Diff 与自动版本快照；
+  3. `file_list` [Level 1 只读]：递归列出沙箱目录树、文件大小与修改时间，支持通配符 glob/正则匹配；
+  4. `file_delete` [Level 2 敏感确认]：安全删除指定沙箱文件或子目录；
+- 在 `ToolRegistry` 中自动注册以上文件工具。
+
+### R2. 隔离沙箱代码执行与剪贴板工具 (Code Execution Sandbox & Clipboard)
+- 实现 `CodeExecutionService` 与 `code_eval` 工具 [Level 2 敏感确认]：
+  - 基于独立 `Isolate.spawn` 建立隔离 Worker Isolate，支持纯 Dart/JS 轻量脚本解释执行与数据计算；
+  - 设定 3000ms 硬超时机制，超时即调用 `isolate.kill(priority: Isolate.immediate)`，彻底杜绝死循环挂起 UI；
+- 实现 `clipboard` 工具：
+  - `clipboard_read` [Level 1 只读]：安全读取系统剪贴板文本；
+  - `clipboard_write` [Level 2 敏感确认]：向系统剪贴板写入文本。
+
+### R3. Human-in-the-Loop 交互确认卡片框架与流式事件
+- 在 `AgentService` 与流式事件体系中新增 `ToolConfirmationPendingEvent` 与决策等待机制；
+- 当大模型触发 Level 2 敏感工具（如 `file_write`, `file_delete`, `code_eval`, `clipboard_write`）时，拦截并挂起执行，在 UI（`ChatBubble`）中呈现交互确认卡片（包含操作类型、参数预览、Diff 变化，以及「允许执行」与「拒绝/取消」按钮）；
+- 用户点击后恢复执行，若用户拒绝则向大模型返回明确的中文拒绝理由以自适应调整。
+
+### R4. 上下文安全截断器与开发阶段暂停约束
+- 实现 `RuneSafeJsonTruncator`，针对超长工具入参与返回结果进行 Unicode 字符边界保护与 JSON 语法完整性截断保护；
+- **阶段性约束**：完整完成 Milestone 24 的所有数据模型、核心服务、工具类、UI 确认卡片与 Registry 接入，保证 `flutter analyze` 0 issues；开发完成且即将进入大规模编写测试/回归测试前暂停并输出成果汇报。
+
+## Acceptance Criteria
+
+### 架构与核心功能完备性
+- [ ] `PathSanitizer`、`file_read`、`file_write`、`file_list`、`file_delete` 完整实现并注册至 `ToolRegistry`；
+- [ ] `CodeExecutionService` 与 `code_eval` 能够在独立 Isolate 中安全执行并具备 3000ms 硬超时保护；
+- [ ] `clipboard`（读/写）工具实现并合规集成；
+- [ ] Level 2 敏感工具能够触发 `ToolConfirmationPendingEvent` 并在 UI 中渲染交互确认卡片；
+- [ ] 代码通过 `flutter analyze` 静态分析（0 warnings, 0 errors），开发代码整洁合规。

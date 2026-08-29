@@ -7,6 +7,14 @@ import 'tools/math_eval_tool.dart';
 import 'tools/time_calculator_tool.dart';
 import 'tools/weather_query_tool.dart';
 import 'tools/wiki_lookup_tool.dart';
+import 'tools/file_read_tool.dart';
+import 'tools/file_write_tool.dart';
+import 'tools/file_list_tool.dart';
+import 'tools/file_delete_tool.dart';
+import 'tools/code_eval_tool.dart';
+import 'tools/clipboard_tools.dart';
+import 'path_sanitizer.dart';
+import 'code_execution_service.dart';
 import 'search_service.dart';
 import 'url_fetch_service.dart';
 
@@ -17,11 +25,13 @@ class ToolRegistry {
 
   ToolRegistry();
 
-  /// Pre-populates a default registry containing built-in search, fetch, and safe basic tools.
+  /// Pre-populates a default registry containing built-in search, fetch, safe basic, file, code, and clipboard tools.
   factory ToolRegistry.defaultRegistry({
     SearchService? searchService,
     UrlFetchService? urlFetchService,
     Dio? dio,
+    PathSanitizer? pathSanitizer,
+    CodeExecutionService? codeExecutionService,
   }) {
     final registry = ToolRegistry();
     registry.registerTools([
@@ -35,6 +45,14 @@ class ToolRegistry {
       TimeCalculatorTool(),
       WeatherQueryTool(dio: dio),
       WikiLookupTool(dio: dio),
+      // Local sandboxed file tools & code execution & clipboard (Milestone 24)
+      FileReadTool(pathSanitizer: pathSanitizer),
+      FileWriteTool(pathSanitizer: pathSanitizer),
+      FileListTool(pathSanitizer: pathSanitizer),
+      FileDeleteTool(pathSanitizer: pathSanitizer),
+      CodeEvalTool(codeExecutionService: codeExecutionService),
+      const ClipboardReadTool(),
+      const ClipboardWriteTool(),
     ]);
     return registry;
   }

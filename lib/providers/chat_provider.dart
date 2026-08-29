@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:uuid/uuid.dart';
 import '../models/chat_message.dart';
 import '../models/conversation.dart';
+import '../models/tool/tool_confirmation.dart';
 import '../data/message_dao.dart';
 import '../data/api_config_dao.dart';
 import '../services/agent_service.dart';
@@ -79,6 +81,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
   
   CancelToken? _cancelToken;
+  Completer<ToolConfirmationDecision>? _confirmationCompleter;
   bool _sendingInProgress = false;
 
   ChatNotifier(this._messageDao, this._agentService, this._apiConfigDao, this._ref) : super(ChatState());
@@ -279,6 +282,31 @@ class ChatNotifier extends StateNotifier<ChatState> {
     state = state.copyWith(messages: freshMessages, error: null);
   }
 
+  Future<ToolConfirmationDecision> _handleToolConfirmation(ToolConfirmationRequest request) {
+    _ref.read(agentProvider.notifier).setPendingConfirmation(request);
+    _confirmationCompleter = Completer<ToolConfirmationDecision>();
+    return _confirmationCompleter!.future;
+  }
+
+  /// Responds to a pending Level 2 tool confirmation request with approval or rejection.
+  void respondToToolConfirmation(
+    String requestId, {
+    required bool allow,
+    String? reason,
+  }) {
+    final currentRequest = _ref.read(agentProvider).pendingConfirmationRequest;
+    if (currentRequest != null && currentRequest.confirmationId == requestId) {
+      _ref.read(agentProvider.notifier).clearPendingConfirmation();
+      if (_confirmationCompleter != null && !_confirmationCompleter!.isCompleted) {
+        if (allow) {
+          _confirmationCompleter!.complete(ToolConfirmationDecision.approve());
+        } else {
+          _confirmationCompleter!.complete(ToolConfirmationDecision.reject(reason));
+        }
+      }
+    }
+  }
+
   /// Core streaming logic shared by sendMessage, editAndResend, regenerateLastResponse.
   Future<void> _startStreaming(String conversationId) async {
     final activeConfig = _ref.read(apiConfigProvider).activeConfig;
@@ -330,6 +358,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         reasoningEffort: settings.reasoningEffort,
         enableAutoSearch: settings.enableAutoSearch,
         cancelToken: _cancelToken,
+        onConfirmTool: _handleToolConfirmation,
       );
 
       await for (final event in stream) {
@@ -348,6 +377,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
           _ref.read(agentProvider.notifier).startUrlFetch(event.url);
         } else if (event is UrlFetchCompletedEvent) {
           _ref.read(agentProvider.notifier).completeUrlFetch();
+        } else if (event is ToolConfirmationPendingEvent) {
+          _ref.read(agentProvider.notifier).setPendingConfirmation(event.request);
         } else if (event is ToolCallExecutedMessageEvent) {
           await _messageDao.insert(event.assistantMessage);
           for (final toolMsg in event.toolMessages) {
@@ -440,12 +471,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
       }
     } finally {
       _cancelToken = null;
+      _confirmationCompleter = null;
       _ref.read(agentProvider.notifier).reset();
     }
   }
 
   void cancelGeneration() {
     _cancelToken?.cancel('User stopped execution');
+    if (_confirmationCompleter != null && !_confirmationCompleter!.isCompleted) {
+      _confirmationCompleter!.complete(ToolConfirmationDecision.cancel());
+    }
+    _ref.read(agentProvider.notifier).clearPendingConfirmation();
   }
 
   void cancelActiveStream() {

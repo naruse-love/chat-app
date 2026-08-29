@@ -397,7 +397,7 @@ void main() {
   });
 
   group('Riverpod Provider Tests', () {
-    test('toolRegistryProvider initializes default registry with 8 built-in tools', () {
+    test('toolRegistryProvider initializes default registry with 15 built-in tools', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
@@ -410,7 +410,14 @@ void main() {
       expect(registry.hasTool('time_calculator'), isTrue);
       expect(registry.hasTool('weather_query'), isTrue);
       expect(registry.hasTool('wiki_lookup'), isTrue);
-      expect(registry.getAllTools().length, equals(8));
+      expect(registry.hasTool('file_read'), isTrue);
+      expect(registry.hasTool('file_write'), isTrue);
+      expect(registry.hasTool('file_list'), isTrue);
+      expect(registry.hasTool('file_delete'), isTrue);
+      expect(registry.hasTool('code_eval'), isTrue);
+      expect(registry.hasTool('clipboard_read'), isTrue);
+      expect(registry.hasTool('clipboard_write'), isTrue);
+      expect(registry.getAllTools().length, equals(15));
     });
   });
 }

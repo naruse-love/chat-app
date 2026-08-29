@@ -86,6 +86,62 @@ _ToolMeta _getToolMetadata(String toolName) {
         securityLevelBadge: '只读 Level 1',
         categoryColor: Colors.green,
       );
+    case 'file_read':
+      return const _ToolMeta(
+        displayName: '沙箱文件读取',
+        category: '文件系统',
+        icon: Icons.file_open,
+        securityLevelBadge: '只读 Level 1',
+        categoryColor: Colors.blueGrey,
+      );
+    case 'file_write':
+      return const _ToolMeta(
+        displayName: '沙箱文件写入',
+        category: '文件系统',
+        icon: Icons.edit_document,
+        securityLevelBadge: '需确认 Level 2',
+        categoryColor: Colors.deepOrange,
+      );
+    case 'file_list':
+      return const _ToolMeta(
+        displayName: '沙箱目录列表',
+        category: '文件系统',
+        icon: Icons.folder,
+        securityLevelBadge: '只读 Level 1',
+        categoryColor: Colors.brown,
+      );
+    case 'file_delete':
+      return const _ToolMeta(
+        displayName: '沙箱文件删除',
+        category: '文件系统',
+        icon: Icons.delete_forever,
+        securityLevelBadge: '需确认 Level 2',
+        categoryColor: Colors.red,
+      );
+    case 'code_eval':
+      return const _ToolMeta(
+        displayName: '代码沙箱执行',
+        category: '代码执行',
+        icon: Icons.terminal,
+        securityLevelBadge: '需确认 Level 2',
+        categoryColor: Colors.deepPurple,
+      );
+    case 'clipboard_read':
+      return const _ToolMeta(
+        displayName: '读取剪贴板',
+        category: '系统交互',
+        icon: Icons.content_paste,
+        securityLevelBadge: '只读 Level 1',
+        categoryColor: Colors.lightBlue,
+      );
+    case 'clipboard_write':
+      return const _ToolMeta(
+        displayName: '写入剪贴板',
+        category: '系统交互',
+        icon: Icons.content_copy,
+        securityLevelBadge: '需确认 Level 2',
+        categoryColor: Colors.orange,
+      );
     default:
       return _ToolMeta(
         displayName: toolName,

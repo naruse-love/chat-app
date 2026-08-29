@@ -9,6 +9,7 @@ import '../providers/agent_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/chat_input.dart';
+import '../widgets/tool_confirmation_card.dart';
 import '../models/chat_message.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -328,6 +329,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   foregroundColor: theme.colorScheme.onErrorContainer,
                 ),
               ),
+            ),
+
+          // Pending Tool Confirmation Card (Milestone 24 HITL)
+          if (agentState.isWaitingConfirmation && agentState.pendingConfirmationRequest != null)
+            ToolConfirmationCard(
+              request: agentState.pendingConfirmationRequest!,
+              onDecision: ({required bool allow, String? reason}) {
+                ref.read(chatProvider.notifier).respondToToolConfirmation(
+                  agentState.pendingConfirmationRequest!.confirmationId,
+                  allow: allow,
+                  reason: reason,
+                );
+              },
+              onCancel: () {
+                ref.read(chatProvider.notifier).cancelActiveStream();
+              },
             ),
 
           // Chat Input panel

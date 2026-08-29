@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/search_service.dart';
+import '../models/tool/tool_confirmation.dart';
 
 class AgentState {
   final bool isSearching;
@@ -7,6 +8,9 @@ class AgentState {
   final List<SearchResult> searchResults;
   final bool isFetchingUrl;
   final String fetchingUrl;
+  final ToolConfirmationRequest? pendingConfirmationRequest;
+
+  bool get isWaitingConfirmation => pendingConfirmationRequest != null;
 
   AgentState({
     this.isSearching = false,
@@ -14,6 +18,7 @@ class AgentState {
     this.searchResults = const [],
     this.isFetchingUrl = false,
     this.fetchingUrl = '',
+    this.pendingConfirmationRequest,
   });
 
   AgentState copyWith({
@@ -22,6 +27,8 @@ class AgentState {
     List<SearchResult>? searchResults,
     bool? isFetchingUrl,
     String? fetchingUrl,
+    ToolConfirmationRequest? pendingConfirmationRequest,
+    bool clearPendingConfirmation = false,
   }) {
     return AgentState(
       isSearching: isSearching ?? this.isSearching,
@@ -29,6 +36,9 @@ class AgentState {
       searchResults: searchResults ?? this.searchResults,
       isFetchingUrl: isFetchingUrl ?? this.isFetchingUrl,
       fetchingUrl: fetchingUrl ?? this.fetchingUrl,
+      pendingConfirmationRequest: clearPendingConfirmation
+          ? null
+          : (pendingConfirmationRequest ?? this.pendingConfirmationRequest),
     );
   }
 }
@@ -43,6 +53,7 @@ class AgentNotifier extends StateNotifier<AgentState> {
       searchResults: const [],
       isFetchingUrl: false,
       fetchingUrl: '',
+      pendingConfirmationRequest: null,
     );
   }
 
@@ -60,6 +71,7 @@ class AgentNotifier extends StateNotifier<AgentState> {
       searchResults: const [],
       isFetchingUrl: true,
       fetchingUrl: url,
+      pendingConfirmationRequest: null,
     );
   }
 
@@ -67,6 +79,18 @@ class AgentNotifier extends StateNotifier<AgentState> {
     state = state.copyWith(
       isFetchingUrl: false,
       fetchingUrl: '',
+    );
+  }
+
+  void setPendingConfirmation(ToolConfirmationRequest request) {
+    state = state.copyWith(
+      pendingConfirmationRequest: request,
+    );
+  }
+
+  void clearPendingConfirmation() {
+    state = state.copyWith(
+      clearPendingConfirmation: true,
     );
   }
 

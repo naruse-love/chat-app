@@ -14,10 +14,19 @@ import 'tools/math_eval_tool.dart';
 import 'tools/time_calculator_tool.dart';
 import 'tools/weather_query_tool.dart';
 import 'tools/wiki_lookup_tool.dart';
+import 'tools/file_write_tool.dart';
+import '../models/tool/tool.dart';
+import '../models/tool/tool_confirmation.dart';
 
 /// Base class for all events yielded during agent execution.
 abstract class AgentStreamEvent {
   const AgentStreamEvent();
+}
+
+/// Yielded when a Level 2 (or higher) sensitive tool execution requires user confirmation.
+class ToolConfirmationPendingEvent extends AgentStreamEvent {
+  final ToolConfirmationRequest request;
+  const ToolConfirmationPendingEvent(this.request);
 }
 
 /// Yielded when the model emits streaming reasoning text.
@@ -356,6 +365,31 @@ class AgentService {
     return cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
+  /// Generates tool preview metadata for Level 2 confirmation cards.
+  dynamic _buildToolPreviewData(String name, Tool? toolObj, Map<String, dynamic> args) {
+    if (name == 'file_write' && toolObj is FileWriteTool) {
+      final rawPath = args['path']?.toString() ?? '';
+      final content = args['content']?.toString() ?? '';
+      final mode = args['mode']?.toString() ?? 'overwrite';
+      return toolObj.generateDiffPreview(rawPath, content, mode: mode);
+    } else if (name == 'file_delete') {
+      return {
+        'path': args['path']?.toString() ?? '',
+        'recursive': args['recursive'] == true,
+      };
+    } else if (name == 'code_eval') {
+      return {
+        'code': args['code']?.toString() ?? '',
+        'timeout_ms': args['timeout_ms'] ?? 3000,
+      };
+    } else if (name == 'clipboard_write') {
+      return {
+        'text': args['text']?.toString() ?? '',
+      };
+    }
+    return args;
+  }
+
   /// Main entry point coordinating completion streaming, tool execution, and manual trigger.
   Stream<AgentStreamEvent> chatAndSearchStream({
     required String baseUrl,
@@ -374,6 +408,7 @@ class AgentService {
     CancelToken? cancelToken,
     int maxToolRounds = 100,
     AgentLoopGuard? guard,
+    Future<ToolConfirmationDecision> Function(ToolConfirmationRequest)? onConfirmTool,
   }) async* {
     // Inject system prompt if provided (prepend after removing any existing system messages)
     List<ChatMessage> effectiveMessages;
@@ -500,6 +535,7 @@ class AgentService {
         cancelToken: cancelToken,
         maxToolRounds: maxToolRounds,
         guard: activeGuard,
+        onConfirmTool: onConfirmTool,
       );
     } else {
       final accumulatedToolCalls = <int, _ToolCallAccumulator>{};
@@ -629,33 +665,98 @@ class AgentService {
 
           _checkCancellation(cancelToken);
 
-          if (name == 'url_fetch') {
-            final url = args['url'] as String? ?? '';
-            yield UrlFetchStartedEvent(url);
-          } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-            final query = args['query'] as String? ?? '';
-            yield ToolCallStartedEvent(query);
+          final toolObj = _toolRegistry.getTool(name);
+          final requiresConfirmation =
+              toolObj != null && toolObj.securityLevel.requiresConfirmation && onConfirmTool != null;
+
+          ToolExecutionResult result;
+
+          if (requiresConfirmation) {
+            final confirmationRequest = ToolConfirmationRequest(
+              confirmationId: _uuid.v4(),
+              toolCallId: entry.id,
+              toolName: name,
+              displayName: toolObj.displayName,
+              securityLevel: toolObj.securityLevel,
+              arguments: args,
+              description: toolObj.description,
+              previewData: _buildToolPreviewData(name, toolObj, args),
+              status: ToolConfirmationStatus.pending,
+            );
+
+            yield ToolConfirmationPendingEvent(confirmationRequest);
+
+            final decision = await onConfirmTool(confirmationRequest);
+            _checkCancellation(cancelToken);
+
+            if (decision.isCancelled) {
+              return;
+            }
+
+            if (decision.isRejected) {
+              final reason = decision.rejectionReason ?? '用户拒绝了执行权限';
+              result = ToolExecutionResult.failure(
+                toolName: name,
+                errorMessage: '用户已拒绝执行此操作',
+                content: '【用户已拒绝执行此操作】原因：$reason',
+                rawData: {'rejected': true, 'rejectionReason': reason},
+              );
+            } else {
+              // Approved
+              if (name == 'url_fetch') {
+                final url = args['url'] as String? ?? '';
+                yield UrlFetchStartedEvent(url);
+              } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+                final query = args['query'] as String? ?? '';
+                yield ToolCallStartedEvent(query);
+              } else {
+                final title = '${toolObj.displayName}: ${args.values.join(', ')}';
+                yield ToolCallStartedEvent(title);
+              }
+
+              result = await _toolRegistry.execute(name, args, context: context);
+              _checkCancellation(cancelToken);
+
+              if (name == 'url_fetch') {
+                final url = args['url'] as String? ?? '';
+                yield UrlFetchCompletedEvent(url, result.content);
+              } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+                final query = args['query'] as String? ?? '';
+                final rawResults = (result.rawData is List<SearchResult>)
+                    ? (result.rawData as List<SearchResult>)
+                    : <SearchResult>[];
+                yield ToolCallCompletedEvent(query, rawResults);
+              } else {
+                yield ToolCallCompletedEvent(name, []);
+              }
+            }
           } else {
-            final toolObj = _toolRegistry.getTool(name);
-            final title = toolObj != null ? '${toolObj.displayName}: ${args.values.join(', ')}' : name;
-            yield ToolCallStartedEvent(title);
-          }
+            if (name == 'url_fetch') {
+              final url = args['url'] as String? ?? '';
+              yield UrlFetchStartedEvent(url);
+            } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+              final query = args['query'] as String? ?? '';
+              yield ToolCallStartedEvent(query);
+            } else {
+              final title = toolObj != null ? '${toolObj.displayName}: ${args.values.join(', ')}' : name;
+              yield ToolCallStartedEvent(title);
+            }
 
-          final result = await _toolRegistry.execute(name, args, context: context);
+            result = await _toolRegistry.execute(name, args, context: context);
+            _checkCancellation(cancelToken);
 
-          _checkCancellation(cancelToken);
-
-          if (name == 'url_fetch') {
-            final url = args['url'] as String? ?? '';
-            yield UrlFetchCompletedEvent(url, result.content);
-          } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-            final query = args['query'] as String? ?? '';
-            final rawResults = (result.rawData is List<SearchResult>)
-                ? (result.rawData as List<SearchResult>)
-                : <SearchResult>[];
-            yield ToolCallCompletedEvent(query, rawResults);
-          } else {
-            yield ToolCallCompletedEvent(name, []);
+            if (name == 'url_fetch') {
+              final url = args['url'] as String? ?? '';
+              yield UrlFetchCompletedEvent(url, result.content);
+            } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+              final query = args['query'] as String? ?? '';
+              final rawResults = (result.rawData is List<SearchResult>)
+                  ? (result.rawData as List<SearchResult>)
+                  : <SearchResult>[];
+              yield ToolCallCompletedEvent(query, rawResults);
+            } else {
+              yield ToolCallCompletedEvent(name, []);
+            }
           }
 
           toolMessages.add(ChatMessage(
@@ -709,6 +810,7 @@ class AgentService {
           cancelToken: cancelToken,
           maxToolRounds: maxToolRounds,
           guard: activeGuard,
+          onConfirmTool: onConfirmTool,
         );
       } else {
         // --- First round: check for pseudo-XML fallback ---
@@ -754,36 +856,101 @@ class AgentService {
 
             _checkCancellation(cancelToken);
 
-            if (name == 'url_fetch') {
-              final url = params['url'] as String? ?? '';
-              yield UrlFetchStartedEvent(url);
-            } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-              final query = params['query'] as String? ?? '';
-              yield ToolCallStartedEvent(query);
-            } else {
-              final toolObj = _toolRegistry.getTool(name);
-              final title = toolObj != null ? '${toolObj.displayName}: ${params.values.join(', ')}' : name;
-              yield ToolCallStartedEvent(title);
-            }
-
-            final result = await _toolRegistry.execute(name, params, context: context);
-
-            _checkCancellation(cancelToken);
-
-            if (name == 'url_fetch') {
-              final url = params['url'] as String? ?? '';
-              yield UrlFetchCompletedEvent(url, result.content);
-            } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-              final query = params['query'] as String? ?? '';
-              final rawResults = (result.rawData is List<SearchResult>)
-                  ? (result.rawData as List<SearchResult>)
-                  : <SearchResult>[];
-              yield ToolCallCompletedEvent(query, rawResults);
-            } else {
-              yield ToolCallCompletedEvent(name, []);
-            }
-
             final toolCallId = 'pseudo_${_uuid.v4()}';
+            final toolObj = _toolRegistry.getTool(name);
+            final requiresConfirmation =
+                toolObj != null && toolObj.securityLevel.requiresConfirmation && onConfirmTool != null;
+
+            ToolExecutionResult result;
+
+            if (requiresConfirmation) {
+              final confirmationRequest = ToolConfirmationRequest(
+                confirmationId: _uuid.v4(),
+                toolCallId: toolCallId,
+                toolName: name,
+                displayName: toolObj.displayName,
+                securityLevel: toolObj.securityLevel,
+                arguments: params,
+                description: toolObj.description,
+                previewData: _buildToolPreviewData(name, toolObj, params),
+                status: ToolConfirmationStatus.pending,
+              );
+
+              yield ToolConfirmationPendingEvent(confirmationRequest);
+
+              final decision = await onConfirmTool(confirmationRequest);
+              _checkCancellation(cancelToken);
+
+              if (decision.isCancelled) {
+                return;
+              }
+
+              if (decision.isRejected) {
+                final reason = decision.rejectionReason ?? '用户拒绝了执行权限';
+                result = ToolExecutionResult.failure(
+                  toolName: name,
+                  errorMessage: '用户已拒绝执行此操作',
+                  content: '【用户已拒绝执行此操作】原因：$reason',
+                  rawData: {'rejected': true, 'rejectionReason': reason},
+                );
+              } else {
+                // Approved
+                if (name == 'url_fetch') {
+                  final url = params['url'] as String? ?? '';
+                  yield UrlFetchStartedEvent(url);
+                } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+                  final query = params['query'] as String? ?? '';
+                  yield ToolCallStartedEvent(query);
+                } else {
+                  final title = '${toolObj.displayName}: ${params.values.join(', ')}';
+                  yield ToolCallStartedEvent(title);
+                }
+
+                result = await _toolRegistry.execute(name, params, context: context);
+                _checkCancellation(cancelToken);
+
+                if (name == 'url_fetch') {
+                  final url = params['url'] as String? ?? '';
+                  yield UrlFetchCompletedEvent(url, result.content);
+                } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+                  final query = params['query'] as String? ?? '';
+                  final rawResults = (result.rawData is List<SearchResult>)
+                      ? (result.rawData as List<SearchResult>)
+                      : <SearchResult>[];
+                  yield ToolCallCompletedEvent(query, rawResults);
+                } else {
+                  yield ToolCallCompletedEvent(name, []);
+                }
+              }
+            } else {
+              if (name == 'url_fetch') {
+                final url = params['url'] as String? ?? '';
+                yield UrlFetchStartedEvent(url);
+              } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+                final query = params['query'] as String? ?? '';
+                yield ToolCallStartedEvent(query);
+              } else {
+                final title = toolObj != null ? '${toolObj.displayName}: ${params.values.join(', ')}' : name;
+                yield ToolCallStartedEvent(title);
+              }
+
+              result = await _toolRegistry.execute(name, params, context: context);
+              _checkCancellation(cancelToken);
+
+              if (name == 'url_fetch') {
+                final url = params['url'] as String? ?? '';
+                yield UrlFetchCompletedEvent(url, result.content);
+              } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+                final query = params['query'] as String? ?? '';
+                final rawResults = (result.rawData is List<SearchResult>)
+                    ? (result.rawData as List<SearchResult>)
+                    : <SearchResult>[];
+                yield ToolCallCompletedEvent(query, rawResults);
+              } else {
+                yield ToolCallCompletedEvent(name, []);
+              }
+            }
+
             toolCallList.add(ToolCall(
               id: toolCallId,
               type: 'function',
@@ -839,6 +1006,7 @@ class AgentService {
               toolRound: 1,
               maxToolRounds: maxToolRounds,
               guard: activeGuard,
+              onConfirmTool: onConfirmTool,
             );
           }
         }
@@ -864,6 +1032,7 @@ class AgentService {
     CancelToken? cancelToken,
     int maxToolRounds = 100,
     AgentLoopGuard? guard,
+    Future<ToolConfirmationDecision> Function(ToolConfirmationRequest)? onConfirmTool,
   }) async* {
     yield* _streamCompletionsLoop(
       baseUrl: baseUrl,
@@ -882,6 +1051,7 @@ class AgentService {
       toolRound: 0,
       maxToolRounds: maxToolRounds,
       guard: guard,
+      onConfirmTool: onConfirmTool,
     );
   }
 
@@ -960,6 +1130,7 @@ class AgentService {
     int toolRound = 0,
     int maxToolRounds = 100,
     AgentLoopGuard? guard,
+    Future<ToolConfirmationDecision> Function(ToolConfirmationRequest)? onConfirmTool,
   }) async* {
     final activeGuard = guard ?? guardFactory?.call() ?? AgentLoopGuard(maxToolRounds: maxToolRounds);
 
@@ -1107,33 +1278,98 @@ class AgentService {
 
         _checkCancellation(cancelToken);
 
-        if (name == 'url_fetch') {
-          final url = args['url'] as String? ?? '';
-          yield UrlFetchStartedEvent(url);
-        } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-          final query = args['query'] as String? ?? '';
-          yield ToolCallStartedEvent(query);
+        final toolObj = _toolRegistry.getTool(name);
+        final requiresConfirmation =
+            toolObj != null && toolObj.securityLevel.requiresConfirmation && onConfirmTool != null;
+
+        ToolExecutionResult result;
+
+        if (requiresConfirmation) {
+          final confirmationRequest = ToolConfirmationRequest(
+            confirmationId: _uuid.v4(),
+            toolCallId: entry.id,
+            toolName: name,
+            displayName: toolObj.displayName,
+            securityLevel: toolObj.securityLevel,
+            arguments: args,
+            description: toolObj.description,
+            previewData: _buildToolPreviewData(name, toolObj, args),
+            status: ToolConfirmationStatus.pending,
+          );
+
+          yield ToolConfirmationPendingEvent(confirmationRequest);
+
+          final decision = await onConfirmTool(confirmationRequest);
+          _checkCancellation(cancelToken);
+
+          if (decision.isCancelled) {
+            return;
+          }
+
+          if (decision.isRejected) {
+            final reason = decision.rejectionReason ?? '用户拒绝了执行权限';
+            result = ToolExecutionResult.failure(
+              toolName: name,
+              errorMessage: '用户已拒绝执行此操作',
+              content: '【用户已拒绝执行此操作】原因：$reason',
+              rawData: {'rejected': true, 'rejectionReason': reason},
+            );
+          } else {
+            // Approved
+            if (name == 'url_fetch') {
+              final url = args['url'] as String? ?? '';
+              yield UrlFetchStartedEvent(url);
+            } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+              final query = args['query'] as String? ?? '';
+              yield ToolCallStartedEvent(query);
+            } else {
+              final title = '${toolObj.displayName}: ${args.values.join(', ')}';
+              yield ToolCallStartedEvent(title);
+            }
+
+            result = await _toolRegistry.execute(name, args, context: context);
+            _checkCancellation(cancelToken);
+
+            if (name == 'url_fetch') {
+              final url = args['url'] as String? ?? '';
+              yield UrlFetchCompletedEvent(url, result.content);
+            } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+              final query = args['query'] as String? ?? '';
+              final rawResults = (result.rawData is List<SearchResult>)
+                  ? (result.rawData as List<SearchResult>)
+                  : <SearchResult>[];
+              yield ToolCallCompletedEvent(query, rawResults);
+            } else {
+              yield ToolCallCompletedEvent(name, []);
+            }
+          }
         } else {
-          final toolObj = _toolRegistry.getTool(name);
-          final title = toolObj != null ? '${toolObj.displayName}: ${args.values.join(', ')}' : name;
-          yield ToolCallStartedEvent(title);
-        }
+          if (name == 'url_fetch') {
+            final url = args['url'] as String? ?? '';
+            yield UrlFetchStartedEvent(url);
+          } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+            final query = args['query'] as String? ?? '';
+            yield ToolCallStartedEvent(query);
+          } else {
+            final title = toolObj != null ? '${toolObj.displayName}: ${args.values.join(', ')}' : name;
+            yield ToolCallStartedEvent(title);
+          }
 
-        final result = await _toolRegistry.execute(name, args, context: context);
+          result = await _toolRegistry.execute(name, args, context: context);
+          _checkCancellation(cancelToken);
 
-        _checkCancellation(cancelToken);
-
-        if (name == 'url_fetch') {
-          final url = args['url'] as String? ?? '';
-          yield UrlFetchCompletedEvent(url, result.content);
-        } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-          final query = args['query'] as String? ?? '';
-          final rawResults = (result.rawData is List<SearchResult>)
-              ? (result.rawData as List<SearchResult>)
-              : <SearchResult>[];
-          yield ToolCallCompletedEvent(query, rawResults);
-        } else {
-          yield ToolCallCompletedEvent(name, []);
+          if (name == 'url_fetch') {
+            final url = args['url'] as String? ?? '';
+            yield UrlFetchCompletedEvent(url, result.content);
+          } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+            final query = args['query'] as String? ?? '';
+            final rawResults = (result.rawData is List<SearchResult>)
+                ? (result.rawData as List<SearchResult>)
+                : <SearchResult>[];
+            yield ToolCallCompletedEvent(query, rawResults);
+          } else {
+            yield ToolCallCompletedEvent(name, []);
+          }
         }
 
         toolMessages.add(ChatMessage(
@@ -1188,6 +1424,7 @@ class AgentService {
         toolRound: toolRound + 1,
         maxToolRounds: maxToolRounds,
         guard: activeGuard,
+        onConfirmTool: onConfirmTool,
       );
     } else {
       // --- No standard tool_calls; check for pseudo-XML fallback ---
@@ -1233,36 +1470,101 @@ class AgentService {
 
           _checkCancellation(cancelToken);
 
-          if (name == 'url_fetch') {
-            final url = params['url'] as String? ?? '';
-            yield UrlFetchStartedEvent(url);
-          } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-            final query = params['query'] as String? ?? '';
-            yield ToolCallStartedEvent(query);
-          } else {
-            final toolObj = _toolRegistry.getTool(name);
-            final title = toolObj != null ? '${toolObj.displayName}: ${params.values.join(', ')}' : name;
-            yield ToolCallStartedEvent(title);
-          }
-
-          final result = await _toolRegistry.execute(name, params, context: context);
-
-          _checkCancellation(cancelToken);
-
-          if (name == 'url_fetch') {
-            final url = params['url'] as String? ?? '';
-            yield UrlFetchCompletedEvent(url, result.content);
-          } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-            final query = params['query'] as String? ?? '';
-            final rawResults = (result.rawData is List<SearchResult>)
-                ? (result.rawData as List<SearchResult>)
-                : <SearchResult>[];
-            yield ToolCallCompletedEvent(query, rawResults);
-          } else {
-            yield ToolCallCompletedEvent(name, []);
-          }
-
           final toolCallId = 'pseudo_${_uuid.v4()}';
+          final toolObj = _toolRegistry.getTool(name);
+          final requiresConfirmation =
+              toolObj != null && toolObj.securityLevel.requiresConfirmation && onConfirmTool != null;
+
+          ToolExecutionResult result;
+
+          if (requiresConfirmation) {
+            final confirmationRequest = ToolConfirmationRequest(
+              confirmationId: _uuid.v4(),
+              toolCallId: toolCallId,
+              toolName: name,
+              displayName: toolObj.displayName,
+              securityLevel: toolObj.securityLevel,
+              arguments: params,
+              description: toolObj.description,
+              previewData: _buildToolPreviewData(name, toolObj, params),
+              status: ToolConfirmationStatus.pending,
+            );
+
+            yield ToolConfirmationPendingEvent(confirmationRequest);
+
+            final decision = await onConfirmTool(confirmationRequest);
+            _checkCancellation(cancelToken);
+
+            if (decision.isCancelled) {
+              return;
+            }
+
+            if (decision.isRejected) {
+              final reason = decision.rejectionReason ?? '用户拒绝了执行权限';
+              result = ToolExecutionResult.failure(
+                toolName: name,
+                errorMessage: '用户已拒绝执行此操作',
+                content: '【用户已拒绝执行此操作】原因：$reason',
+                rawData: {'rejected': true, 'rejectionReason': reason},
+              );
+            } else {
+              // Approved
+              if (name == 'url_fetch') {
+                final url = params['url'] as String? ?? '';
+                yield UrlFetchStartedEvent(url);
+              } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+                final query = params['query'] as String? ?? '';
+                yield ToolCallStartedEvent(query);
+              } else {
+                final title = '${toolObj.displayName}: ${params.values.join(', ')}';
+                yield ToolCallStartedEvent(title);
+              }
+
+              result = await _toolRegistry.execute(name, params, context: context);
+              _checkCancellation(cancelToken);
+
+              if (name == 'url_fetch') {
+                final url = params['url'] as String? ?? '';
+                yield UrlFetchCompletedEvent(url, result.content);
+              } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+                final query = params['query'] as String? ?? '';
+                final rawResults = (result.rawData is List<SearchResult>)
+                    ? (result.rawData as List<SearchResult>)
+                    : <SearchResult>[];
+                yield ToolCallCompletedEvent(query, rawResults);
+              } else {
+                yield ToolCallCompletedEvent(name, []);
+              }
+            }
+          } else {
+            if (name == 'url_fetch') {
+              final url = params['url'] as String? ?? '';
+              yield UrlFetchStartedEvent(url);
+            } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+              final query = params['query'] as String? ?? '';
+              yield ToolCallStartedEvent(query);
+            } else {
+              final title = toolObj != null ? '${toolObj.displayName}: ${params.values.join(', ')}' : name;
+              yield ToolCallStartedEvent(title);
+            }
+
+            result = await _toolRegistry.execute(name, params, context: context);
+            _checkCancellation(cancelToken);
+
+            if (name == 'url_fetch') {
+              final url = params['url'] as String? ?? '';
+              yield UrlFetchCompletedEvent(url, result.content);
+            } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
+              final query = params['query'] as String? ?? '';
+              final rawResults = (result.rawData is List<SearchResult>)
+                  ? (result.rawData as List<SearchResult>)
+                  : <SearchResult>[];
+              yield ToolCallCompletedEvent(query, rawResults);
+            } else {
+              yield ToolCallCompletedEvent(name, []);
+            }
+          }
+
           toolCallList.add(ToolCall(
             id: toolCallId,
             type: 'function',
@@ -1318,6 +1620,7 @@ class AgentService {
             toolRound: toolRound + 1,
             maxToolRounds: maxToolRounds,
             guard: activeGuard,
+            onConfirmTool: onConfirmTool,
           );
           return; // Prevent fall-through to buffered content yield
         }

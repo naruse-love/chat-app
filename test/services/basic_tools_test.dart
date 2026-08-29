@@ -735,9 +735,9 @@ void main() {
   });
 
   group('ToolRegistry Integration Tests for Safe Basic Tools', () {
-    test('Default registry contains all 8 registered tools', () {
+    test('Default registry contains all 15 registered tools', () {
       final registry = ToolRegistry.defaultRegistry();
-      expect(registry.getAllTools().length, equals(8));
+      expect(registry.getAllTools().length, equals(15));
       expect(
         registry.getRegisteredNames(),
         containsAll([
@@ -749,6 +749,13 @@ void main() {
           'time_calculator',
           'weather_query',
           'wiki_lookup',
+          'file_read',
+          'file_write',
+          'file_list',
+          'file_delete',
+          'code_eval',
+          'clipboard_read',
+          'clipboard_write',
         ]),
       );
     });
@@ -769,7 +776,7 @@ void main() {
       expect(timeResult.rawData['differenceText'], equals('1小时 30分钟'));
     });
 
-    test('Export OpenAI schemas with security level filtering across all 8 tools', () {
+    test('Export OpenAI schemas with security level filtering across all tools', () {
       final registry = ToolRegistry.defaultRegistry();
 
       // Safe tools only (Level 0) -> math_eval, time_calculator
@@ -779,9 +786,9 @@ void main() {
       expect(safeNames, isNot(contains('web_search')));
       expect(safeNames, isNot(contains('weather_query')));
 
-      // ReadOnly tools (Level 1) -> All 8 tools
+      // ReadOnly tools (Level 1) -> 11 tools (Level 0 + Level 1)
       final readOnlySchemas = registry.exportOpenAiSchemas(maxSecurityLevel: ToolSecurityLevel.readOnly);
-      expect(readOnlySchemas.length, equals(8));
+      expect(readOnlySchemas.length, equals(11));
     });
   });
 }

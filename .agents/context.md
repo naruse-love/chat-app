@@ -43,8 +43,9 @@
 | **21 / 完整文档重构** | 全面重构并丰富 `README.md` 项目说明文档，涵盖架构拓扑、特性矩阵、目录树、快速上手、测试矩阵、配置指南、稳定性自愈设计与开发规范；版本号递增至 `1.06.0+7`（2026-08-14） | ✅ 完成 |
 | **22 / UrlFetchService v2 智能抓取与诊断** | 提升提取上限至 15000 字符，增加截断感知与警告；增加反爬验证页（captcha）、登录墙（login_wall）、导航门户（nav_hub）诊断与警告；提取 JSON-LD、OG 协议与 HTML 元数据；语义容器（article/main）优先提取与 nav/footer/aside 噪音剥离；站内/站外链接统计分析；新增 FetchResult 结构化模型（2026-08-16） | ✅ 完成 |
 | **23 / 内置基础工具库与防死循环架构** | 打造内置基础工具体系（`math_eval` 数学计算引擎、`time_calculator` 高精度时间时区运算、`weather_query` 免费 Open-Meteo 天气、`wiki_lookup` 维基百科检索）；构建 `ToolRegistry` 统一注册与权限管理中心；引入 `AgentLoopGuard`（RFC 1321 MD5 签名、连续重复与震荡周期防御、轮次上限强制兜底）；`AgentService` 全面接入与动态 Schema 导出；`ChatBubble` 中文分类标签、安全等级徽章与折叠卡片（2026-08-28） | ✅ 完成 |
+| **24 / 本地沙箱执行与人机协同确认机制** | 打造本地安全沙箱文件系统（`PathSanitizer` 路径净化、`file_read`、`file_write`、`file_list`、`file_delete`）与多语言代码执行沙箱（`code_eval`）及系统剪贴板工具（`clipboard_read`、`clipboard_write`）；定义 4 级工具安全分类；实现人机协同确认机制（Human-in-the-Loop, HITL），在 `AgentService` 与 `ChatNotifier` 中全面拦截 Level 2 敏感工具并挂起；实现 `DiffViewerWidget` 统一差异对比视图与 `ToolConfirmationCard` 授权/拒绝交互卡片；ToolRegistry 统一接入 15 个工具（2026-08-29） | ✅ 完成 |
 
-**当前测试状态：263 / 263 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.08.0+9。**
+**当前测试状态：324 / 324 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.09.0+10。**
 
 ---
 
