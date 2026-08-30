@@ -386,6 +386,25 @@ class AgentService {
       return {
         'text': args['text']?.toString() ?? '',
       };
+    } else if (name == 'calendar_create_event') {
+      return {
+        'title': args['title']?.toString() ?? '',
+        'start_time': args['start_time']?.toString() ?? '',
+        'end_time': args['end_time']?.toString() ?? '',
+        'location': args['location']?.toString(),
+        'description': args['description']?.toString(),
+        'reminder_minutes': args['reminder_minutes'] ?? args['remind_minutes_before'],
+        'is_all_day': args['is_all_day'] == true,
+      };
+    } else if (name == 'notification_schedule') {
+      return {
+        'title': args['title']?.toString() ?? '',
+        'body': args['body']?.toString() ?? '',
+        'scheduled_time': args['scheduled_time']?.toString() ?? args['trigger_time']?.toString() ?? '',
+        'notification_id': args['notification_id']?.toString(),
+        'payload': args['payload']?.toString(),
+        'is_exact_alarm': args['is_exact_alarm'] != false,
+      };
     }
     return args;
   }

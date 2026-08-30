@@ -1,5 +1,5 @@
 # 项目接手上下文（Context）
-> 最后更新：2026-08-29
+> 最后更新：2026-08-30
 
 ---
 
@@ -10,7 +10,7 @@
 - **工作目录**：`D:\work\chat`
 - **Flutter SDK**：`D:\work\flutter-sdk\flutter\bin\flutter.bat`
 - **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支）
-- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（412/412），`flutter analyze` 必须 0 issues
+- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（537/537），`flutter analyze` 必须 0 issues
 
 ---
 
@@ -44,8 +44,9 @@
 | **22 / UrlFetchService v2 智能抓取与诊断** | 提升提取上限至 15000 字符，增加截断感知与警告；增加反爬验证页（captcha）、登录墙（login_wall）、导航门户（nav_hub）诊断与警告；提取 JSON-LD、OG 协议与 HTML 元数据；语义容器（article/main）优先提取与 nav/footer/aside 噪音剥离；站内/站外链接统计分析；新增 FetchResult 结构化模型（2026-08-16） | ✅ 完成 |
 | **23 / 内置基础工具库与防死循环架构** | 打造内置基础工具体系（`math_eval` 数学计算引擎、`time_calculator` 高精度时间时区运算、`weather_query` 免费 Open-Meteo 天气、`wiki_lookup` 维基百科检索）；构建 `ToolRegistry` 统一注册与权限管理中心；引入 `AgentLoopGuard`（RFC 1321 MD5 签名、连续重复与震荡周期防御、轮次上限强制兜底）；`AgentService` 全面接入与动态 Schema 导出；`ChatBubble` 中文分类标签、安全等级徽章与折叠卡片（2026-08-28） | ✅ 完成 |
 | **24 / 本地沙箱执行与人机协同确认机制** | 打造本地安全沙箱文件系统（`PathSanitizer` 路径净化与配额管理、`file_read`、`file_write`、`file_list`、`file_delete`）与多语言 Isolate 代码执行沙箱（`code_eval` 3000ms 硬超时强杀）及系统剪贴板工具（`clipboard_read`、`clipboard_write`）；定义 4 级工具安全分类；实现人机协同确认机制（Human-in-the-Loop, HITL），在 `AgentService` 与 `ChatNotifier` 中全面拦截 Level 2 敏感工具并挂起异步决断；实现 `DiffViewerWidget` 统一差异对比视图与 `ToolConfirmationCard` 授权/拒绝交互卡片；ToolRegistry 统一接入 15 个工具；完成全面对抗性加固验证与 412 个自动化测试矩阵（2026-08-29） | ✅ 完成 |
+| **25 / 移动原生能力与特权工具生态** | 打造移动端原生设备能力抽象契约与服务层（`ICalendarService`、`INotificationService`、`IContactsService`、`ILocationService` 及内存 Mock）；构建隐私脱敏网关 `ContactsSanitizer`（E.164 手机号掩码、白名单过滤、提示词注入防护、单次 5 条限制）；实现统一权限管理器 `PermissionManagerService`（权限预检、申请与中文友好降级）；实现 7 个原生标准工具（`calendar_query_events`、`calendar_create_event`、`notification_schedule`、`notification_cancel`、`contacts_search`、`geolocation_get`、`reverse_geocode`）；`ToolRegistry` 接入 22 个工具并支持动态启停与 Schema 导出；`ChatBubble` 与 `ToolConfirmationCard` 深度集成原生特权徽章与专属日程/通知预览卡片（2026-08-30） | ✅ 完成 |
 
-**当前测试状态：412 / 412 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.09.0+10。**
+**当前测试状态：537 / 537 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.10.0+11。**
 
 ---
 
@@ -65,12 +66,18 @@ lib/
 │   ├── search_result.dart        # 搜索结果
 │   ├── system_prompt_template.dart
 │   ├── tool_call.dart
-│   └── tool/                     # 工具体系模型
-│       ├── tool.dart             # 抽象基类 Tool
-│       ├── tool_parameter.dart   # 参数模式 ToolParameter
-│       ├── tool_execution_result.dart # 执行结果模型
-│       ├── tool_security_level.dart   # 4 级安全分类
-│       └── tool_confirmation.dart    # HITL 确认请求与决策模型
+│   ├── tool/                     # 工具体系模型
+│   │   ├── tool.dart             # 抽象基类 Tool
+│   │   ├── tool_parameter.dart   # 参数模式 ToolParameter
+│   │   ├── tool_execution_result.dart # 执行结果模型
+│   │   ├── tool_security_level.dart   # 4 级安全分类
+│   │   └── tool_confirmation.dart    # HITL 确认请求与决策模型
+│   └── native/                   # 移动原生数据模型
+│       ├── calendar_event.dart   # 日历日程与确认预览模型
+│       ├── scheduled_notification.dart # 定时通知与确认预览模型
+│       ├── contact_item.dart     # 设备联系人模型
+│       ├── geo_models.dart       # GPS 坐标与结构化地址模型
+│       └── app_permission.dart   # 原生设备权限枚举与状态
 │
 ├── data/                         # SQLite 数据访问层
 │   ├── database_helper.dart      # 单例 SQLite 管理器（损坏自愈 + schema v3 迁移）
@@ -83,14 +90,22 @@ lib/
 │   ├── search_service.dart       # SearXNG 主路径 + 实验性 Bing（9Router 内置搜索已停用，双页并发，URL 去重，新 Prompt）
 │   ├── url_fetch_service.dart    # 网页抓取服务（DOM 节点清洗，15000字符截断）
 │   ├── agent_service.dart        # 多轮 tool calling，伪 XML tool_call 兜底，HITL 敏感拦截，url_fetch 路由支持
-│   ├── tool_registry.dart        # 统一工具注册中心（15 个内置与扩展工具）
+│   ├── tool_registry.dart        # 统一工具注册中心（22 个内置、沙箱与原生特权工具）
 │   ├── agent_loop_guard.dart     # MD5 签名与死循环/震荡检测防护器
 │   ├── path_sanitizer.dart       # 安全沙箱路径净化与 5MB/50MB 配额防护器
 │   ├── code_execution_service.dart # 多语言 Isolate 代码执行沙箱（3000ms 超时强杀）
 │   ├── rune_safe_json_truncator.dart # Unicode 代理对安全截断与 JSON 修复器
 │   ├── image_service.dart        # 图片选取 / 压缩 / Base64 编码
 │   ├── secure_storage_service.dart # flutter_secure_storage 封装
-│   └── tools/                    # 15 个具体工具实现
+│   ├── native/                   # 原生服务层与隐私安全网关
+│   │   ├── calendar_service.dart # 日历服务接口与 InMemoryCalendarService
+│   │   ├── notification_service.dart # 通知服务接口与 InMemoryNotificationService
+│   │   ├── contacts_service.dart # 通讯录接口与 InMemoryContactsService
+│   │   ├── location_service.dart # 定位接口与 InMemoryLocationService
+│   │   ├── contacts_sanitizer.dart # 通讯录隐私脱敏与防注入网关
+│   │   ├── permission_manager_service.dart # 统一权限管理器
+│   │   └── native_service_providers.dart # Riverpod DI Provider
+│   └── tools/                    # 22 个具体工具实现
 │       ├── math_eval_tool.dart
 │       ├── time_calculator_tool.dart
 │       ├── weather_query_tool.dart
@@ -101,7 +116,13 @@ lib/
 │       ├── file_list_tool.dart
 │       ├── file_delete_tool.dart
 │       ├── code_eval_tool.dart
-│       └── clipboard_tools.dart
+│       ├── clipboard_tools.dart
+│       └── native/               # 7 个原生特权与定位工具
+│           ├── calendar_tools.dart
+│           ├── notification_tools.dart
+│           ├── contacts_search_tool.dart
+│           ├── geolocation_tool.dart
+│           └── reverse_geocode_tool.dart
 │
 ├── providers/                    # Riverpod 状态管理
 │   ├── theme_provider.dart       # ThemeMode（light/dark/system）
@@ -123,10 +144,10 @@ lib/
 │   └── diff_helper.dart          # LCS 动态规划算法 Diff 差异比对器
 │
 └── widgets/                      # 可复用 Widget
-    ├── chat_bubble.dart          # 消息气泡（思考区独立 SelectableText + 15 个工具分类卡片与安全等级徽章）
+    ├── chat_bubble.dart          # 消息气泡（思考区独立 SelectableText + 22 个工具分类卡片与 4 级安全等级徽章）
     ├── chat_input.dart           # 输入区（图片附件、发送、多行文本）
     ├── diff_viewer_widget.dart   # 统一差异对比视图组件
-    └── tool_confirmation_card.dart # 人机协同交互确认卡片
+    └── tool_confirmation_card.dart # 人机协同交互确认卡片（Diff 差异比对、日历日程与定时通知专属预览卡片）
 
 test/
 ├── unit tests (模型、服务、DAO、工具集)
@@ -138,12 +159,23 @@ test/
 │   ├── rune_safe_json_truncator_test.dart
 │   ├── basic_tools_test.dart
 │   ├── tool_registry_test.dart
-│   └── agent_loop_guard_test.dart
+│   ├── agent_loop_guard_test.dart
+│   ├── native/
+│   │   ├── calendar_service_test.dart
+│   │   ├── notification_service_test.dart
+│   │   ├── contacts_service_test.dart
+│   │   ├── location_service_test.dart
+│   │   ├── contacts_sanitizer_test.dart
+│   │   └── permission_manager_service_test.dart
+│   └── tools/
+│       ├── native_tools_test.dart
+│       └── tool_registry_native_test.dart
 ├── providers/
 │   └── chat_provider_hitl_test.dart
 ├── widgets/
 │   ├── diff_viewer_widget_test.dart
 │   ├── tool_confirmation_card_test.dart
+│   ├── native_tools_ui_test.dart
 │   ├── chat_bubble_tool_rendering_stress_test.dart
 │   └── challenger_m24_hitl_concurrency_stress_test.dart
 ├── widgets_test.dart             # ChatBubble、ChatInput Widget 测试
@@ -178,6 +210,10 @@ test/
 20. **Isolate 代码沙箱与 3000ms 硬超时强杀**：通过独立 Worker Isolate 执行代码，配合 `Timer` 与 `isolate.kill()` 彻底防御 `while(true)` 死循环。
 21. **人机协同确认机制（HITL）**：Level 2+ 敏感工具在执行前通过 Completer 挂起并触发 UI 确认卡片，展示 LCS 行级差异对比，允许用户一键授权或携带理由拒绝，流取消与拒绝逻辑平滑协同。
 22. **Unicode Rune 安全截断与 JSON 自动闭合**：`RuneSafeJsonTruncator` 避免破坏 UTF-16 代理对引发乱码，并在截断后基于括号栈自动补全未闭合的 JSON 结构。
+23. **移动端原生能力契约与服务抽象**：定义 `ICalendarService`、`INotificationService`、`IContactsService`、`ILocationService` 标准接口与基于内存状态的 InMemory 实现，支持日历事件 CRUD、日程重叠判定、精确通知调度与取消、地理坐标逆编码计算。
+24. **通讯录隐私脱敏网关 (ContactsSanitizer)**：规范化 E.164 号码掩码脱敏（保留前3后4位）、严格白名单过滤（屏蔽私密备注与敏感地址）、中立化控制符防御提示词注入与 JSON 结构污染、单次检索结果硬性截断上限 5 条。
+25. **统一原生权限管理与友好降级**：`PermissionManagerService` 统一管理 `AppPermission` 状态与申请流，对未授权或被拒绝权限返回明确中文友好提示与操作引导。
+26. **原生特权工具链 (Level 3) 与 HITL 专用卡片**：构建 7 个原生工具（日历、通知、通讯录、定位），其中日历新建与定时通知通过 `CalendarEventPreview` / `NotificationPreview` 结构化提炼渲染专属 HITL 确认卡片。
 
 ---
 
@@ -212,7 +248,7 @@ test/
 # 静态分析（必须 0 issues）
 D:\work\flutter-sdk\flutter\bin\flutter.bat analyze
 
-# 运行全部测试（必须 412/412 通过）
+# 运行全部测试（必须 537/537 通过）
 D:\work\flutter-sdk\flutter\bin\flutter.bat test --no-pub
 
 # 编译 Debug APK
@@ -221,3 +257,4 @@ D:\work\flutter-sdk\flutter\bin\flutter.bat build apk --debug
 # 提交并推送
 git add -A && git commit -m "..." && git push
 ```
+

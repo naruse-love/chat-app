@@ -190,6 +190,10 @@ class _ToolConfirmationCardState extends State<ToolConfirmationCard> {
       return _buildCodeEvalPreview(context, isDark, preview);
     } else if (name == 'clipboard_write') {
       return _buildClipboardWritePreview(context, isDark, preview);
+    } else if (name == 'calendar_create_event') {
+      return _buildCalendarCreatePreview(context, isDark, preview);
+    } else if (name == 'notification_schedule') {
+      return _buildNotificationSchedulePreview(context, isDark, preview);
     } else {
       return _buildGenericArgumentsPreview(context, isDark);
     }
@@ -352,6 +356,213 @@ class _ToolConfirmationCardState extends State<ToolConfirmationCard> {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCalendarCreatePreview(BuildContext context, bool isDark, dynamic preview) {
+    final args = widget.request.arguments;
+    final title = (preview is Map ? preview['title']?.toString() : null) ??
+        args['title']?.toString() ??
+        '(无标题日程)';
+    final startTime = (preview is Map ? preview['start_time']?.toString() : null) ??
+        args['start_time']?.toString() ??
+        '';
+    final endTime = (preview is Map ? preview['end_time']?.toString() : null) ??
+        args['end_time']?.toString() ??
+        '';
+    final location = (preview is Map ? preview['location']?.toString() : null) ??
+        args['location']?.toString();
+    final description = (preview is Map ? preview['description']?.toString() : null) ??
+        args['description']?.toString();
+    final reminderMinutes = (preview is Map ? preview['reminder_minutes']?.toString() : null) ??
+        args['reminder_minutes']?.toString() ??
+        args['remind_minutes_before']?.toString();
+    final isAllDay = (preview is Map && preview['is_all_day'] == true) || args['is_all_day'] == true;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A2634) : const Color(0xFFEBF3FB),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2C4A6F) : const Color(0xFFB9D7F6),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.event, color: Color(0xFF1976D2), size: 18),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isAllDay)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1976D2).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    '全天',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF1976D2)),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(Icons.access_time, size: 14, color: Colors.blueGrey),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  '时间: $startTime 至 $endTime',
+                  style: const TextStyle(fontSize: 11.5, fontFamily: 'monospace'),
+                ),
+              ),
+            ],
+          ),
+          if (location != null && location.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.place_outlined, size: 14, color: Colors.blueGrey),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text('地点: $location', style: const TextStyle(fontSize: 11.5)),
+                ),
+              ],
+            ),
+          ],
+          if (reminderMinutes != null && reminderMinutes.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.notifications_active_outlined, size: 14, color: Colors.amber),
+                const SizedBox(width: 4),
+                Text('提前 $reminderMinutes 分钟提醒', style: const TextStyle(fontSize: 11.5)),
+              ],
+            ),
+          ],
+          if (description != null && description.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              '备注: $description',
+              style: TextStyle(
+                fontSize: 11.5,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationSchedulePreview(BuildContext context, bool isDark, dynamic preview) {
+    final args = widget.request.arguments;
+    final title = (preview is Map ? preview['title']?.toString() : null) ??
+        args['title']?.toString() ??
+        '(无标题提醒)';
+    final body = (preview is Map ? preview['body']?.toString() : null) ??
+        args['body']?.toString() ??
+        '';
+    final scheduledTime = (preview is Map ? preview['scheduled_time']?.toString() : null) ??
+        (preview is Map ? preview['trigger_time']?.toString() : null) ??
+        args['scheduled_time']?.toString() ??
+        args['trigger_time']?.toString() ??
+        '';
+    final isExact = (preview is Map && preview['is_exact_alarm'] == false)
+        ? false
+        : (args['is_exact_alarm'] != false);
+    final payload = (preview is Map ? preview['payload']?.toString() : null) ??
+        args['payload']?.toString();
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF332211) : const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark ? const Color(0xFF664422) : const Color(0xFFFED7AA),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.alarm, color: Color(0xFFE65100), size: 18),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE65100).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  isExact ? '精确闹钟' : '普通通知',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFFE65100),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (body.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              body,
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF4A3018) : const Color(0xFFFFEDD5),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              scheduledTime.isNotEmpty ? '预定时间: $scheduledTime' : '预定提醒',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFC2410C),
+              ),
+            ),
+          ),
+          if (payload != null && payload.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              '附加数据: $payload',
+              style: TextStyle(fontSize: 10.5, color: isDark ? Colors.white54 : Colors.black54),
+            ),
+          ],
         ],
       ),
     );

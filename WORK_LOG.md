@@ -1,3 +1,54 @@
+## 2026-08-30 Feature & Integration: Milestone 25 Native Capabilities, Privileged Tools & Privacy Gateway (v1.10.0+11)
+
+### 变更文件
+- `lib/models/native/calendar_event.dart`: 日历日程数据模型 `CalendarEvent` 与确认预览模型 `CalendarEventPreview`，支持重叠冲突判定 `overlapsWith` (`S1 < E2 && E1 > S2`)。
+- `lib/models/native/scheduled_notification.dart`: 定时通知数据模型 `ScheduledNotification` 与确认预览模型 `NotificationPreview`。
+- `lib/models/native/contact_item.dart`: 设备联系人原始数据模型 `ContactItem`。
+- `lib/models/native/geo_models.dart`: GPS 定位坐标 `GeoCoordinates`（支持 DMS 格式转换）与结构化地理地址 `GeoAddress`。
+- `lib/models/native/app_permission.dart`: 原生设备权限枚举 `AppPermission`（日历、通知、通讯录、定位）与权限状态枚举 `PermissionStatus`。
+- `lib/models/native/native_models.dart`: 原生数据模型 Barrel 导出文件。
+- `lib/services/native/calendar_service.dart`: 日历服务接口 `ICalendarService` 与带内置预置日程的 `InMemoryCalendarService`。
+- `lib/services/native/notification_service.dart`: 通知服务接口 `INotificationService` 与 `InMemoryNotificationService`。
+- `lib/services/native/contacts_service.dart`: 通讯录检索接口 `IContactsService` 与多字段模糊匹配 `InMemoryContactsService`。
+- `lib/services/native/location_service.dart`: 地理定位接口 `ILocationService` 与具备邻近距离逆编码的 `InMemoryLocationService`。
+- `lib/services/native/contacts_sanitizer.dart`: 通讯录隐私脱敏网关 `ContactsSanitizer`（E.164 手机号掩码脱敏、严格白名单过滤、提示词注入防护与单次 5 条上限截断）。
+- `lib/services/native/permission_manager_service.dart`: 统一权限管理器 `PermissionManagerService`，提供权限状态管理与中文降级错误提示。
+- `lib/services/native/native_service_providers.dart` & `native_services.dart`: 原生服务 Riverpod DI Provider 与完整服务层 Barrel 导出。
+- `lib/services/tools/native/calendar_tools.dart`: `CalendarQueryEventsTool`（`calendar_query_events`，Level 3 特权）与 `CalendarCreateEventTool`（`calendar_create_event`，Level 3 特权 + HITL 确认）。
+- `lib/services/tools/native/notification_tools.dart`: `NotificationScheduleTool`（`notification_schedule`，Level 3 特权 + HITL 确认）与 `NotificationCancelTool`（`notification_cancel`，Level 3 特权）。
+- `lib/services/tools/native/contacts_search_tool.dart`: `ContactsSearchTool`（`contacts_search`，Level 3 特权），集成隐私脱敏网关。
+- `lib/services/tools/native/geolocation_tool.dart`: `GeolocationGetTool`（`geolocation_get`，Level 3 特权），获取高精 GPS 坐标。
+- `lib/services/tools/native/reverse_geocode_tool.dart`: `ReverseGeocodeTool`（`reverse_geocode`，Level 1 只读），经纬度坐标逆地理编码。
+- `lib/services/tools/native/native_tools.dart`: 7 个原生工具 Barrel 导出文件。
+- `lib/services/tool_registry.dart`: 更新 `ToolRegistry.defaultRegistry` 完整注册全部 7 个原生特权工具（工具总数增至 22 个）。
+- `lib/services/agent_service.dart`: 在 `_buildToolPreviewData` 中增加 `calendar_create_event` 与 `notification_schedule` 的结构化参数提炼。
+- `lib/widgets/chat_bubble.dart`: 在 `_getToolMetadata` 中扩充 7 个原生工具的专属图标、分类标签、特权 Level 3/只读 Level 1 徽章与色彩定义。
+- `lib/widgets/tool_confirmation_card.dart`: 增加 `_buildCalendarCreatePreview` 与 `_buildNotificationSchedulePreview` 专用 HITL 确认卡片，展示日程时间地点提醒及通知精确闹钟预览。
+- `pubspec.yaml`: 按照 `AGENTS.md` 规则 6 递增版本号至 `1.10.0+11`。
+- `test/services/tools/native_tools_test.dart`: 7 个原生工具完整单元测试套件（覆盖参数校验、权限被拒处理、日程冲突检测、通知取消、通讯录脱敏与逆编码）。
+- `test/services/tools/tool_registry_native_test.dart`: ToolRegistry 22 个工具注册、动态启停开关、OpenAI Schema 导出与分发执行测试套件。
+- `test/widgets/native_tools_ui_test.dart`: ChatBubble 工具气泡元数据与 ToolConfirmationCard 专用卡片渲染与交互测试套件。
+- `test/services/basic_tools_test.dart` & `test/services/tool_registry_test.dart`: 同步更新工具总数（22个）与只读工具数（12个）测试断言。
+
+### 核心改进与技术指标
+1. **移动端原生特权工具矩阵**：
+   - 完整实现 7 个移动原生标准工具（日历查询/创建、通知创建/取消、通讯录安全检索、GPS 定位、逆地理编码）；
+   - 工具总数扩充至 22 个，全部合规注册至 `ToolRegistry` 并支持动态启停开关与 OpenAI Schema 导出。
+2. **隐私脱敏与防注入安全网关 (ContactsSanitizer)**：
+   - E.164 规范手机号掩码脱敏（保留国际区号，掩码中间位如 `138****5678`）；
+   - 严格白名单过滤（剥离私密备注、家庭地址），单次检索硬性限制最多返回 5 条；
+   - 过滤中立化 `<tool_call>`, `<system>`, `[INST]` 等控制符，转义花括号 `{}` 彻底防御提示词注入与 JSON 劫持。
+3. **统一权限管理与安全降级**：
+   - 统一由 `PermissionManagerService` 管理系统权限，权限未授予或被拒绝时优雅返回友好中文错误提示，零崩溃。
+4. **HITL 交互确认卡片与气泡 UI**：
+   - 为敏感特权操作 `calendar_create_event` 与 `notification_schedule` 定制专属确认卡片；
+   - `ChatBubble` 深度定制 7 个原生工具专属徽章、分类与图标。
+5. **全量测试与代码分析**：
+   - `flutter analyze` 静态分析：**`No issues found!`**（0 errors, 0 warnings）；
+   - `flutter test` 单元与 Widget 测试：**537/537 全部通过（100% pass rate，0 failures）**。
+
+---
+
 ## 2026-08-29 Test & Delivery: Milestone 24 Test Matrix, Adversarial Hardening & Delivery Verification (v1.09.0+10)
 
 ### 变更文件

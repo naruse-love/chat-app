@@ -13,6 +13,8 @@ import 'tools/file_list_tool.dart';
 import 'tools/file_delete_tool.dart';
 import 'tools/code_eval_tool.dart';
 import 'tools/clipboard_tools.dart';
+import 'tools/native/native_tools.dart';
+import 'native/native_services.dart';
 import 'path_sanitizer.dart';
 import 'code_execution_service.dart';
 import 'search_service.dart';
@@ -25,14 +27,27 @@ class ToolRegistry {
 
   ToolRegistry();
 
-  /// Pre-populates a default registry containing built-in search, fetch, safe basic, file, code, and clipboard tools.
+  /// Pre-populates a default registry containing built-in search, fetch, safe basic, file, code, clipboard, and native tools.
   factory ToolRegistry.defaultRegistry({
     SearchService? searchService,
     UrlFetchService? urlFetchService,
     Dio? dio,
     PathSanitizer? pathSanitizer,
     CodeExecutionService? codeExecutionService,
+    ICalendarService? calendarService,
+    INotificationService? notificationService,
+    IContactsService? contactsService,
+    ILocationService? locationService,
+    ContactsSanitizer? contactsSanitizer,
+    PermissionManagerService? permissionManagerService,
   }) {
+    final effectiveCalendar = calendarService ?? InMemoryCalendarService();
+    final effectiveNotification = notificationService ?? InMemoryNotificationService();
+    final effectiveContacts = contactsService ?? InMemoryContactsService();
+    final effectiveLocation = locationService ?? InMemoryLocationService();
+    final effectiveSanitizer = contactsSanitizer ?? const ContactsSanitizer();
+    final effectivePermission = permissionManagerService ?? PermissionManagerService();
+
     final registry = ToolRegistry();
     registry.registerTools([
       // Legacy network adapters
@@ -53,6 +68,35 @@ class ToolRegistry {
       CodeEvalTool(codeExecutionService: codeExecutionService),
       const ClipboardReadTool(),
       const ClipboardWriteTool(),
+      // Native Privileged Tools (Milestone 25)
+      CalendarQueryEventsTool(
+        calendarService: effectiveCalendar,
+        permissionService: effectivePermission,
+      ),
+      CalendarCreateEventTool(
+        calendarService: effectiveCalendar,
+        permissionService: effectivePermission,
+      ),
+      NotificationScheduleTool(
+        notificationService: effectiveNotification,
+        permissionService: effectivePermission,
+      ),
+      NotificationCancelTool(
+        notificationService: effectiveNotification,
+        permissionService: effectivePermission,
+      ),
+      ContactsSearchTool(
+        contactsService: effectiveContacts,
+        contactsSanitizer: effectiveSanitizer,
+        permissionService: effectivePermission,
+      ),
+      GeolocationGetTool(
+        locationService: effectiveLocation,
+        permissionService: effectivePermission,
+      ),
+      ReverseGeocodeTool(
+        locationService: effectiveLocation,
+      ),
     ]);
     return registry;
   }

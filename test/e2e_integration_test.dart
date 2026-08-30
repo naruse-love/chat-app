@@ -213,6 +213,9 @@ void main() {
 
       // Yield control to let async constructors finish initialization (e.g. loadConfigs, _loadSettings, etc.)
       await Future.delayed(const Duration(milliseconds: 100));
+      while (container.read(apiConfigProvider).isLoading) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
 
       // Verify initial theme state
       final themeMode = container.read(themeProvider);

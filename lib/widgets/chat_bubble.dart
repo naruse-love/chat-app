@@ -142,6 +142,63 @@ _ToolMeta _getToolMetadata(String toolName) {
         securityLevelBadge: '需确认 Level 2',
         categoryColor: Colors.orange,
       );
+    // === Milestone 25: Native Privileged Tools ===
+    case 'calendar_query_events':
+      return const _ToolMeta(
+        displayName: '查询日程',
+        category: '设备日历',
+        icon: Icons.calendar_month,
+        securityLevelBadge: '特权 Level 3',
+        categoryColor: Color(0xFFC62828),
+      );
+    case 'calendar_create_event':
+      return const _ToolMeta(
+        displayName: '创建日程',
+        category: '设备日历',
+        icon: Icons.event_available,
+        securityLevelBadge: '特权 Level 3',
+        categoryColor: Color(0xFFC62828),
+      );
+    case 'notification_schedule':
+      return const _ToolMeta(
+        displayName: '设置通知',
+        category: '系统通知',
+        icon: Icons.notification_add,
+        securityLevelBadge: '特权 Level 3',
+        categoryColor: Color(0xFFC62828),
+      );
+    case 'notification_cancel':
+      return const _ToolMeta(
+        displayName: '取消通知',
+        category: '系统通知',
+        icon: Icons.notifications_off,
+        securityLevelBadge: '特权 Level 3',
+        categoryColor: Color(0xFFC62828),
+      );
+    case 'contacts_search':
+      return const _ToolMeta(
+        displayName: '搜索通讯录',
+        category: '设备通讯录',
+        icon: Icons.contacts,
+        securityLevelBadge: '特权 Level 3',
+        categoryColor: Color(0xFFC62828),
+      );
+    case 'geolocation_get':
+      return const _ToolMeta(
+        displayName: '获取当前定位',
+        category: '设备定位',
+        icon: Icons.my_location,
+        securityLevelBadge: '特权 Level 3',
+        categoryColor: Color(0xFFC62828),
+      );
+    case 'reverse_geocode':
+      return const _ToolMeta(
+        displayName: '地理逆编码',
+        category: '地理服务',
+        icon: Icons.pin_drop,
+        securityLevelBadge: '只读 Level 1',
+        categoryColor: Color(0xFF1976D2),
+      );
     default:
       return _ToolMeta(
         displayName: toolName,

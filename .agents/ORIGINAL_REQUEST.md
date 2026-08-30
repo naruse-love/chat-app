@@ -362,11 +362,101 @@ Integrity mode: development
 - 确保版本号更新为 `1.09.0+10`，并在 `WORK_LOG.md` 与 `.agents/context.md` 中完备记录 Milestone 24；
 - 提交 Git 并成功推送至 `origin/main`。
 
+## Follow-up — 2026-08-30T13:16:00+08:00
+
+在 Flutter AI 聊天应用中实现 Milestone 25：构建移动端原生设备特权能力服务契约与工具库（日历日程、定时通知/闹钟、通讯录脱敏检索、GPS地理位置与逆编码）、ContactsSanitizer 隐私脱敏与防注入网关、统一权限管理层（PermissionManagerService），并全面接入 ToolRegistry 与 UI 呈现。（注意：完成全套核心功能开发并确保 `flutter analyze` 0 issues，在进入测试阶段前暂停并汇报）。
+
+Working directory: D:\work\chat
+Integrity mode: development
+
+## Requirements
+
+### R1. 移动端原生设备能力抽象契约与服务层 (Native Services Abstraction)
+- 在 `lib/services/native/` 中定义纯 Dart 抽象接口与默认实现：
+  1. `ICalendarService`：支持日历日程查询、时间冲突检测、日程创建与删除；
+  2. `INotificationService`：支持本地推送通知、精准定时提醒（精确闹钟）与取消指定通知；
+  3. `IContactsService`：支持联系人模糊查询与字段脱敏过滤；
+  4. `ILocationService`：支持当前 GPS 经纬度获取、地址逆编码（经纬度转地名）与正向地理编码；
+- 提供纯 Dart 内存 Mock 默认实现与平台通道抽象，保证在 Headless CI/桌面环境下 100% 具备可测试性与零崩溃保障。
+
+### R2. 隐私数据脱敏网关与防注入防护 (ContactsSanitizer)
+- 实现 `ContactsSanitizer` 通讯录脱敏与安全网关：
+  - 手机号强制执行 E.164 掩码脱敏（如 `+86 138****1234`）；
+  - 严格白名单字段过滤（仅保留姓名、脱敏手机号、邮箱、公司）；
+  - 提示词注入（Prompt Injection）字符过滤与 Markdown 转义（转义 `<tool_call>`, `<system>`, `{`, `}` 等控制符号）；
+  - 单次查询最多限制返回 5 条匹配结果，杜绝隐私批量外泄。
+
+### R3. 原生能力工具集与 ToolRegistry 注册 (Native Tools Suite)
+- 完整实现以下 Level 3 原生特权标准 `Tool`：
+  1. `calendar_query_events` [Level 3 Privileged]：按时间范围查询日历日程与事件详情；
+  2. `calendar_create_event` [Level 3 Privileged + HITL]：创建系统日程（标题、起始结束时间、地点、提醒备注）；
+  3. `notification_schedule` [Level 3 Privileged + HITL]：设定本地精准定时通知/提醒；
+  4. `notification_cancel` [Level 3 Privileged]：取消/清空指定 ID 的待触发通知；
+  5. `contacts_search` [Level 3 Privileged]：通过 `ContactsSanitizer` 安全脱敏检索联系人；
+  6. `geolocation_get` [Level 3 Privileged]：获取当前设备经纬度坐标与粗略定位；
+  7. `reverse_geocode` [Level 0 Safe / Level 1 只读]：将经纬度坐标解析为人类可读的具体街道/城市地址；
+- 统一注册至 `ToolRegistry` 并支持动态启停开关与权限级别过滤。
+
+### R4. 统一权限管理与 UI 呈现 (PermissionManagerService & UI)
+- 实现 `PermissionManagerService`：统一检查与申请系统权限（日历、通知、通讯录、定位），权限被拒绝时返回清晰友好的中文降级错误，不崩溃；
+- 完善 `ChatBubble` 与 `ToolConfirmationCard`：为移动原生特权工具提供专属中文图标、特权徽章及确认卡片预览；
+- **阶段性约束**：完整完成 Milestone 25 的所有服务接口、脱敏网关、工具类、权限管理与 Registry/UI 接入，确保 `flutter analyze` 输出 **`No issues found!`**；在进入测试阶段前暂停并向用户汇报。
+
+## Acceptance Criteria
+
+### 架构与核心功能完备性
+- [ ] `ICalendarService`、`INotificationService`、`IContactsService`、`ILocationService` 抽象接口与服务实现就绪；
+- [ ] `ContactsSanitizer` 隐私脱敏网关（E.164 掩码、5 条限制、防注入转义）完整实现；
+- [ ] 7 个移动原生工具（日历读写、通知设定/取消、通讯录、定位与逆编码）全部注册至 `ToolRegistry`；
+- [ ] `PermissionManagerService` 权限检查与友好降级机制实现；
+- [ ] 静态分析 `flutter analyze` 保持 **`No issues found!`**（0 errors, 0 warnings）；
+- [ ] 开发完成且在进入测试阶段前暂停并输出成果汇报。
+
+## Follow-up — 2026-08-30T10:21:35Z
+
+对 Milestone 25（移动端原生特权能力：日历日程、定时通知、通讯录隐私脱敏检索、GPS 定位与逆编码、ContactsSanitizer 网关与权限管理层）执行全量自动化测试套件构建、对抗性加固验证与最终工程交付。
+
+Working directory: D:\work\chat
+Integrity mode: development
+
+## Requirements
+
+### R1. 全面构建与执行 Milestone 25 自动化测试矩阵
+针对 Milestone 25 所有核心原生服务与工具进行深度测试覆盖：
+1. **`ContactsSanitizer` 隐私脱敏与安全防御测试**：
+   - 手机号 E.164 格式规范化与自动掩码脱敏（`+86 138****1234`、`010-****9999`）；
+   - 白名单字段过滤（确保地址、备注等隐私字段物理隔离）；
+   - Prompt 注入控制字符防御与转义（`<tool_call>`, `<system>`, `[INST]`, `<｜｜DSML｜｜tool_calls>`, `{` 转 `｛`）；
+   - 单次检索 5 条硬上限限制与中文截断提示测试；
+2. **日历服务与日程冲突算法测试 (`ICalendarService`, `calendar_*`)**：
+   - 时间重叠冲突检测算法（$S_1 < E_2 \land E_1 > S_2$）与冲突预警测试；
+   - `calendar_query_events` 时间范围与关键词过滤测试；
+   - `calendar_create_event` 敏感创建与 HITL 交互确认测试；
+3. **通知服务与定时提醒测试 (`INotificationService`, `notification_*`)**：
+   - `notification_schedule` 精准定时提醒设定与 HITL 交互测试；
+   - `notification_cancel` 按 ID 取消与异常 ID 容错测试；
+4. **通讯录与定位服务测试 (`IContactsService`, `ILocationService`, `geolocation_*`, `reverse_geocode`)**：
+   - 通讯录多字段模糊检索与脱敏输出测试；
+   - GPS 坐标获取与街道地址逆编码解析测试；
+5. **统一权限管理与 UI 组件测试**：
+   - `PermissionManagerService` 权限拒绝与友好中文降级提示测试；
+   - `ChatBubble` 原生特权（Level 3）徽章与专属图标渲染测试；
+   - `ToolConfirmationCard` 日历冲突高亮与提醒确认卡片交互测试；
+6. **Headless CI 纯 Dart 稳定性保障**：
+   - 确保所有原生测试在无真机/模拟器的纯命令行与 CI 环境下 100% 稳定运行。
+
+### R2. 质量门禁与工程交付
+- 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat analyze`，输出 **`No issues found!`**（0 error, 0 warning, 0 lint）；
+- 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat test`，所有测试用例 **100% 全部通过（0 failures）**；
+- 确保版本号更新为 `1.10.0+11`，并在 `WORK_LOG.md` 与 `.agents/context.md` 中完备记录 Milestone 25；
+- 提交 Git 并成功推送至 `origin/main`。
+
 ## Acceptance Criteria
 
 ### 自动化测试与质量指标
-- [ ] 所有 Milestone 24 专属测试套件（PathSanitizer、文件工具、Isolate 超时强杀、剪贴板、HITL 确认卡片、DiffViewer、RuneSafeTruncator）全部通过；
+- [ ] 所有 Milestone 25 专属测试套件（ContactsSanitizer、日历日程冲突、通知提醒、通讯录、定位逆编码、权限管理、UI 徽章）全部通过；
 - [ ] 现有全部回归测试用例 100% 通过（0 failures）；
 - [ ] 静态分析 `flutter analyze` 结果为 `No issues found!`；
 - [ ] 变更已 commit 并 push 到 Git 远程仓库。
+
 
