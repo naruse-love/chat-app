@@ -459,4 +459,109 @@ Integrity mode: development
 - [ ] 静态分析 `flutter analyze` 结果为 `No issues found!`；
 - [ ] 变更已 commit 并 push 到 Git 远程仓库。
 
+## Follow-up — 2026-08-31T12:46:43Z
+
+在 Flutter AI 聊天应用中实现 Milestone 26：构建 Model Context Protocol (MCP) 客户端体系与动态工具网桥（SSE / WebSocket / Stdio 三大传输层通道、JSON-RPC 2.0 通信引擎、协议握手与心跳、动态工具/资源/Prompt 发现与调用桥接、多 Server 配置与生命周期状态管理、MCP 管理设置界面与 UI 动态标签渲染）。（注意：完成全套核心功能开发并确保 `flutter analyze` 0 issues，在进入全面测试阶段前暂停并汇报）。
+
+Working directory: D:\work\chat
+Integrity mode: development
+
+## Requirements
+
+### R1. MCP 多传输通道层与 JSON-RPC 2.0 协议引擎 (MCP Transports & JSON-RPC 2.0)
+- 在 `lib/services/mcp/transports/` 中构建抽象传输接口 `McpTransport` 与三大传输实现：
+  1. `SseMcpTransport`：基于 HTTP SSE (Server-Sent Events) + POST 的远程 MCP 传输通道；
+  2. `WebSocketMcpTransport`：基于全双工 WebSocket 的实时双向传输通道；
+  3. `StdioMcpTransport`：基于本地子进程标准输入输出（`Process.start`）的本地进程传输通道（桌面端支持与优雅降级）；
+- 实现 `JsonRpcEngine`：
+  - 严格支持 JSON-RPC 2.0 规范（Request、Response、Notification、Error）；
+  - 请求 ID 自动递增关联、10s 请求超时处理与标准错误码（`-32700`, `-32600`, `-32601`, `-32602`, `-32603`）转换。
+
+### R2. MCP 客户端协议核心与动态工具网桥 (McpClient & Dynamic Tool Bridge)
+- 实现 `McpClient` 核心客户端：
+  - 握手协议协商：`initialize`（客户端 Capabilities 交换与协议版本 `2024-11-05` 协商）；
+  - 心跳保活机制：`ping` 定时检测与断线重连；
+  - 工具发现与调用：`tools/list` 获取远程工具清单，`tools/call` 异步执行并处理结构化返回/错误；
+  - 资源与模板支持：`resources/list` / `resources/read` 及 `prompts/list` / `prompts/get`；
+- 实现 `McpDynamicTool` 动态工具适配器：
+  - 将远程 MCP 工具动态包装为标准 `Tool` 实例，自动添加命名空间前缀（`mcp_{serverId}_{toolName}`）；
+  - 随 MCP Server 连接状态自动在 `ToolRegistry` 中动态注册与注销。
+
+### R3. 多 Server 配置持久化与 Riverpod 状态管理 (McpProvider & Storage)
+- 定义数据模型 (`lib/models/mcp/`)：
+  - `McpServerConfig`：ID、名称、传输类型（SSE / WebSocket / Stdio）、URL / 命令、环境变量/请求头、自动重连、启用状态；
+  - `McpServerState`：连接状态枚举（`disconnected`, `connecting`, `connected`, `error`）、已发现工具列表、错误信息；
+- 实现 `McpProvider`（基于 `StateNotifier`）：
+  - 支持多 MCP Server 增删改查与配置持久化；
+  - 统一管理 Server 连接/断开、动态工具注入 `ToolRegistry`、连接状态监听；
+  - 所有 `await` 异步后遵循 `if (!mounted) return;` 规范。
+
+### R4. MCP 管理设置界面与 UI 动态徽章渲染 (UI & ChatBubble)
+- 实现 `McpServerManagementScreen` 管理界面：
+  - 支持 Server 列表展示、在线状态芯片指示、添加/编辑/删除 Server、一键连接测试与启停切换；
+  - 在应用设置页（`SettingsScreen`）中提供入口跳转；
+- 完善 `ChatBubble` 与 `ToolConfirmationCard`：
+  - 识别动态 MCP 工具，渲染专属 `MCP: {ServerName}` 徽章、服务器来源标识与折叠卡片；
+- **阶段性约束**：完整完成 Milestone 26 的所有传输层、协议引擎、客户端、动态工具适配器、Riverpod 状态管理、UI 管理界面与 ChatBubble 接入，确保 `flutter analyze` 输出 **`No issues found!`**；在进入全面测试阶段前暂停并向用户汇报。
+
+## Acceptance Criteria
+
+### 架构与核心功能完备性
+- [ ] `McpTransport`、`SseMcpTransport`、`WebSocketMcpTransport`、`StdioMcpTransport` 与 `JsonRpcEngine` 完整实现；
+- [ ] `McpClient` 支持完整的协议初始化握手（`initialize`）、心跳保活、`tools/list` 动态发现与 `tools/call` 调用；
+- [ ] `McpDynamicTool` 能够将远程工具注入 `ToolRegistry`，并在断连时自动清理；
+- [ ] `McpServerConfig`、`McpServerState` 与 `McpProvider` 支持多 Server 配置持久化与响应式状态管理；
+- [ ] `McpServerManagementScreen` 支持可视化配置管理，`ChatBubble` 具备 MCP 专属徽章；
+- [ ] 静态分析 `flutter analyze` 保持 **`No issues found!`**（0 errors, 0 warnings）；
+- [ ] 开发完成且在进入全面测试阶段前暂停并输出成果汇报。
+
+## Follow-up — 2026-09-01T01:54:46Z
+
+对 Milestone 26（Model Context Protocol / MCP 客户端体系、SSE / WebSocket / Stdio 三大传输层通道、JSON-RPC 2.0 协议引擎、动态工具网桥、多 Server 配置持久化与 Riverpod 状态管理、MCP 管理设置界面与 UI 动态徽章）执行全量自动化测试套件构建、对抗性加固验证与最终工程交付。
+
+Working directory: D:\work\chat
+Integrity mode: development
+
+## Requirements
+
+### R1. 全面构建与执行 Milestone 26 自动化测试矩阵
+针对 Milestone 26 所有核心模块与传输通道进行深度测试覆盖：
+1. **`McpTransport` 三大传输层通道与容错测试**：
+   - `SseMcpTransport`：SSE 事件流解析、分块数据重组、POST 消息发送、HTTP 异常状态码与断线重连测试；
+   - `WebSocketMcpTransport`：全双工消息收发、连接中断重连与异常状态流转测试；
+   - `StdioMcpTransport`：子进程标准 I/O 管道通信、进程异常退出捕获与跨平台优雅降级测试；
+2. **`JsonRpcEngine` 协议引擎测试**：
+   - Request ID 自动关联映射、Response 结果解析、Notification 事件分发；
+   - 10s 请求超时取消机制测试；
+   - 标准错误码映射测试（`-32700 Parse error`, `-32600 Invalid Request`, `-32601 Method not found`, `-32602 Invalid params`, `-32603 Internal error`）；
+3. **`McpClient` 协议核心与动态工具网桥测试**：
+   - 协议初始化握手测试（`initialize` Capabilities 交换与协议版本 `2024-11-05` 协商）；
+   - 心跳保活测试（`ping` 超时与连接存活性探活）；
+   - `tools/list` 远程工具 Schema 解析与转 OpenAI Function Calling 规范测试；
+   - `tools/call` 异步远程调用、超时重试与异常兜底测试；
+   - `McpDynamicTool` 动态注入 `ToolRegistry`（带 `mcp_{serverId}_{toolName}` 命名空间）与断开连接时自动清理注销测试；
+4. **`McpServerDao` 数据持久化与 `McpProvider` 状态机测试**：
+   - SQLite `mcp_servers` 表 CRUD 完整性与事务安全测试；
+   - `McpProvider` 连接状态机流转（`disconnected` ➜ `connecting` ➜ `connected` / `error`）；
+   - 多 Server 启停开关与并发连接调度测试；
+5. **UI 管理界面与聊天气泡动态渲染测试**：
+   - `McpServerManagementScreen` 列表渲染、新增/编辑/删除表单、连通性测试与启停切换交互测试；
+   - `ChatBubble` 动态 `MCP: {ServerName}` 专属徽章、服务器来源指示与工具折叠卡片渲染测试。
+
+### R2. 质量门禁与工程交付
+- 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat analyze`，输出 **`No issues found!`**（0 error, 0 warning, 0 lint）；
+- 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat test`，所有测试用例 **100% 全部通过（0 failures）**；
+- 确保版本号更新为 `1.11.0+12`，并在 `WORK_LOG.md` 与 `.agents/context.md` 中完备记录 Milestone 26；
+- 提交 Git 并成功推送至 `origin/main`。
+
+## Acceptance Criteria
+
+### 自动化测试与质量指标
+- [ ] 所有 Milestone 26 专属测试套件（SSE/WS/Stdio 传输层、JsonRpcEngine、McpClient、动态工具网桥、McpServerDao、McpProvider、UI 管理界面）全部通过；
+- [ ] 现有全部回归测试用例 100% 通过（0 failures）；
+- [ ] 静态分析 `flutter analyze` 结果为 `No issues found!`；
+- [ ] 变更已 commit 并 push 到 Git 远程仓库。
+
+
+
 

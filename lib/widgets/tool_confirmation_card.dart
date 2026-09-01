@@ -61,7 +61,8 @@ class _ToolConfirmationCardState extends State<ToolConfirmationCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final securityColor = _getSecurityColor(widget.request.securityLevel);
+    final isMcp = widget.request.toolName.startsWith('mcp_');
+    final securityColor = isMcp ? Colors.deepPurple : _getSecurityColor(widget.request.securityLevel);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -109,13 +110,14 @@ class _ToolConfirmationCardState extends State<ToolConfirmationCard> {
   }
 
   Widget _buildHeader(BuildContext context, bool isDark, Color securityColor) {
+    final isMcp = widget.request.toolName.startsWith('mcp_');
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       color: securityColor.withValues(alpha: isDark ? 0.2 : 0.1),
       child: Row(
         children: [
           Icon(
-            Icons.security_outlined,
+            isMcp ? Icons.hub_outlined : Icons.security_outlined,
             size: 20,
             color: securityColor,
           ),
@@ -134,6 +136,24 @@ class _ToolConfirmationCardState extends State<ToolConfirmationCard> {
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (isMcp) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'MCP 动态工具',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepPurple,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
@@ -182,7 +202,9 @@ class _ToolConfirmationCardState extends State<ToolConfirmationCard> {
     final name = widget.request.toolName;
     final preview = widget.request.previewData;
 
-    if (name == 'file_write') {
+    if (name.startsWith('mcp_')) {
+      return _buildMcpToolPreview(context, isDark);
+    } else if (name == 'file_write') {
       return _buildFileWritePreview(context, isDark, preview);
     } else if (name == 'file_delete') {
       return _buildFileDeletePreview(context, isDark, preview);
@@ -197,6 +219,66 @@ class _ToolConfirmationCardState extends State<ToolConfirmationCard> {
     } else {
       return _buildGenericArgumentsPreview(context, isDark);
     }
+  }
+
+  Widget _buildMcpToolPreview(BuildContext context, bool isDark) {
+    final args = widget.request.arguments;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF261D36) : const Color(0xFFF3E5F5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark ? const Color(0xFF5E35B1) : const Color(0xFFD1C4E9),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.hub_outlined, color: Colors.deepPurple, size: 16),
+              const SizedBox(width: 6),
+              const Text(
+                'MCP 远程参数调用:',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.deepPurple,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'MCP 动态工具',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.deepPurple,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (args.isEmpty)
+            const Text('(无传入参数)', style: TextStyle(fontSize: 11.5, color: Colors.grey))
+          else
+            ...args.entries.map((entry) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                '• ${entry.key}: ${entry.value}',
+                style: const TextStyle(fontSize: 11.5, fontFamily: 'monospace'),
+              ),
+            )),
+        ],
+      ),
+    );
   }
 
   Widget _buildFileWritePreview(BuildContext context, bool isDark, dynamic preview) {

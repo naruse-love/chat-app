@@ -1,3 +1,79 @@
+## 2026-09-01 Testing & Delivery: Milestone 26 MCP Testing, Adversarial Hardening & Final Delivery (v1.13.0+14)
+
+### 变更文件
+- `lib/models/mcp/mcp_tool_info.dart`: 增强 `McpServerCapabilities.fromJson` 泛型字典兼容性与容错能力。
+- `pubspec.yaml`: 依据 `AGENTS.md` 规范递增项目版本号至 `1.13.0+14`。
+- `test/services/mcp/mcp_transports_test.dart`: 扩展四大传输层对抗性测试套件（SSE 跨包/分块 JSON 重组与注释行过滤、动态 endpoint 解析与 500ms 降级、HTTP 401/403/404/500 异常状态码捕获；WebSocket 文本/二进制 UTF-8 帧解析与非 JSON 容错、Socket 掉线重连；Stdio 非 0 退出码捕获、Stdout 调试日志行过滤与资源清理）。
+- `test/services/mcp/json_rpc_engine_test.dart`: 扩展 JSON-RPC 2.0 异步引擎测试套件（并发请求 ID 关联与乱序响应处理、10s 超时熔断与迟到响应安全忽略、Response/Server Request/Notification 三路解复用、-32700 到 -32603 全套标准错误码映射、底层传输断开 failAllPending 熔断）。
+- `test/services/mcp/mcp_client_test.dart`: 扩展 MCP 客户端协议核心测试套件（2024-11-05 协议握手 Capabilities 交换、ping 保活、tools/resources/prompts 检索与多模态内容块解析、isError 标记与超时降级处理、dispose 资源回收）。
+- `test/services/mcp/mcp_dynamic_tool_test.dart`: 扩展动态工具网桥测试套件（命名空间隔离 `mcp_{cleanServerId}_{cleanToolName}` 与 64 字符硬截断、JSON Schema 宽容解析、`__` 系统参数清洗、`ToolRegistry` 动态生命周期注册/注销）。
+- `test/data/mcp_server_dao_test.dart`: 扩展 SQLite `mcp_servers` 表 CRUD、SecureStorage headers 加密持久化与物理删除、v3 到 v4 数据库平滑升级迁移测试。
+- `test/providers/mcp_provider_test.dart`: 扩展 Riverpod `McpNotifier` 状态机流转、并发多 Server 调度（SSE + WS + Stdio 并行管理）、断网流监听工具注销、无副作用 `testConnection`、`if (!mounted) return;` 异步保护测试。
+- `test/screens/mcp_server_management_screen_test.dart`: 扩展 MCP 服务管理主页面空状态、动态表单切换（SSE/WS URL+Headers vs Stdio Command+Args+Env）、表单校验、实时连通性测试反馈、多 Tab 工具抽屉 Widget 测试。
+- `test/widgets/mcp_ui_rendering_test.dart`: 扩展 `ChatBubble` MCP 紫色徽章与工具执行结果展开、`ToolConfirmationCard` 敏感确认卡片预览与授权/拒绝流、`SettingsScreen` 入口导航 Widget 测试。
+- `test/models/mcp/mcp_tool_info_test.dart`: 新增 MCP 协议数据模型单元测试套件（McpToolInfo、McpContentBlock、McpToolCallResult、McpResourceInfo、McpResourceContent、McpPromptInfo、McpPromptArgument、McpInitializeResult、McpServerCapabilities）。
+
+### 核心改进与技术指标
+1. **全链路对抗性异常与边界覆盖**：
+   - 覆盖网络分包、协议错误、异常退出、未授权 401/403、超时重试与断网熔断全场景；
+   - 验证 OpenAI Function Calling 64 字符长度硬截断规范与命名空间防冲突隔离；
+   - 验证 SecureStorage 敏感凭据物理隔离与删除安全；
+   - 验证并发多 Server 独立状态机与 ToolRegistry 动态注入/注销协同。
+2. **质量指标**：
+   - 静态分析 `flutter analyze` 保持 **`No issues found!`**（0 errors, 0 warnings, 0 lints）；
+   - 全量自动化测试套件通过率 **100% (662/662 全部通过，0 failures)**。
+
+## 2026-08-31 UI & Integration: Milestone 26.4 MCP Management Screen, Settings Integration, and UI Badges (v1.12.0+13)
+
+### 变更文件
+- `lib/screens/mcp_server_management_screen.dart`: MCP 服务管理主页面 `McpServerManagementScreen`、服务器添加/编辑表单对话框 `McpServerEditDialog`（支持 SSE/WebSocket/Stdio 通道参数校验、敏感请求头/环境变量解析、异步连接测试）与工具/资源/Prompt 查看抽屉 `McpToolsBottomSheet`。
+- `lib/screens/settings_screen.dart`: 在“配置管理”分组中新增“MCP 服务管理”入口卡片。
+- `lib/app.dart`: 在 `AppRouter.generateRoute` 中注册 `/settings/mcp_servers` 页面路由导航。
+- `lib/widgets/chat_bubble.dart`: 在 `_getToolMetadata` 中新增对 `mcp_` 动态工具前缀的原生适配，展示 `MCP: <name>` 显示名称、`MCP 扩展工具` 类别标识、`Icons.hub_outlined` 图标、`MCP` 徽章与 `Colors.deepPurple` 主题色。
+- `lib/widgets/tool_confirmation_card.dart`: 增强对 `mcp_` 动态工具的高风险二次确认拦截渲染，展示 `MCP 动态工具` 标签与专属 Deep Purple 视觉样式及参数预览。
+- `pubspec.yaml`: 按照规范递增版本号至 `1.12.0+13`。
+- `test/screens/mcp_server_management_screen_test.dart`: MCP 服务器管理页面空状态、加载中、列表与多状态徽章渲染、添加/编辑/测试连接/启停切换/删除二次确认/工具抽屉完整 Widget 测试套件。
+- `test/widgets/mcp_ui_rendering_test.dart`: `ChatBubble` MCP 动态工具徽章渲染、`ToolConfirmationCard` MCP 拦截确认卡片与 `SettingsScreen` 设置入口渲染测试套件。
+
+### 核心改进与技术指标
+1. **完善的 MCP 服务管理体验**：
+   - 支持 SSE、WebSocket 与 Stdio 三种传输协议的独立表单配置与实时联调；
+   - 一键测试连接（`testConnection`）并即时反馈工具/资源探测数量与异常诊断；
+   - 具备工具/资源/Prompt 多 Tab 查看能力与 Schema 参数详情展示；
+   - 支持启停 Switch 开关与删除二次确认防护。
+2. **全局 UI 徽章与安全性联动**：
+   - 聊天气泡与工具调用列表一等支持 MCP 动态工具标记与紫色主题色分类；
+   - 涉及 Level 2+ 敏感操作的 MCP 工具在 `ToolConfirmationCard` 中提供专属动态工具确认徽章与参数审计。
+3. **质量指标**：
+   - 静态分析 `flutter analyze` 保持 **`No issues found!`**（0 errors, 0 warnings）；
+   - 全量测试套件通过率 **100% (610/610 passed)**。
+
+## 2026-08-31 Feature & Storage: Milestone 26.3 MCP Storage, DAO Migration & Riverpod McpProvider (v1.11.0+12)
+
+### 变更文件
+- `lib/models/mcp/mcp_server_config.dart`: MCP 服务器持久化配置模型 `McpServerConfig`，支持多种传输通道（stdio / sse / websocket）、进程执行参数/环境变量、敏感 headers 引用、安全等级与自动连接配置。
+- `lib/models/mcp/mcp_server_state.dart`: MCP Server 运行时状态模型 `McpServerState`，管理连接生命周期状态、工具/资源/Prompt 元数据与错误信息。
+- `lib/data/database_helper.dart`: 数据库版本从 v3 升至 v4，新增 `mcp_servers` 表建表与平滑升级迁移逻辑。
+- `lib/data/mcp_server_dao.dart`: `McpServerDao` 数据库访问对象，支持 SQLite 与 SecureStorage 双重存储（敏感 headers 加密存储于安全存储中）。
+- `lib/providers/mcp_provider.dart`: Riverpod 状态管理 `McpState` 与 `McpNotifier`，实现多 Server 增删改查、连接/断开生命周期管理、动态 `McpDynamicTool` 注入/注销 `ToolRegistry`，并在所有 `await` 异步后严格执行 `if (!mounted) return;` 保护。
+- `lib/services/mcp/mcp_client.dart`: 升级默认客户端版本标识为 `1.11.0`。
+- `pubspec.yaml`: 按照规范递增版本号至 `1.11.0+12`。
+- `test/models/mcp/mcp_server_config_test.dart`: `McpServerConfig` 与 `McpServerState` 序列化/反序列化及属性测试套件。
+- `test/data/mcp_server_dao_test.dart`: `McpServerDao` CRUD、SecureStorage headers 存取与 SQLite v3->v4 升级迁移测试套件。
+- `test/providers/mcp_provider_test.dart`: `McpNotifier` 状态机生命周期、自动连接、ToolRegistry 动态注入/清理、断线监听、连接测试与 mounted 安全测试套件。
+
+### 核心改进与技术指标
+1. **多 Server 配置持久化与加密安全存储**：
+   - SQLite `mcp_servers` 表存储基础元数据与进程/网络配置；
+   - 敏感 Authorization 请求头通过 `SecureStorageService` 加密隔离存储，防止明文泄露。
+2. **响应式状态管理与动态工具桥接 (McpProvider)**：
+   - 随 Server 启停/断线自动在 `ToolRegistry` 中动态注册/注销 `McpDynamicTool`；
+   - 支持一键连接测试 `testConnection`（不污染持久化状态与工具注册表）；
+   - 全异步链路严格遵守 `if (!mounted) return;` 生命周期约束。
+3. **质量指标**：
+   - 静态分析 `flutter analyze` 保持 **`No issues found!`**（0 errors, 0 warnings）；
+   - 全量测试套件通过率 **100% (600/600 passed)**。
+
 ## 2026-08-30 Feature & Integration: Milestone 25 Native Capabilities, Privileged Tools & Privacy Gateway (v1.10.0+11)
 
 ### 变更文件

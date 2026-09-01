@@ -26,7 +26,7 @@ class DatabaseHelper {
     try {
       return await openDatabase(
         path,
-        version: 3,
+        version: 4,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -41,7 +41,7 @@ class DatabaseHelper {
       } catch (_) {}
       return await openDatabase(
         path,
-        version: 3,
+        version: 4,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -107,6 +107,8 @@ class DatabaseHelper {
       )
     ''');
 
+    await _createMcpServersTable(db);
+
     await db.execute('''
       CREATE INDEX idx_messages_conversation_id ON messages (conversationId);
     ''');
@@ -124,6 +126,27 @@ class DatabaseHelper {
     ''');
   }
 
+  Future<void> _createMcpServersTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS mcp_servers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        transportType TEXT NOT NULL,
+        command TEXT,
+        arguments TEXT,
+        environment TEXT,
+        workingDirectory TEXT,
+        url TEXT,
+        headersRef TEXT,
+        isEnabled INTEGER NOT NULL DEFAULT 1,
+        autoConnect INTEGER NOT NULL DEFAULT 1,
+        defaultSecurityLevel INTEGER NOT NULL DEFAULT 1,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+    ''');
+  }
+
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE conversations ADD COLUMN isPinned INTEGER NOT NULL DEFAULT 0');
@@ -135,6 +158,9 @@ class DatabaseHelper {
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE messages ADD COLUMN promptTokens INTEGER');
       await db.execute('ALTER TABLE messages ADD COLUMN completionTokens INTEGER');
+    }
+    if (oldVersion < 4) {
+      await _createMcpServersTable(db);
     }
   }
 

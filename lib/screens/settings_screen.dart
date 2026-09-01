@@ -402,6 +402,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Navigator.pushNamed(context, '/settings/system_prompts');
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.hub_outlined, color: Colors.deepPurple),
+            title: const Text('MCP 服务管理'),
+            subtitle: const Text('管理 Model Context Protocol 服务器与扩展工具'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.pushNamed(context, '/settings/mcp_servers');
+            },
+          ),
         ],
       ),
     );

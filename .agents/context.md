@@ -1,5 +1,5 @@
 # 项目接手上下文（Context）
-> 最后更新：2026-08-30
+> 最后更新：2026-09-01
 
 ---
 
@@ -10,7 +10,7 @@
 - **工作目录**：`D:\work\chat`
 - **Flutter SDK**：`D:\work\flutter-sdk\flutter\bin\flutter.bat`
 - **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支）
-- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（537/537），`flutter analyze` 必须 0 issues
+- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（662/662），`flutter analyze` 必须 0 issues
 
 ---
 
@@ -45,8 +45,9 @@
 | **23 / 内置基础工具库与防死循环架构** | 打造内置基础工具体系（`math_eval` 数学计算引擎、`time_calculator` 高精度时间时区运算、`weather_query` 免费 Open-Meteo 天气、`wiki_lookup` 维基百科检索）；构建 `ToolRegistry` 统一注册与权限管理中心；引入 `AgentLoopGuard`（RFC 1321 MD5 签名、连续重复与震荡周期防御、轮次上限强制兜底）；`AgentService` 全面接入与动态 Schema 导出；`ChatBubble` 中文分类标签、安全等级徽章与折叠卡片（2026-08-28） | ✅ 完成 |
 | **24 / 本地沙箱执行与人机协同确认机制** | 打造本地安全沙箱文件系统（`PathSanitizer` 路径净化与配额管理、`file_read`、`file_write`、`file_list`、`file_delete`）与多语言 Isolate 代码执行沙箱（`code_eval` 3000ms 硬超时强杀）及系统剪贴板工具（`clipboard_read`、`clipboard_write`）；定义 4 级工具安全分类；实现人机协同确认机制（Human-in-the-Loop, HITL），在 `AgentService` 与 `ChatNotifier` 中全面拦截 Level 2 敏感工具并挂起异步决断；实现 `DiffViewerWidget` 统一差异对比视图与 `ToolConfirmationCard` 授权/拒绝交互卡片；ToolRegistry 统一接入 15 个工具；完成全面对抗性加固验证与 412 个自动化测试矩阵（2026-08-29） | ✅ 完成 |
 | **25 / 移动原生能力与特权工具生态** | 打造移动端原生设备能力抽象契约与服务层（`ICalendarService`、`INotificationService`、`IContactsService`、`ILocationService` 及内存 Mock）；构建隐私脱敏网关 `ContactsSanitizer`（E.164 手机号掩码、白名单过滤、提示词注入防护、单次 5 条限制）；实现统一权限管理器 `PermissionManagerService`（权限预检、申请与中文友好降级）；实现 7 个原生标准工具（`calendar_query_events`、`calendar_create_event`、`notification_schedule`、`notification_cancel`、`contacts_search`、`geolocation_get`、`reverse_geocode`）；`ToolRegistry` 接入 22 个工具并支持动态启停与 Schema 导出；`ChatBubble` 与 `ToolConfirmationCard` 深度集成原生特权徽章与专属日程/通知预览卡片（2026-08-30） | ✅ 完成 |
+| **26 / MCP 客户端体系、动态工具网桥与全链路加固** | 构建 Model Context Protocol (MCP 2024-11-05) 客户端体系与动态工具网桥：多通道传输层（`SseMcpTransport`、`WebSocketMcpTransport`、`StdioMcpTransport` 跨平台支持与优雅降级）、`JsonRpcEngine` 协议引擎（超时、请求路由与错误映射）、`McpClient` 核心客户端（初始化握手、保活心跳、工具/资源/Prompt 检索与执行）、`McpDynamicTool` 桥接适配器（OpenAI Schema 命名空间隔离与参数宽容解析）；SQLite v4 `mcp_servers` 表与 `SecureStorageService` 敏感凭据存储；`McpProvider`（StateNotifier 异步 `mounted` 安全与 `ToolRegistry` 动态注入/注销）；`McpServerManagementScreen` 管理页面、设置页入口及 `ChatBubble` / `ToolConfirmationCard` 专属 MCP 徽章与参数预览；完成全链路对抗性测试与加固交付（2026-09-01） | ✅ 完成 |
 
-**当前测试状态：537 / 537 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.10.0+11。**
+**当前测试状态：662 / 662 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.13.0+14。**
 
 ---
 
@@ -214,6 +215,7 @@ test/
 24. **通讯录隐私脱敏网关 (ContactsSanitizer)**：规范化 E.164 号码掩码脱敏（保留前3后4位）、严格白名单过滤（屏蔽私密备注与敏感地址）、中立化控制符防御提示词注入与 JSON 结构污染、单次检索结果硬性截断上限 5 条。
 25. **统一原生权限管理与友好降级**：`PermissionManagerService` 统一管理 `AppPermission` 状态与申请流，对未授权或被拒绝权限返回明确中文友好提示与操作引导。
 26. **原生特权工具链 (Level 3) 与 HITL 专用卡片**：构建 7 个原生工具（日历、通知、通讯录、定位），其中日历新建与定时通知通过 `CalendarEventPreview` / `NotificationPreview` 结构化提炼渲染专属 HITL 确认卡片。
+27. **MCP (Model Context Protocol) 客户端体系与动态工具网桥**：构建多通道通信层（SSE / WebSocket / Stdio）、JSON-RPC 2.0 异步协议引擎（支持 10s 请求超时与标准错误码转换）、MCP 2024-11-05 标准协议握手与心跳机制；实现 `McpDynamicTool` 动态工具网桥，将远程 MCP 工具自动转换为带命名空间隔离的标准 `Tool` 实例并动态注入 `ToolRegistry`；SQLite v4 表结构持久化多 Server 配置，并通过 `SecureStorageService` 加密隔离敏感授权凭据；`McpProvider`（StateNotifier）严格遵循异步 `mounted` 安全防护；提供专属 `McpServerManagementScreen` 可视化管理面板及 `ChatBubble` / `ToolConfirmationCard` MCP 紫色徽章与参数审计。
 
 ---
 
@@ -248,7 +250,7 @@ test/
 # 静态分析（必须 0 issues）
 D:\work\flutter-sdk\flutter\bin\flutter.bat analyze
 
-# 运行全部测试（必须 537/537 通过）
+# 运行全部测试（必须 645/645 通过）
 D:\work\flutter-sdk\flutter\bin\flutter.bat test --no-pub
 
 # 编译 Debug APK

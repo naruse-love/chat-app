@@ -200,6 +200,16 @@ _ToolMeta _getToolMetadata(String toolName) {
         categoryColor: Color(0xFF1976D2),
       );
     default:
+      if (toolName.startsWith('mcp_')) {
+        final cleanName = toolName.replaceFirst('mcp_', '');
+        return _ToolMeta(
+          displayName: 'MCP: $cleanName',
+          category: 'MCP 扩展工具',
+          icon: Icons.hub_outlined,
+          securityLevelBadge: 'MCP',
+          categoryColor: Colors.deepPurple,
+        );
+      }
       return _ToolMeta(
         displayName: toolName,
         category: '自定义工具',
