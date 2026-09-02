@@ -88,6 +88,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   void clearChat() {
     state = ChatState();
+    _ref.read(agentProvider.notifier).reset();
   }
 
   Future<void> loadMessages(String conversationId) async {
@@ -338,6 +339,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
         : settings.defaultSystemPrompt;
 
     state = state.copyWith(isGenerating: true, streamContent: '', streamReasoning: '', error: null);
+    _ref.read(agentProvider.notifier).clearTelemetry();
+    _ref.read(agentProvider.notifier).clearTransientState();
 
     int? pendingPromptTokens;
     int? pendingCompletionTokens;
@@ -379,6 +382,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
           _ref.read(agentProvider.notifier).completeUrlFetch();
         } else if (event is ToolConfirmationPendingEvent) {
           _ref.read(agentProvider.notifier).setPendingConfirmation(event.request);
+        } else if (event is AgentStepTelemetryEvent) {
+          _ref.read(agentProvider.notifier).addStepTelemetry(event.telemetry);
+        } else if (event is TokenBudgetTelemetryEvent) {
+          _ref.read(agentProvider.notifier).updateTokenBudget(event.telemetry);
+        } else if (event is CircuitBreakerTriggeredEvent) {
+          _ref.read(agentProvider.notifier).triggerCircuitBreaker(event.reason);
         } else if (event is ToolCallExecutedMessageEvent) {
           await _messageDao.insert(event.assistantMessage);
           for (final toolMsg in event.toolMessages) {
@@ -390,7 +399,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             streamContent: '',
             streamReasoning: '',
           );
-          _ref.read(agentProvider.notifier).reset();
+          _ref.read(agentProvider.notifier).clearTransientState();
         } else if (event is UsageEvent) {
           pendingPromptTokens = event.promptTokens;
           pendingCompletionTokens = event.completionTokens;
@@ -472,7 +481,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } finally {
       _cancelToken = null;
       _confirmationCompleter = null;
-      _ref.read(agentProvider.notifier).reset();
+      _ref.read(agentProvider.notifier).clearTransientState();
     }
   }
 
@@ -494,6 +503,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       await _messageDao.clearConversation(activeConv.id);
       if (!mounted) return;
       state = ChatState();
+      _ref.read(agentProvider.notifier).reset();
     }
   }
 }

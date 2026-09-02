@@ -6,6 +6,9 @@ class ToolExecutionResult {
   /// Whether the execution completed successfully.
   final bool success;
 
+  /// Alias for success.
+  bool get isSuccess => success;
+
   /// Formatted text/markdown content to inject into LLM context and render in UI.
   final String content;
 

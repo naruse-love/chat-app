@@ -5,11 +5,14 @@ import 'package:dio/dio.dart';
 import 'package:uuid/uuid.dart';
 import '../models/chat_message.dart';
 import '../models/tool_call.dart';
+import '../models/agent_step_telemetry.dart';
 import 'search_service.dart';
 import 'chat_service.dart';
 import 'url_fetch_service.dart';
 import 'tool_registry.dart';
 import 'agent_loop_guard.dart';
+import 'token_budget_manager.dart';
+import 'agent_fault_tolerance.dart';
 import 'tools/math_eval_tool.dart';
 import 'tools/time_calculator_tool.dart';
 import 'tools/weather_query_tool.dart';
@@ -81,6 +84,26 @@ class UsageEvent extends AgentStreamEvent {
   const UsageEvent(this.promptTokens, this.completionTokens);
 }
 
+/// Yielded when a step telemetry record is generated during multi-step tool execution.
+class AgentStepTelemetryEvent extends AgentStreamEvent {
+  final AgentStepTelemetry telemetry;
+  const AgentStepTelemetryEvent(this.telemetry);
+}
+
+/// Yielded when token budget evaluation or sliding window compaction occurs.
+class TokenBudgetTelemetryEvent extends AgentStreamEvent {
+  final TokenBudgetTelemetry telemetry;
+  const TokenBudgetTelemetryEvent(this.telemetry);
+}
+
+/// Yielded when context size triggers the global circuit breaker threshold.
+class CircuitBreakerTriggeredEvent extends AgentStreamEvent {
+  final String reason;
+  final int estimatedTokens;
+  final int budgetCap;
+  const CircuitBreakerTriggeredEvent(this.reason, this.estimatedTokens, this.budgetCap);
+}
+
 class _ToolCallAccumulator {
   String id = '';
   String name = '';
@@ -93,6 +116,8 @@ class AgentService {
   final SearchService _searchService;
   final UrlFetchService _urlFetchService;
   final ToolRegistry _toolRegistry;
+  final TokenBudgetManager _tokenBudgetManager;
+  final AgentFaultTolerance _agentFaultTolerance;
   final AgentLoopGuard Function()? guardFactory;
   final Uuid _uuid;
 
@@ -101,6 +126,8 @@ class AgentService {
     SearchService? searchService,
     UrlFetchService? urlFetchService,
     ToolRegistry? toolRegistry,
+    TokenBudgetManager? tokenBudgetManager,
+    AgentFaultTolerance? agentFaultTolerance,
     this.guardFactory,
   })  : _chatService = chatService ?? ChatService(),
         _searchService = searchService ?? SearchService(),
@@ -110,12 +137,53 @@ class AgentService {
               searchService: searchService,
               urlFetchService: urlFetchService,
             ),
+        _tokenBudgetManager = tokenBudgetManager ?? TokenBudgetManager(),
+        _agentFaultTolerance = agentFaultTolerance ?? AgentFaultTolerance(),
         _uuid = const Uuid();
 
   ChatService get chatService => _chatService;
   SearchService get searchService => _searchService;
   UrlFetchService get urlFetchService => _urlFetchService;
   ToolRegistry get toolRegistry => _toolRegistry;
+  TokenBudgetManager get tokenBudgetManager => _tokenBudgetManager;
+  AgentFaultTolerance get agentFaultTolerance => _agentFaultTolerance;
+
+  /// Categorizes a tool into one of the 4 dimensions:
+  /// 1: 基础实用, 2: 沙箱与代码, 3: 移动原生, 4: 动态MCP
+  static String categorizeTool(String toolName) {
+    if (toolName.startsWith('mcp_')) {
+      return '动态MCP';
+    }
+    switch (toolName) {
+      case 'math_eval':
+      case 'time_calculator':
+      case 'weather_query':
+      case 'wiki_lookup':
+      case 'web_search':
+      case 'google_search':
+      case 'bing_search':
+      case 'url_fetch':
+        return '基础实用';
+      case 'file_read':
+      case 'file_write':
+      case 'file_list':
+      case 'file_delete':
+      case 'code_eval':
+      case 'clipboard_read':
+      case 'clipboard_write':
+        return '沙箱与代码';
+      case 'calendar_query_events':
+      case 'calendar_create_event':
+      case 'notification_schedule':
+      case 'notification_cancel':
+      case 'contacts_search':
+      case 'geolocation_get':
+      case 'reverse_geocode':
+        return '移动原生';
+      default:
+        return '基础实用';
+    }
+  }
 
   /// OpenAI-compatible Tool definition for web search.
   static const Map<String, dynamic> webSearchTool = {
@@ -195,14 +263,6 @@ class AgentService {
   };
 
   /// Returns effective tool schemas passed to the LLM.
-  ///
-  /// When [toolRegistry] is provided:
-  /// - Filters search tools based on [enableAutoSearch] and [searchBackend].
-  /// - Includes all other enabled tools from the registry.
-  ///
-  /// When [toolRegistry] is null:
-  /// - Preserves exact legacy tool list for 100% backward compatibility.
-  /// - If [includeBasicTools] is true, also appends 4 basic tools.
   static List<Map<String, dynamic>> getEffectiveTools(
     String searchBackend, {
     bool enableAutoSearch = true,
@@ -285,13 +345,12 @@ class AgentService {
 
   /// Extracts pseudo-XML tool calls from [content].
   /// Supports both standard <tool_call> and DSML (<｜｜DSML｜｜tool_calls> or <||DSML||tool_calls>) formats.
-  /// Returns a list of maps with 'name' (String) and 'params' (Map<String, String>).
   static List<Map<String, dynamic>> parsePseudoXmlToolCalls(String content) {
     final results = <Map<String, dynamic>>[];
 
     // 1. Standard <tool_call> parsing
     final toolCallBlockRegex = RegExp(
-      r'<tool_call>\s*<function=(\w+)>([\s\S]*?)</function>\s*</tool_call>',
+      r'<tool_call>\s*<function=([\w\-]+)>([\s\S]*?)</function>\s*</tool_call>',
       multiLine: true,
     );
     for (final match in toolCallBlockRegex.allMatches(content)) {
@@ -299,7 +358,7 @@ class AgentService {
       final blockContent = match.group(2) ?? '';
       final paramMap = <String, String>{};
       final paramRegex = RegExp(
-        r'<parameter=(\w+)>([\s\S]*?)</parameter>',
+        r'<parameter=([\w\-]+)>([\s\S]*?)</parameter>',
         multiLine: true,
       );
       for (final paramMatch in paramRegex.allMatches(blockContent)) {
@@ -322,7 +381,7 @@ class AgentService {
       final blockContent = blockMatch.group(1) ?? '';
 
       final invokeRegex = RegExp(
-        r'<[|｜]{2}DSML[|｜]{2}invoke name="(\w+)">([\s\S]*?)</[|｜]{2}DSML[|｜]{2}invoke>',
+        r'<[|｜]{2}DSML[|｜]{2}invoke name="([\w\-]+)">([\s\S]*?)</[|｜]{2}DSML[|｜]{2}invoke>',
         multiLine: true,
       );
       for (final invokeMatch in invokeRegex.allMatches(blockContent)) {
@@ -331,7 +390,7 @@ class AgentService {
 
         final paramMap = <String, String>{};
         final paramRegex = RegExp(
-          r'<[|｜]{2}DSML[|｜]{2}parameter name="(\w+)"[^>]*>([\s\S]*?)</[|｜]{2}DSML[|｜]{2}parameter>',
+          r'<[|｜]{2}DSML[|｜]{2}parameter name="([\w\-]+)"[^>]*>([\s\S]*?)</[|｜]{2}DSML[|｜]{2}parameter>',
           multiLine: true,
         );
         for (final paramMatch in paramRegex.allMatches(invokeContent)) {
@@ -353,7 +412,7 @@ class AgentService {
   static String stripPseudoXmlToolCalls(String content) {
     var cleaned = content.replaceAll(_pseudoXmlToolCallRegex, '');
     final genericToolCallRegex = RegExp(
-      r'<tool_call>\s*<function=\w+>[\s\S]*?</function>\s*</tool_call>',
+      r'<tool_call>\s*<function=[\w\-]+>[\s\S]*?</function>\s*</tool_call>',
       multiLine: true,
     );
     cleaned = cleaned.replaceAll(genericToolCallRegex, '');
@@ -409,7 +468,86 @@ class AgentService {
     return args;
   }
 
-  /// Main entry point coordinating completion streaming, tool execution, and manual trigger.
+  /// Executes a tool with fault-tolerant exponential backoff retry and self-healing diagnostic error packaging.
+  Future<ToolExecutionResult> _executeToolSafely(
+    String name,
+    Map<String, dynamic> args, {
+    Map<String, dynamic>? context,
+    CancelToken? cancelToken,
+  }) async {
+    final isExternalOrMcp = name == 'web_search' ||
+        name == 'google_search' ||
+        name == 'bing_search' ||
+        name == 'url_fetch' ||
+        name == 'weather_query' ||
+        name == 'wiki_lookup' ||
+        name.startsWith('mcp_');
+
+    ToolExecutionResult result;
+    try {
+      if (isExternalOrMcp) {
+        result = await _agentFaultTolerance.executeWithRetry<ToolExecutionResult>(
+          () async {
+            final res = await _toolRegistry.execute(name, args, context: context);
+            if (!res.isSuccess && res.errorMessage != null) {
+              final err = res.errorMessage!;
+              if (err.contains('Timeout') ||
+                  err.contains('timeout') ||
+                  err.contains('连接') ||
+                  err.contains('超时') ||
+                  err.contains('SocketException') ||
+                  err.contains('429') ||
+                  err.contains('500') ||
+                  err.contains('502') ||
+                  err.contains('503') ||
+                  err.contains('504')) {
+                throw DioException(
+                  requestOptions: RequestOptions(path: ''),
+                  type: DioExceptionType.connectionTimeout,
+                  error: err,
+                );
+              }
+            }
+            return res;
+          },
+          cancelToken: cancelToken,
+        );
+      } else {
+        result = await _toolRegistry.execute(name, args, context: context);
+      }
+    } catch (e) {
+      developer.log('Tool execution failed for $name: $e', name: 'AgentService');
+      final feedback = _agentFaultTolerance.generateSelfHealingFeedback(
+        toolName: name,
+        arguments: args,
+        errorMessage: e.toString(),
+      );
+      return ToolExecutionResult.failure(
+        toolName: name,
+        errorMessage: e.toString(),
+        content: feedback,
+        rawData: {'error': e.toString(), 'selfHealingFeedback': feedback},
+      );
+    }
+
+    if (!result.isSuccess && (result.content.isEmpty || !result.content.contains('【工具'))) {
+      final feedback = _agentFaultTolerance.generateSelfHealingFeedback(
+        toolName: name,
+        arguments: args,
+        errorMessage: result.errorMessage ?? '执行失败',
+      );
+      result = ToolExecutionResult.failure(
+        toolName: name,
+        errorMessage: result.errorMessage ?? '执行失败',
+        content: feedback,
+        rawData: result.rawData,
+      );
+    }
+
+    return result;
+  }
+
+  /// Main entry point coordinating completion streaming, tool execution, token budgeting, and fault tolerance.
   Stream<AgentStreamEvent> chatAndSearchStream({
     required String baseUrl,
     required String apiKey,
@@ -470,23 +608,28 @@ class AgentService {
 
       yield ToolCallStartedEvent(query);
 
+      final stopwatch = Stopwatch()..start();
       List<SearchResult> results;
       String? searchError;
       try {
-        results = await _searchService.search(
-          query: query,
-          searxngUrl: searxngUrl,
-          searchBackend: searchBackend,
-          googleApiKey: googleApiKey,
-          googleBaseUrl: googleBaseUrl,
-          googleSearchModel: googleSearchModel,
-          bingCookie: bingCookie,
+        results = await _agentFaultTolerance.executeWithRetry<List<SearchResult>>(
+          () => _searchService.search(
+            query: query,
+            searxngUrl: searxngUrl,
+            searchBackend: searchBackend,
+            googleApiKey: googleApiKey,
+            googleBaseUrl: googleBaseUrl,
+            googleSearchModel: googleSearchModel,
+            bingCookie: bingCookie,
+          ),
+          cancelToken: cancelToken,
         );
-      } on SearchException catch (e) {
+      } catch (e) {
         results = [];
-        searchError = e.message;
-        developer.log('Manual search failed: ${e.message}', name: 'AgentService');
+        searchError = e is SearchException ? e.message : e.toString();
+        developer.log('Manual search failed: $searchError', name: 'AgentService');
       }
+      stopwatch.stop();
 
       _checkCancellation(cancelToken);
 
@@ -503,6 +646,21 @@ class AgentService {
           : (searchBackend == 'bing' ? 'bing_search' : 'web_search');
 
       activeGuard.recordToolCall(searchToolName, {'query': query});
+
+      final stepTelemetry = AgentStepTelemetry(
+        stepIndex: 1,
+        toolName: searchToolName,
+        toolCategory: '基础实用',
+        durationMs: stopwatch.elapsedMilliseconds,
+        intent: '用户指定手工搜索指令',
+        arguments: {'query': query},
+        outputPreview: formattedResults.length > 200 ? '${formattedResults.substring(0, 200)}...' : formattedResults,
+        fullOutput: formattedResults,
+        isSuccess: searchError == null,
+        errorMessage: searchError,
+        timestamp: DateTime.now(),
+      );
+      yield AgentStepTelemetryEvent(stepTelemetry);
 
       final assistantMessage = ChatMessage(
         id: _uuid.v4(),
@@ -555,8 +713,41 @@ class AgentService {
         maxToolRounds: maxToolRounds,
         guard: activeGuard,
         onConfirmTool: onConfirmTool,
+        stepIndexOffset: 1,
       );
     } else {
+      // 1. Pre-flight Token Budget & Sliding Window Compaction (Round 0)
+      final budgetResult = _tokenBudgetManager.evaluateAndCompact(
+        messages: effectiveMessages,
+        tools: effectiveTools,
+        currentRound: 0,
+      );
+
+      yield TokenBudgetTelemetryEvent(budgetResult.toTelemetry());
+
+      if (budgetResult.status == BudgetActionStatus.circuitBreakerTriggered || budgetResult.shouldStripTools) {
+        yield CircuitBreakerTriggeredEvent(
+          '当前会话上下文已达 ${budgetResult.estimatedPromptTokens} Tokens（超出模型安全上限）',
+          budgetResult.estimatedPromptTokens,
+          budgetResult.maxContextTokens,
+        );
+
+        final forcedPrompt = budgetResult.forcedConclusionPrompt ??
+            '【系统安全熔断】当前会话上下文已达 ${budgetResult.estimatedPromptTokens} Tokens（超出模型安全上限）。请立即基于前面已获得的全部工具执行数据与分析，为用户输出完整、详尽的最终总结性回答，禁止再次调用任何工具。';
+
+        yield* _streamFinalConclusion(
+          baseUrl: baseUrl,
+          apiKey: apiKey,
+          model: model,
+          messages: budgetResult.effectiveMessages,
+          prompt: forcedPrompt,
+          reasoningEffort: reasoningEffort,
+          cancelToken: cancelToken,
+        );
+        return;
+      }
+
+      final activeMessages = budgetResult.effectiveMessages;
       final accumulatedToolCalls = <int, _ToolCallAccumulator>{};
       final contentBuffer = StringBuffer();
       final reasoningBuffer = StringBuffer();
@@ -568,7 +759,7 @@ class AgentService {
         baseUrl: baseUrl,
         apiKey: apiKey,
         model: model,
-        messages: effectiveMessages,
+        messages: activeMessages,
         tools: effectiveTools,
         reasoningEffort: reasoningEffort,
         cancelToken: cancelToken,
@@ -632,27 +823,13 @@ class AgentService {
 
       if (accumulatedToolCalls.isNotEmpty) {
         final toolMessages = <ChatMessage>[];
-        final conversationId = effectiveMessages.last.conversationId;
+        final conversationId = activeMessages.last.conversationId;
+        int executedCount = 0;
 
         for (final entry in accumulatedToolCalls.values) {
           final name = entry.name;
-          Map<String, dynamic> args;
-          try {
-            final decoded = json.decode(entry.argumentsBuffer.toString());
-            if (decoded is Map<String, dynamic>) {
-              if (decoded.containsKey('query') && decoded['query'] != null && decoded['query'] is! String) {
-                args = {'query': entry.argumentsBuffer.toString()};
-              } else if (decoded.containsKey('url') && decoded['url'] != null && decoded['url'] is! String) {
-                args = {'url': entry.argumentsBuffer.toString()};
-              } else {
-                args = decoded;
-              }
-            } else {
-              args = {'query': entry.argumentsBuffer.toString()};
-            }
-          } catch (_) {
-            args = {'query': entry.argumentsBuffer.toString()};
-          }
+          final rawArgsString = entry.argumentsBuffer.toString();
+          final args = _agentFaultTolerance.repairAndParseArguments(rawArgsString);
 
           // Guard check before execution
           final verdict = activeGuard.checkBeforeExecution(name, args, currentRound: 0);
@@ -662,7 +839,7 @@ class AgentService {
               baseUrl: baseUrl,
               apiKey: apiKey,
               model: model,
-              messages: effectiveMessages,
+              messages: activeMessages,
               prompt: prompt,
               reasoningEffort: reasoningEffort,
               cancelToken: cancelToken,
@@ -689,6 +866,7 @@ class AgentService {
               toolObj != null && toolObj.securityLevel.requiresConfirmation && onConfirmTool != null;
 
           ToolExecutionResult result;
+          final stopwatch = Stopwatch()..start();
 
           if (requiresConfirmation) {
             final confirmationRequest = ToolConfirmationRequest(
@@ -723,24 +901,24 @@ class AgentService {
             } else {
               // Approved
               if (name == 'url_fetch') {
-                final url = args['url'] as String? ?? '';
+                final url = args['url']?.toString() ?? '';
                 yield UrlFetchStartedEvent(url);
               } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-                final query = args['query'] as String? ?? '';
+                final query = args['query']?.toString() ?? '';
                 yield ToolCallStartedEvent(query);
               } else {
                 final title = '${toolObj.displayName}: ${args.values.join(', ')}';
                 yield ToolCallStartedEvent(title);
               }
 
-              result = await _toolRegistry.execute(name, args, context: context);
+              result = await _executeToolSafely(name, args, context: context, cancelToken: cancelToken);
               _checkCancellation(cancelToken);
 
               if (name == 'url_fetch') {
-                final url = args['url'] as String? ?? '';
+                final url = args['url']?.toString() ?? '';
                 yield UrlFetchCompletedEvent(url, result.content);
               } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-                final query = args['query'] as String? ?? '';
+                final query = args['query']?.toString() ?? '';
                 final rawResults = (result.rawData is List<SearchResult>)
                     ? (result.rawData as List<SearchResult>)
                     : <SearchResult>[];
@@ -751,24 +929,24 @@ class AgentService {
             }
           } else {
             if (name == 'url_fetch') {
-              final url = args['url'] as String? ?? '';
+              final url = args['url']?.toString() ?? '';
               yield UrlFetchStartedEvent(url);
             } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-              final query = args['query'] as String? ?? '';
+              final query = args['query']?.toString() ?? '';
               yield ToolCallStartedEvent(query);
             } else {
               final title = toolObj != null ? '${toolObj.displayName}: ${args.values.join(', ')}' : name;
               yield ToolCallStartedEvent(title);
             }
 
-            result = await _toolRegistry.execute(name, args, context: context);
+            result = await _executeToolSafely(name, args, context: context, cancelToken: cancelToken);
             _checkCancellation(cancelToken);
 
             if (name == 'url_fetch') {
-              final url = args['url'] as String? ?? '';
+              final url = args['url']?.toString() ?? '';
               yield UrlFetchCompletedEvent(url, result.content);
             } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-              final query = args['query'] as String? ?? '';
+              final query = args['query']?.toString() ?? '';
               final rawResults = (result.rawData is List<SearchResult>)
                   ? (result.rawData as List<SearchResult>)
                   : <SearchResult>[];
@@ -777,6 +955,25 @@ class AgentService {
               yield ToolCallCompletedEvent(name, []);
             }
           }
+          stopwatch.stop();
+
+          executedCount++;
+          final stepTelemetry = AgentStepTelemetry(
+            stepIndex: executedCount,
+            toolName: name,
+            toolCategory: categorizeTool(name),
+            durationMs: stopwatch.elapsedMilliseconds,
+            intent: reasoningBuffer.isNotEmpty ? reasoningBuffer.toString() : (contentBuffer.isNotEmpty ? contentBuffer.toString() : null),
+            arguments: args,
+            outputPreview: result.content.length > 200 ? '${result.content.substring(0, 200)}...' : result.content,
+            fullOutput: result.content,
+            isSuccess: result.isSuccess,
+            errorMessage: result.errorMessage,
+            promptTokens: mainPromptTokens,
+            completionTokens: mainCompletionTokens,
+            timestamp: DateTime.now(),
+          );
+          yield AgentStepTelemetryEvent(stepTelemetry);
 
           toolMessages.add(ChatMessage(
             id: _uuid.v4(),
@@ -808,7 +1005,7 @@ class AgentService {
         yield ToolCallExecutedMessageEvent(assistantMessage, toolMessages);
 
         final nextMessages = [
-          ...effectiveMessages,
+          ...activeMessages,
           assistantMessage,
           ...toolMessages,
         ];
@@ -830,16 +1027,24 @@ class AgentService {
           maxToolRounds: maxToolRounds,
           guard: activeGuard,
           onConfirmTool: onConfirmTool,
+          stepIndexOffset: executedCount,
         );
       } else {
-        // --- First round: check for pseudo-XML fallback ---
+        // --- First round: check for multi-format tool call / pseudo-XML fallback ---
         final fullContent = contentBuffer.toString();
-        final pseudoCalls = parsePseudoXmlToolCalls(fullContent);
+        final multiFormatCalls = _agentFaultTolerance.parseToolCalls(fullContent);
+        final pseudoCalls = multiFormatCalls.isNotEmpty
+            ? multiFormatCalls.map((c) => {'name': c.toolName, 'params': c.arguments}).toList()
+            : parsePseudoXmlToolCalls(fullContent);
+
         if (pseudoCalls.isNotEmpty && effectiveTools.isNotEmpty) {
-          final cleanedContent = stripPseudoXmlToolCalls(fullContent);
-          final conversationId = effectiveMessages.last.conversationId;
+          final cleanedContent = multiFormatCalls.isNotEmpty
+              ? _agentFaultTolerance.stripToolCallBlocks(fullContent)
+              : stripPseudoXmlToolCalls(fullContent);
+          final conversationId = activeMessages.last.conversationId;
           final toolMessages = <ChatMessage>[];
           final toolCallList = <ToolCall>[];
+          int executedCount = 0;
 
           for (final call in pseudoCalls) {
             final name = call['name'] as String? ?? '';
@@ -853,7 +1058,7 @@ class AgentService {
                 baseUrl: baseUrl,
                 apiKey: apiKey,
                 model: model,
-                messages: effectiveMessages,
+                messages: activeMessages,
                 prompt: prompt,
                 reasoningEffort: reasoningEffort,
                 cancelToken: cancelToken,
@@ -881,6 +1086,7 @@ class AgentService {
                 toolObj != null && toolObj.securityLevel.requiresConfirmation && onConfirmTool != null;
 
             ToolExecutionResult result;
+            final stopwatch = Stopwatch()..start();
 
             if (requiresConfirmation) {
               final confirmationRequest = ToolConfirmationRequest(
@@ -915,24 +1121,24 @@ class AgentService {
               } else {
                 // Approved
                 if (name == 'url_fetch') {
-                  final url = params['url'] as String? ?? '';
+                  final url = params['url']?.toString() ?? '';
                   yield UrlFetchStartedEvent(url);
                 } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-                  final query = params['query'] as String? ?? '';
+                  final query = params['query']?.toString() ?? '';
                   yield ToolCallStartedEvent(query);
                 } else {
                   final title = '${toolObj.displayName}: ${params.values.join(', ')}';
                   yield ToolCallStartedEvent(title);
                 }
 
-                result = await _toolRegistry.execute(name, params, context: context);
+                result = await _executeToolSafely(name, params, context: context, cancelToken: cancelToken);
                 _checkCancellation(cancelToken);
 
                 if (name == 'url_fetch') {
-                  final url = params['url'] as String? ?? '';
+                  final url = params['url']?.toString() ?? '';
                   yield UrlFetchCompletedEvent(url, result.content);
                 } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-                  final query = params['query'] as String? ?? '';
+                  final query = params['query']?.toString() ?? '';
                   final rawResults = (result.rawData is List<SearchResult>)
                       ? (result.rawData as List<SearchResult>)
                       : <SearchResult>[];
@@ -943,24 +1149,24 @@ class AgentService {
               }
             } else {
               if (name == 'url_fetch') {
-                final url = params['url'] as String? ?? '';
+                final url = params['url']?.toString() ?? '';
                 yield UrlFetchStartedEvent(url);
               } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-                final query = params['query'] as String? ?? '';
+                final query = params['query']?.toString() ?? '';
                 yield ToolCallStartedEvent(query);
               } else {
                 final title = toolObj != null ? '${toolObj.displayName}: ${params.values.join(', ')}' : name;
                 yield ToolCallStartedEvent(title);
               }
 
-              result = await _toolRegistry.execute(name, params, context: context);
+              result = await _executeToolSafely(name, params, context: context, cancelToken: cancelToken);
               _checkCancellation(cancelToken);
 
               if (name == 'url_fetch') {
-                final url = params['url'] as String? ?? '';
+                final url = params['url']?.toString() ?? '';
                 yield UrlFetchCompletedEvent(url, result.content);
               } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-                final query = params['query'] as String? ?? '';
+                final query = params['query']?.toString() ?? '';
                 final rawResults = (result.rawData is List<SearchResult>)
                     ? (result.rawData as List<SearchResult>)
                     : <SearchResult>[];
@@ -969,6 +1175,25 @@ class AgentService {
                 yield ToolCallCompletedEvent(name, []);
               }
             }
+            stopwatch.stop();
+
+            executedCount++;
+            final stepTelemetry = AgentStepTelemetry(
+              stepIndex: executedCount,
+              toolName: name,
+              toolCategory: categorizeTool(name),
+              durationMs: stopwatch.elapsedMilliseconds,
+              intent: reasoningBuffer.isNotEmpty ? reasoningBuffer.toString() : (contentBuffer.isNotEmpty ? contentBuffer.toString() : null),
+              arguments: params,
+              outputPreview: result.content.length > 200 ? '${result.content.substring(0, 200)}...' : result.content,
+              fullOutput: result.content,
+              isSuccess: result.isSuccess,
+              errorMessage: result.errorMessage,
+              promptTokens: mainPromptTokens,
+              completionTokens: mainCompletionTokens,
+              timestamp: DateTime.now(),
+            );
+            yield AgentStepTelemetryEvent(stepTelemetry);
 
             toolCallList.add(ToolCall(
               id: toolCallId,
@@ -1003,7 +1228,7 @@ class AgentService {
             yield ToolCallExecutedMessageEvent(assistantMessage, toolMessages);
 
             final nextMessages = [
-              ...effectiveMessages,
+              ...activeMessages,
               assistantMessage,
               ...toolMessages,
             ];
@@ -1026,6 +1251,7 @@ class AgentService {
               maxToolRounds: maxToolRounds,
               guard: activeGuard,
               onConfirmTool: onConfirmTool,
+              stepIndexOffset: executedCount,
             );
           }
         }
@@ -1052,6 +1278,7 @@ class AgentService {
     int maxToolRounds = 100,
     AgentLoopGuard? guard,
     Future<ToolConfirmationDecision> Function(ToolConfirmationRequest)? onConfirmTool,
+    int stepIndexOffset = 0,
   }) async* {
     yield* _streamCompletionsLoop(
       baseUrl: baseUrl,
@@ -1071,6 +1298,7 @@ class AgentService {
       maxToolRounds: maxToolRounds,
       guard: guard,
       onConfirmTool: onConfirmTool,
+      stepIndexOffset: stepIndexOffset,
     );
   }
 
@@ -1131,7 +1359,7 @@ class AgentService {
     }
   }
 
-  /// Internal recursive loop that handles one round of streaming + tool execution.
+  /// Internal recursive loop that handles one round of streaming + tool execution with Token Budget & Fault Tolerance.
   Stream<AgentStreamEvent> _streamCompletionsLoop({
     required String baseUrl,
     required String apiKey,
@@ -1150,10 +1378,11 @@ class AgentService {
     int maxToolRounds = 100,
     AgentLoopGuard? guard,
     Future<ToolConfirmationDecision> Function(ToolConfirmationRequest)? onConfirmTool,
+    int stepIndexOffset = 0,
   }) async* {
     final activeGuard = guard ?? guardFactory?.call() ?? AgentLoopGuard(maxToolRounds: maxToolRounds);
 
-    // Max total tool rounds or loop guard check
+    // 1. Max total tool rounds or loop guard check
     if (activeGuard.shouldStripTools(toolRound) || toolRound >= maxToolRounds - 1) {
       final conclusionPrompt = activeGuard.getForcedConclusionPrompt();
       yield* _streamFinalConclusion(
@@ -1168,6 +1397,38 @@ class AgentService {
       return;
     }
 
+    // 2. Pre-flight Token Budget & Sliding Window Compaction
+    final budgetResult = _tokenBudgetManager.evaluateAndCompact(
+      messages: messages,
+      tools: tools,
+      currentRound: toolRound,
+    );
+
+    yield TokenBudgetTelemetryEvent(budgetResult.toTelemetry());
+
+    if (budgetResult.status == BudgetActionStatus.circuitBreakerTriggered || budgetResult.shouldStripTools) {
+      yield CircuitBreakerTriggeredEvent(
+        '当前会话上下文已达 ${budgetResult.estimatedPromptTokens} Tokens（超出模型安全上限）',
+        budgetResult.estimatedPromptTokens,
+        budgetResult.maxContextTokens,
+      );
+
+      final forcedPrompt = budgetResult.forcedConclusionPrompt ??
+          '【系统安全熔断】当前会话上下文已达 ${budgetResult.estimatedPromptTokens} Tokens（超出模型安全上限）。请立即基于前面已获得的全部工具执行数据与分析，为用户输出完整、详尽的最终总结性回答，禁止再次调用任何工具。';
+
+      yield* _streamFinalConclusion(
+        baseUrl: baseUrl,
+        apiKey: apiKey,
+        model: model,
+        messages: budgetResult.effectiveMessages,
+        prompt: forcedPrompt,
+        reasoningEffort: reasoningEffort,
+        cancelToken: cancelToken,
+      );
+      return;
+    }
+
+    final activeMessages = budgetResult.effectiveMessages;
     final accumulatedToolCalls = <int, _ToolCallAccumulator>{};
     final contentBuffer = StringBuffer();
     final reasoningBuffer = StringBuffer();
@@ -1178,7 +1439,7 @@ class AgentService {
       baseUrl: baseUrl,
       apiKey: apiKey,
       model: model,
-      messages: messages,
+      messages: activeMessages,
       tools: tools,
       reasoningEffort: reasoningEffort,
       cancelToken: cancelToken,
@@ -1202,7 +1463,7 @@ class AgentService {
           final content = delta['content'] as String?;
           if (content != null && content.isNotEmpty) {
             contentBuffer.write(content);
-            // Delay yielding content if tools are configured (might be pseudo-XML to strip)
+            // Delay yielding content if tools are configured (might be multi-format tool call to strip)
             if (tools == null || tools.isEmpty) {
               yield ContentDeltaEvent(content);
             }
@@ -1244,28 +1505,14 @@ class AgentService {
     }
 
     if (accumulatedToolCalls.isNotEmpty) {
-      final conversationId = messages.last.conversationId;
+      final conversationId = activeMessages.last.conversationId;
       final toolMessages = <ChatMessage>[];
+      int executedCount = 0;
 
       for (final entry in accumulatedToolCalls.values) {
         final name = entry.name;
-        Map<String, dynamic> args;
-        try {
-          final decoded = json.decode(entry.argumentsBuffer.toString());
-          if (decoded is Map<String, dynamic>) {
-            if (decoded.containsKey('query') && decoded['query'] != null && decoded['query'] is! String) {
-              args = {'query': entry.argumentsBuffer.toString()};
-            } else if (decoded.containsKey('url') && decoded['url'] != null && decoded['url'] is! String) {
-              args = {'url': entry.argumentsBuffer.toString()};
-            } else {
-              args = decoded;
-            }
-          } else {
-            args = {'query': entry.argumentsBuffer.toString()};
-          }
-        } catch (_) {
-          args = {'query': entry.argumentsBuffer.toString()};
-        }
+        final rawArgsString = entry.argumentsBuffer.toString();
+        final args = _agentFaultTolerance.repairAndParseArguments(rawArgsString);
 
         // Guard check before execution
         final verdict = activeGuard.checkBeforeExecution(name, args, currentRound: toolRound + 1);
@@ -1275,7 +1522,7 @@ class AgentService {
             baseUrl: baseUrl,
             apiKey: apiKey,
             model: model,
-            messages: messages,
+            messages: activeMessages,
             prompt: prompt,
             reasoningEffort: reasoningEffort,
             cancelToken: cancelToken,
@@ -1302,6 +1549,7 @@ class AgentService {
             toolObj != null && toolObj.securityLevel.requiresConfirmation && onConfirmTool != null;
 
         ToolExecutionResult result;
+        final stopwatch = Stopwatch()..start();
 
         if (requiresConfirmation) {
           final confirmationRequest = ToolConfirmationRequest(
@@ -1336,24 +1584,24 @@ class AgentService {
           } else {
             // Approved
             if (name == 'url_fetch') {
-              final url = args['url'] as String? ?? '';
+              final url = args['url']?.toString() ?? '';
               yield UrlFetchStartedEvent(url);
             } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-              final query = args['query'] as String? ?? '';
+              final query = args['query']?.toString() ?? '';
               yield ToolCallStartedEvent(query);
             } else {
               final title = '${toolObj.displayName}: ${args.values.join(', ')}';
               yield ToolCallStartedEvent(title);
             }
 
-            result = await _toolRegistry.execute(name, args, context: context);
+            result = await _executeToolSafely(name, args, context: context, cancelToken: cancelToken);
             _checkCancellation(cancelToken);
 
             if (name == 'url_fetch') {
-              final url = args['url'] as String? ?? '';
+              final url = args['url']?.toString() ?? '';
               yield UrlFetchCompletedEvent(url, result.content);
             } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-              final query = args['query'] as String? ?? '';
+              final query = args['query']?.toString() ?? '';
               final rawResults = (result.rawData is List<SearchResult>)
                   ? (result.rawData as List<SearchResult>)
                   : <SearchResult>[];
@@ -1364,24 +1612,24 @@ class AgentService {
           }
         } else {
           if (name == 'url_fetch') {
-            final url = args['url'] as String? ?? '';
+            final url = args['url']?.toString() ?? '';
             yield UrlFetchStartedEvent(url);
           } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-            final query = args['query'] as String? ?? '';
+            final query = args['query']?.toString() ?? '';
             yield ToolCallStartedEvent(query);
           } else {
             final title = toolObj != null ? '${toolObj.displayName}: ${args.values.join(', ')}' : name;
             yield ToolCallStartedEvent(title);
           }
 
-          result = await _toolRegistry.execute(name, args, context: context);
+          result = await _executeToolSafely(name, args, context: context, cancelToken: cancelToken);
           _checkCancellation(cancelToken);
 
           if (name == 'url_fetch') {
-            final url = args['url'] as String? ?? '';
+            final url = args['url']?.toString() ?? '';
             yield UrlFetchCompletedEvent(url, result.content);
           } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-            final query = args['query'] as String? ?? '';
+            final query = args['query']?.toString() ?? '';
             final rawResults = (result.rawData is List<SearchResult>)
                 ? (result.rawData as List<SearchResult>)
                 : <SearchResult>[];
@@ -1390,6 +1638,25 @@ class AgentService {
             yield ToolCallCompletedEvent(name, []);
           }
         }
+        stopwatch.stop();
+
+        executedCount++;
+        final stepTelemetry = AgentStepTelemetry(
+          stepIndex: stepIndexOffset + executedCount,
+          toolName: name,
+          toolCategory: categorizeTool(name),
+          durationMs: stopwatch.elapsedMilliseconds,
+          intent: reasoningBuffer.isNotEmpty ? reasoningBuffer.toString() : (contentBuffer.isNotEmpty ? contentBuffer.toString() : null),
+          arguments: args,
+          outputPreview: result.content.length > 200 ? '${result.content.substring(0, 200)}...' : result.content,
+          fullOutput: result.content,
+          isSuccess: result.isSuccess,
+          errorMessage: result.errorMessage,
+          promptTokens: promptTokens,
+          completionTokens: completionTokens,
+          timestamp: DateTime.now(),
+        );
+        yield AgentStepTelemetryEvent(stepTelemetry);
 
         toolMessages.add(ChatMessage(
           id: _uuid.v4(),
@@ -1421,7 +1688,7 @@ class AgentService {
       yield ToolCallExecutedMessageEvent(assistantMessage, toolMessages);
 
       final nextMessages = [
-        ...messages,
+        ...activeMessages,
         assistantMessage,
         ...toolMessages,
       ];
@@ -1444,16 +1711,24 @@ class AgentService {
         maxToolRounds: maxToolRounds,
         guard: activeGuard,
         onConfirmTool: onConfirmTool,
+        stepIndexOffset: stepIndexOffset + executedCount,
       );
     } else {
-      // --- No standard tool_calls; check for pseudo-XML fallback ---
+      // --- No standard tool_calls; check for multi-format tool call / pseudo-XML fallback ---
       final fullContent = contentBuffer.toString();
-      final pseudoCalls = parsePseudoXmlToolCalls(fullContent);
+      final multiFormatCalls = _agentFaultTolerance.parseToolCalls(fullContent);
+      final pseudoCalls = multiFormatCalls.isNotEmpty
+          ? multiFormatCalls.map((c) => {'name': c.toolName, 'params': c.arguments}).toList()
+          : parsePseudoXmlToolCalls(fullContent);
+
       if (pseudoCalls.isNotEmpty && tools != null && tools.isNotEmpty) {
-        final cleanedContent = stripPseudoXmlToolCalls(fullContent);
-        final conversationId = messages.last.conversationId;
+        final cleanedContent = multiFormatCalls.isNotEmpty
+            ? _agentFaultTolerance.stripToolCallBlocks(fullContent)
+            : stripPseudoXmlToolCalls(fullContent);
+        final conversationId = activeMessages.last.conversationId;
         final toolMessages = <ChatMessage>[];
         final toolCallList = <ToolCall>[];
+        int executedCount = 0;
 
         for (final call in pseudoCalls) {
           final name = call['name'] as String? ?? '';
@@ -1467,7 +1742,7 @@ class AgentService {
               baseUrl: baseUrl,
               apiKey: apiKey,
               model: model,
-              messages: messages,
+              messages: activeMessages,
               prompt: prompt,
               reasoningEffort: reasoningEffort,
               cancelToken: cancelToken,
@@ -1495,6 +1770,7 @@ class AgentService {
               toolObj != null && toolObj.securityLevel.requiresConfirmation && onConfirmTool != null;
 
           ToolExecutionResult result;
+          final stopwatch = Stopwatch()..start();
 
           if (requiresConfirmation) {
             final confirmationRequest = ToolConfirmationRequest(
@@ -1529,24 +1805,24 @@ class AgentService {
             } else {
               // Approved
               if (name == 'url_fetch') {
-                final url = params['url'] as String? ?? '';
+                final url = params['url']?.toString() ?? '';
                 yield UrlFetchStartedEvent(url);
               } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-                final query = params['query'] as String? ?? '';
+                final query = params['query']?.toString() ?? '';
                 yield ToolCallStartedEvent(query);
               } else {
                 final title = '${toolObj.displayName}: ${params.values.join(', ')}';
                 yield ToolCallStartedEvent(title);
               }
 
-              result = await _toolRegistry.execute(name, params, context: context);
+              result = await _executeToolSafely(name, params, context: context, cancelToken: cancelToken);
               _checkCancellation(cancelToken);
 
               if (name == 'url_fetch') {
-                final url = params['url'] as String? ?? '';
+                final url = params['url']?.toString() ?? '';
                 yield UrlFetchCompletedEvent(url, result.content);
               } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-                final query = params['query'] as String? ?? '';
+                final query = params['query']?.toString() ?? '';
                 final rawResults = (result.rawData is List<SearchResult>)
                     ? (result.rawData as List<SearchResult>)
                     : <SearchResult>[];
@@ -1557,24 +1833,24 @@ class AgentService {
             }
           } else {
             if (name == 'url_fetch') {
-              final url = params['url'] as String? ?? '';
+              final url = params['url']?.toString() ?? '';
               yield UrlFetchStartedEvent(url);
             } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-              final query = params['query'] as String? ?? '';
+              final query = params['query']?.toString() ?? '';
               yield ToolCallStartedEvent(query);
             } else {
               final title = toolObj != null ? '${toolObj.displayName}: ${params.values.join(', ')}' : name;
               yield ToolCallStartedEvent(title);
             }
 
-            result = await _toolRegistry.execute(name, params, context: context);
+            result = await _executeToolSafely(name, params, context: context, cancelToken: cancelToken);
             _checkCancellation(cancelToken);
 
             if (name == 'url_fetch') {
-              final url = params['url'] as String? ?? '';
+              final url = params['url']?.toString() ?? '';
               yield UrlFetchCompletedEvent(url, result.content);
             } else if (name == 'web_search' || name == 'google_search' || name == 'bing_search') {
-              final query = params['query'] as String? ?? '';
+              final query = params['query']?.toString() ?? '';
               final rawResults = (result.rawData is List<SearchResult>)
                   ? (result.rawData as List<SearchResult>)
                   : <SearchResult>[];
@@ -1583,6 +1859,25 @@ class AgentService {
               yield ToolCallCompletedEvent(name, []);
             }
           }
+          stopwatch.stop();
+
+          executedCount++;
+          final stepTelemetry = AgentStepTelemetry(
+            stepIndex: stepIndexOffset + executedCount,
+            toolName: name,
+            toolCategory: categorizeTool(name),
+            durationMs: stopwatch.elapsedMilliseconds,
+            intent: reasoningBuffer.isNotEmpty ? reasoningBuffer.toString() : (contentBuffer.isNotEmpty ? contentBuffer.toString() : null),
+            arguments: params,
+            outputPreview: result.content.length > 200 ? '${result.content.substring(0, 200)}...' : result.content,
+            fullOutput: result.content,
+            isSuccess: result.isSuccess,
+            errorMessage: result.errorMessage,
+            promptTokens: promptTokens,
+            completionTokens: completionTokens,
+            timestamp: DateTime.now(),
+          );
+          yield AgentStepTelemetryEvent(stepTelemetry);
 
           toolCallList.add(ToolCall(
             id: toolCallId,
@@ -1617,7 +1912,7 @@ class AgentService {
           yield ToolCallExecutedMessageEvent(assistantMessage, toolMessages);
 
           final nextMessages = [
-            ...messages,
+            ...activeMessages,
             assistantMessage,
             ...toolMessages,
           ];
@@ -1640,6 +1935,7 @@ class AgentService {
             maxToolRounds: maxToolRounds,
             guard: activeGuard,
             onConfirmTool: onConfirmTool,
+            stepIndexOffset: stepIndexOffset + executedCount,
           );
           return; // Prevent fall-through to buffered content yield
         }

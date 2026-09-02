@@ -2,7 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/chat_message.dart';
+import '../models/agent_step_telemetry.dart';
 import 'markdown_renderer.dart';
+import 'agent_execution_timeline.dart';
+import 'token_budget_badge.dart';
 
 class _ToolMeta {
   final String displayName;
@@ -227,6 +230,9 @@ class ChatBubble extends StatefulWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onRegenerate;
   final VoidCallback? onRollbackToHere;
+  final List<AgentStepTelemetry>? stepTelemetries;
+  final TokenBudgetTelemetry? tokenBudget;
+  final String? circuitBreakerReason;
 
   const ChatBubble({
     super.key,
@@ -236,6 +242,9 @@ class ChatBubble extends StatefulWidget {
     this.onEdit,
     this.onRegenerate,
     this.onRollbackToHere,
+    this.stepTelemetries,
+    this.tokenBudget,
+    this.circuitBreakerReason,
   });
 
   @override
@@ -445,6 +454,12 @@ class _ChatBubbleState extends State<ChatBubble> {
                 child: _buildImageThumbnail(context),
               ),
 
+            if (widget.circuitBreakerReason != null && widget.circuitBreakerReason!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6.0),
+                child: CircuitBreakerAlertWidget(reason: widget.circuitBreakerReason!),
+              ),
+
             Container(
               decoration: BoxDecoration(
                 color: bubbleColor,
@@ -469,9 +484,16 @@ class _ChatBubbleState extends State<ChatBubble> {
                   else if (isIntermediateAssistant)
                     _buildIntermediateAssistantPanel(theme, theme.textTheme.bodyLarge?.copyWith(color: textColor))
                   else ...[
+                    if (widget.stepTelemetries != null && widget.stepTelemetries!.isNotEmpty) ...[
+                      AgentExecutionTimelineWidget(
+                        steps: widget.stepTelemetries!,
+                        initiallyExpanded: false,
+                      ),
+                      const SizedBox(height: 8.0),
+                    ],
                     if (widget.message.reasoningContent != null &&
                         widget.message.reasoningContent!.isNotEmpty) ...[
-                      _buildReasoningPanel(theme),
+                       _buildReasoningPanel(theme),
                       const SizedBox(height: 8.0),
                     ],
                     MarkdownRenderer(
@@ -485,18 +507,27 @@ class _ChatBubbleState extends State<ChatBubble> {
             ),
             
             // Token usage display
-            if (widget.message.role == 'assistant' &&
-                (widget.message.promptTokens != null || widget.message.completionTokens != null))
-              Padding(
-                padding: const EdgeInsets.only(top: 2.0, left: 8.0, right: 8.0),
-                child: Text(
-                  '🪙 ${widget.message.promptTokens ?? "?"}↑ / ${widget.message.completionTokens ?? "?"}↓',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                    fontSize: 10,
+            if (widget.message.role == 'assistant') ...[
+              if (widget.tokenBudget != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0, left: 8.0, right: 8.0),
+                  child: TokenBudgetBadge(
+                    budget: widget.tokenBudget!,
+                    showDetails: false,
+                  ),
+                )
+              else if (widget.message.promptTokens != null || widget.message.completionTokens != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2.0, left: 8.0, right: 8.0),
+                  child: Text(
+                    '🪙 ${widget.message.promptTokens ?? "?"}↑ / ${widget.message.completionTokens ?? "?"}↓',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                      fontSize: 10,
+                    ),
                   ),
                 ),
-              ),
+            ],
 
             Padding(
               padding: const EdgeInsets.only(top: 2.0, left: 8.0, right: 8.0),

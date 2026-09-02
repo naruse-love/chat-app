@@ -10,6 +10,8 @@ import '../providers/settings_provider.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/chat_input.dart';
 import '../widgets/tool_confirmation_card.dart';
+import '../widgets/agent_execution_timeline.dart';
+import '../widgets/token_budget_badge.dart';
 import '../models/chat_message.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -278,10 +280,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           index == allMessages.length - 1;
                       final isLastUser = message.role == 'user' &&
                           index == allMessages.length - 1;
+                      final isStreamingThisMsg = chatState.isGenerating && message.id == 'streaming_msg';
                       return ChatBubble(
                         key: ValueKey(message.id),
                         message: message,
-                        isStreaming: chatState.isGenerating && message.id == 'streaming_msg',
+                        isStreaming: isStreamingThisMsg,
+                        stepTelemetries: isStreamingThisMsg && agentState.stepTelemetries.isNotEmpty ? agentState.stepTelemetries : null,
+                        tokenBudget: isStreamingThisMsg ? agentState.latestTokenBudget : null,
+                        circuitBreakerReason: isStreamingThisMsg ? agentState.circuitBreakerReason : null,
                         onEdit: message.role == 'user'
                             ? () => _showEditDialog(context, message)
                             : null,
@@ -345,6 +351,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onCancel: () {
                 ref.read(chatProvider.notifier).cancelActiveStream();
               },
+            ),
+
+          // Token budget badge during generation (if telemetry available)
+          if (chatState.isGenerating && agentState.latestTokenBudget != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
+              child: TokenBudgetBadge(budget: agentState.latestTokenBudget!),
+            ),
+
+          // Live Agent Execution Timeline during multi-step generation
+          if (chatState.isGenerating && agentState.stepTelemetries.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
+              child: AgentExecutionTimelineWidget(
+                steps: agentState.stepTelemetries,
+                initiallyExpanded: true,
+              ),
+            ),
+
+          // Circuit Breaker Alert Banner
+          if (agentState.circuitBreakerReason != null && agentState.circuitBreakerReason!.isNotEmpty)
+            CircuitBreakerAlertWidget(
+              reason: agentState.circuitBreakerReason!,
+              currentTokens: agentState.latestTokenBudget?.currentEstimatedTokens,
+              budgetCap: agentState.latestTokenBudget?.budgetCap,
             ),
 
           // Chat Input panel

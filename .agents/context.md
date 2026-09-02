@@ -1,5 +1,5 @@
 # 项目接手上下文（Context）
-> 最后更新：2026-09-01
+> 最后更新：2026-09-02
 
 ---
 
@@ -10,7 +10,7 @@
 - **工作目录**：`D:\work\chat`
 - **Flutter SDK**：`D:\work\flutter-sdk\flutter\bin\flutter.bat`
 - **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支）
-- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（662/662），`flutter analyze` 必须 0 issues
+- **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（774/774），`flutter analyze` 必须 0 issues
 
 ---
 
@@ -46,8 +46,9 @@
 | **24 / 本地沙箱执行与人机协同确认机制** | 打造本地安全沙箱文件系统（`PathSanitizer` 路径净化与配额管理、`file_read`、`file_write`、`file_list`、`file_delete`）与多语言 Isolate 代码执行沙箱（`code_eval` 3000ms 硬超时强杀）及系统剪贴板工具（`clipboard_read`、`clipboard_write`）；定义 4 级工具安全分类；实现人机协同确认机制（Human-in-the-Loop, HITL），在 `AgentService` 与 `ChatNotifier` 中全面拦截 Level 2 敏感工具并挂起异步决断；实现 `DiffViewerWidget` 统一差异对比视图与 `ToolConfirmationCard` 授权/拒绝交互卡片；ToolRegistry 统一接入 15 个工具；完成全面对抗性加固验证与 412 个自动化测试矩阵（2026-08-29） | ✅ 完成 |
 | **25 / 移动原生能力与特权工具生态** | 打造移动端原生设备能力抽象契约与服务层（`ICalendarService`、`INotificationService`、`IContactsService`、`ILocationService` 及内存 Mock）；构建隐私脱敏网关 `ContactsSanitizer`（E.164 手机号掩码、白名单过滤、提示词注入防护、单次 5 条限制）；实现统一权限管理器 `PermissionManagerService`（权限预检、申请与中文友好降级）；实现 7 个原生标准工具（`calendar_query_events`、`calendar_create_event`、`notification_schedule`、`notification_cancel`、`contacts_search`、`geolocation_get`、`reverse_geocode`）；`ToolRegistry` 接入 22 个工具并支持动态启停与 Schema 导出；`ChatBubble` 与 `ToolConfirmationCard` 深度集成原生特权徽章与专属日程/通知预览卡片（2026-08-30） | ✅ 完成 |
 | **26 / MCP 客户端体系、动态工具网桥与全链路加固** | 构建 Model Context Protocol (MCP 2024-11-05) 客户端体系与动态工具网桥：多通道传输层（`SseMcpTransport`、`WebSocketMcpTransport`、`StdioMcpTransport` 跨平台支持与优雅降级）、`JsonRpcEngine` 协议引擎（超时、请求路由与错误映射）、`McpClient` 核心客户端（初始化握手、保活心跳、工具/资源/Prompt 检索与执行）、`McpDynamicTool` 桥接适配器（OpenAI Schema 命名空间隔离与参数宽容解析）；SQLite v4 `mcp_servers` 表与 `SecureStorageService` 敏感凭据存储；`McpProvider`（StateNotifier 异步 `mounted` 安全与 `ToolRegistry` 动态注入/注销）；`McpServerManagementScreen` 管理页面、设置页入口及 `ChatBubble` / `ToolConfirmationCard` 专属 MCP 徽章与参数预览；完成全链路对抗性测试与加固交付（2026-09-01） | ✅ 完成 |
+| **27 / 统一 Agent 运行时、可观测性体系与全量交付** | 构建 Agent 全局 Token 预算与滑动窗口压缩引擎（`TokenBudgetManager`）、跨模型容错与对抗防御自愈网关（`AgentFaultTolerance`）、四大维度工具链统一调度管道终极集成；实现多步执行折叠时间线组件（`AgentExecutionTimelineWidget`）、响应式 Token 预算指示徽章（`TokenBudgetBadge`）与熔断预警卡片（`CircuitBreakerAlertWidget`）；完成全套自动化测试套件构建与逆向对抗加固（774 测试全部通过）（2026-09-02） | ✅ 完成 |
 
-**当前测试状态：662 / 662 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.13.0+14。**
+**当前测试状态：774 / 774 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.16.0+17。**
 
 ---
 
@@ -67,6 +68,7 @@ lib/
 │   ├── search_result.dart        # 搜索结果
 │   ├── system_prompt_template.dart
 │   ├── tool_call.dart
+│   ├── agent_step_telemetry.dart # 多步执行遥测与统计模型（AgentStepTelemetry, AgentExecutionSummary）
 │   ├── tool/                     # 工具体系模型
 │   │   ├── tool.dart             # 抽象基类 Tool
 │   │   ├── tool_parameter.dart   # 参数模式 ToolParameter
@@ -81,23 +83,27 @@ lib/
 │       └── app_permission.dart   # 原生设备权限枚举与状态
 │
 ├── data/                         # SQLite 数据访问层
-│   ├── database_helper.dart      # 单例 SQLite 管理器（损坏自愈 + schema v3 迁移）
+│   ├── database_helper.dart      # 单例 SQLite 管理器（损坏自愈 + schema v3 迁移 + v4 mcp_servers）
 │   ├── api_config_dao.dart       # API 配置 CRUD（含安全存储集成）
 │   ├── conversation_dao.dart     # 对话 CRUD（pin/archive/sort + systemPrompt）
-│   └── message_dao.dart          # 消息 CRUD（绝对/相对路径映射 + token 字段）
+│   ├── message_dao.dart          # 消息 CRUD（绝对/相对路径映射 + token 字段）
+│   └── mcp_server_dao.dart       # MCP 服务配置 DAO
 │
 ├── services/                     # 业务服务层
 │   ├── chat_service.dart         # Dio HTTP 客户端，/v1/chat/completions SSE 流（支持免 Key 自动处理）
 │   ├── search_service.dart       # SearXNG 主路径 + 实验性 Bing（9Router 内置搜索已停用，双页并发，URL 去重，新 Prompt）
 │   ├── url_fetch_service.dart    # 网页抓取服务（DOM 节点清洗，15000字符截断）
-│   ├── agent_service.dart        # 多轮 tool calling，伪 XML tool_call 兜底，HITL 敏感拦截，url_fetch 路由支持
-│   ├── tool_registry.dart        # 统一工具注册中心（22 个内置、沙箱与原生特权工具）
+│   ├── agent_service.dart        # 多轮 tool calling，伪 XML tool_call 兜底，HITL 敏感拦截，四大维度 22+ 工具统一调度管道
+│   ├── token_budget_manager.dart # 全局 Token 预算与滑动窗口压缩引擎（Token 估算、历史修剪、熔断器）
+│   ├── agent_fault_tolerance.dart # 跨模型容错与对抗自愈网关（多格式参数纠错、指数退避重试、自愈降级）
+│   ├── tool_registry.dart        # 统一工具注册中心（22 个内置、沙箱与原生特权工具 + 动态 MCP）
 │   ├── agent_loop_guard.dart     # MD5 签名与死循环/震荡检测防护器
 │   ├── path_sanitizer.dart       # 安全沙箱路径净化与 5MB/50MB 配额防护器
 │   ├── code_execution_service.dart # 多语言 Isolate 代码执行沙箱（3000ms 超时强杀）
 │   ├── rune_safe_json_truncator.dart # Unicode 代理对安全截断与 JSON 修复器
 │   ├── image_service.dart        # 图片选取 / 压缩 / Base64 编码
 │   ├── secure_storage_service.dart # flutter_secure_storage 封装
+│   ├── mcp/                      # MCP 客户端体系（Transport, JsonRpcEngine, McpClient, DynamicTool）
 │   ├── native/                   # 原生服务层与隐私安全网关
 │   │   ├── calendar_service.dart # 日历服务接口与 InMemoryCalendarService
 │   │   ├── notification_service.dart # 通知服务接口与 InMemoryNotificationService
@@ -130,29 +136,37 @@ lib/
 │   ├── api_config_provider.dart  # API 配置列表、活跃配置
 │   ├── model_provider.dart       # 模型列表、选中模型（Vision 能力解析增强）
 │   ├── conversation_provider.dart # 对话列表、活跃对话（clearActive 修复）
-│   ├── chat_provider.dart        # 消息列表、流式生成、HITL 确认交互、editAndResend / regenerate / rollback
-│   ├── agent_provider.dart       # 工具调用状态与确认挂起状态（pendingConfirmationRequest）
+│   ├── chat_provider.dart        # 消息列表、流式生成、HITL 确认交互、多轮管道调度、Token 预算预检
+│   ├── agent_provider.dart       # 工具调用状态、多步遥测步骤流、Token 消耗统计、熔断预警信号
+│   ├── mcp_provider.dart         # MCP 服务状态机与 ToolRegistry 动态注入
 │   └── settings_provider.dart    # searxngUrl, searchBackend, defaultSystemPrompt
 │
 ├── screens/                      # 页面
-│   ├── home_screen.dart          # 主聊天页（HITL 确认卡片、系统提示词入口、回退/编辑/重新生成 UI、侧边栏对话列表、消息气泡）
-│   ├── settings_screen.dart      # 设置页
+│   ├── home_screen.dart          # 主聊天页（HITL 确认卡片、执行时间线、Token 胶囊、熔断横幅）
+│   ├── settings_screen.dart      # 设置页（含 MCP 服务管理入口）
 │   ├── api_config_screen.dart    # API 配置管理页（测试连接功能）
 │   ├── model_selector_screen.dart # 模型选择页（按 provider 分组，带 Vision/Tools 标签）
-│   └── system_prompt_screen.dart # 系统提示词模板管理页
+│   ├── system_prompt_screen.dart # 系统提示词模板管理页
+│   └── mcp_server_management_screen.dart # MCP 服务配置与多 Tab 工具管理页
 │
 ├── utils/                        # 辅助工具
 │   └── diff_helper.dart          # LCS 动态规划算法 Diff 差异比对器
 │
 └── widgets/                      # 可复用 Widget
-    ├── chat_bubble.dart          # 消息气泡（思考区独立 SelectableText + 22 个工具分类卡片与 4 级安全等级徽章）
+    ├── chat_bubble.dart          # 消息气泡（折叠时间线、Token 胶囊、熔断预警、MCP 徽章）
     ├── chat_input.dart           # 输入区（图片附件、发送、多行文本）
     ├── diff_viewer_widget.dart   # 统一差异对比视图组件
-    └── tool_confirmation_card.dart # 人机协同交互确认卡片（Diff 差异比对、日历日程与定时通知专属预览卡片）
+    ├── tool_confirmation_card.dart # 人机协同交互确认卡片
+    ├── agent_execution_timeline.dart # 可折叠多步执行时间线组件
+    └── token_budget_badge.dart   # 响应式 Token 预算胶囊指示徽章与熔断预警卡片
 
 test/
 ├── unit tests (模型、服务、DAO、工具集)
 ├── services/
+│   ├── token_budget_manager_test.dart
+│   ├── agent_fault_tolerance_test.dart
+│   ├── unified_agent_pipeline_test.dart
+│   ├── adversarial_challenge_m27_test.dart
 │   ├── path_sanitizer_test.dart
 │   ├── sandboxed_file_tools_test.dart
 │   ├── code_execution_service_test.dart
@@ -171,9 +185,10 @@ test/
 │   └── tools/
 │       ├── native_tools_test.dart
 │       └── tool_registry_native_test.dart
-├── providers/
-│   └── chat_provider_hitl_test.dart
 ├── widgets/
+│   ├── agent_execution_timeline_test.dart
+│   ├── token_budget_badge_test.dart
+│   ├── m27_widgets_adversarial_test.dart
 │   ├── diff_viewer_widget_test.dart
 │   ├── tool_confirmation_card_test.dart
 │   ├── native_tools_ui_test.dart
@@ -216,6 +231,9 @@ test/
 25. **统一原生权限管理与友好降级**：`PermissionManagerService` 统一管理 `AppPermission` 状态与申请流，对未授权或被拒绝权限返回明确中文友好提示与操作引导。
 26. **原生特权工具链 (Level 3) 与 HITL 专用卡片**：构建 7 个原生工具（日历、通知、通讯录、定位），其中日历新建与定时通知通过 `CalendarEventPreview` / `NotificationPreview` 结构化提炼渲染专属 HITL 确认卡片。
 27. **MCP (Model Context Protocol) 客户端体系与动态工具网桥**：构建多通道通信层（SSE / WebSocket / Stdio）、JSON-RPC 2.0 异步协议引擎（支持 10s 请求超时与标准错误码转换）、MCP 2024-11-05 标准协议握手与心跳机制；实现 `McpDynamicTool` 动态工具网桥，将远程 MCP 工具自动转换为带命名空间隔离的标准 `Tool` 实例并动态注入 `ToolRegistry`；SQLite v4 表结构持久化多 Server 配置，并通过 `SecureStorageService` 加密隔离敏感授权凭据；`McpProvider`（StateNotifier）严格遵循异步 `mounted` 安全防护；提供专属 `McpServerManagementScreen` 可视化管理面板及 `ChatBubble` / `ToolConfirmationCard` MCP 紫色徽章与参数审计。
+28. **TokenBudgetManager 预算与滑动窗口压缩引擎**：基于中文（0.6 token/char）、英文/代码（0.25 token/char）、Emoji 及结构化 JSON 实施高精度 Token 估算；针对多轮长会话工具历史输出实施滑动窗口裁剪，保留关键调用签名与头尾精炼摘要，彻底消除上下文爆炸风险；超限触发熔断器（CircuitBreaker）自动剥离后续工具，安全引导大模型收尾输出总结。
+29. **AgentFaultTolerance 跨模型对抗容错自愈网关**：自动纠错 DeepSeek DSML、Qwen XML、标准 JSON、Llama 函数语法中未闭合引号/括号/转义符；针对外部网络异常执行指数退避重试（带 Jitter）；提供结构化中文自愈错误上下文。
+30. **四大维度工具链统一调度管道与多步时间线可观测性**：统一协同调度 22+ 基础实用、本地沙箱、移动原生特权与 MCP 远程动态工具；`AgentStepTelemetry` 记录微秒级执行耗时与 Token 消耗；`AgentExecutionTimelineWidget` 与 `TokenBudgetBadge` 提供直观可视化时间线与三色预算状态。
 
 ---
 
@@ -250,7 +268,7 @@ test/
 # 静态分析（必须 0 issues）
 D:\work\flutter-sdk\flutter\bin\flutter.bat analyze
 
-# 运行全部测试（必须 645/645 通过）
+# 运行全部测试（必须 774/774 通过）
 D:\work\flutter-sdk\flutter\bin\flutter.bat test --no-pub
 
 # 编译 Debug APK

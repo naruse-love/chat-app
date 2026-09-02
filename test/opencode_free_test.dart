@@ -97,8 +97,7 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      container.read(apiConfigProvider);
-      await Future.delayed(const Duration(milliseconds: 100));
+      await container.read(apiConfigProvider.notifier).loadConfigs();
 
       final modelNotifier = container.read(modelProvider.notifier);
       await modelNotifier.fetchModels();
@@ -135,8 +134,7 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      container.read(apiConfigProvider);
-      await Future.delayed(const Duration(milliseconds: 100));
+      await container.read(apiConfigProvider.notifier).loadConfigs();
 
       final modelNotifier = container.read(modelProvider.notifier);
       await modelNotifier.fetchModels();

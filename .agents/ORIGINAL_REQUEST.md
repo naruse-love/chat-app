@@ -562,6 +562,85 @@ Integrity mode: development
 - [ ] 静态分析 `flutter analyze` 结果为 `No issues found!`；
 - [ ] 变更已 commit 并 push 到 Git 远程仓库。
 
+## Follow-up — 2026-09-01T10:21:05Z
+
+在 Flutter AI 聊天应用中实现 Milestone 27：构建 Agent 全局 Token 预算与滑动窗口压缩引擎（TokenBudgetManager）、跨模型容错与对抗防御修复网关（AgentFaultTolerance）、多轮工具链协同调度管道终极集成，以及多步执行进度时间线与 Token 消耗指示 UI。（注意：完成全套核心功能开发并确保 `flutter analyze` 0 issues，在进入全面测试阶段前暂停并汇报）。
+
+Working directory: D:\work\chat
+Integrity mode: development
+
+## Requirements
+
+### R1. 全局 Token 预算管理与滑动窗口压缩引擎 (TokenBudgetManager)
+- 在 `lib/services/token_budget_manager.dart` 中实现 `TokenBudgetManager`：
+  - 实时 Token/字符估算与硬上限监控（防失控消耗与高额账单）；
+  - 中间轮次工具历史输出智能滑动窗口压缩（保留工具调用签名与头尾精炼摘要，修剪冗余长文本，确保大模型上下文不超限）；
+  - 全局超限熔断器（Circuit Breaker）：触发预算超限时自动剥离工具，强制模型生成最终总结文本并优雅收尾。
+
+### R2. 跨模型容错与对抗防御修复网关 (AgentFaultTolerance)
+- 在 `lib/services/agent_fault_tolerance.dart` 中实现 `AgentFaultTolerance`：
+  - 多格式工具入参自动纠错与修复（支持兼容 DeepSeek DSML、Qwen XML、标准 OpenAI JSON、Llama 函数语法中的畸形转义与未闭合括号）；
+  - 外部工具网络抖动与限流指数退避重试（带随机 Jitter）；
+  - 工具异常/超时结构化自适应降级，向大模型输出规范的中文友好错误上下文以促进计划自愈。
+
+### R3. 四大维度工具链统一调度管道大集成 (Unified Agent Pipeline)
+- 在 `AgentService` 与 `ChatProvider` 中深度整合：
+  - 无缝协同调度四大维度工具体系（基础实用工具、本地文件/Isolate 执行、移动原生能力、MCP 远程动态工具）；
+  - 全流程多步执行遥测与统计（步骤计数器、轮次消耗、Token 预算追踪）。
+
+### R4. 多步执行时间线与 Token 统计 UI 呈现 (UI & UX Polish)
+- 完善 `ChatBubble` 与相关 Widget：
+  - 新增多步工具调用折叠时间线组件（Step-by-step Timeline），直观呈现 Agent 思考与多步工具执行链路；
+  - 提供 Token 消耗/估算小微徽章与熔断预警提示；
+- **阶段性约束**：完整完成 Milestone 27 的所有核心服务、熔断器、自愈网关、UI 时间线与调度链路，确保 `flutter analyze` 输出 **`No issues found!`**；在进入全面测试阶段前暂停并向用户汇报。
+
+## Acceptance Criteria
+
+### 架构与核心功能完备性
+- [ ] `TokenBudgetManager`（Token 估算、滑动窗口压缩、超限熔断器）完整实现；
+- [ ] `AgentFaultTolerance`（畸形入参自动纠错、指数退避重试、自愈降级提示）完整实现；
+- [ ] `AgentService` 成功统一调度四大维度所有 22+ 内置与 MCP 工具；
+- [ ] `ChatBubble` 具备多步执行折叠时间线与 Token 统计指示；
+- [ ] 静态分析 `flutter analyze` 保持 **`No issues found!`**（0 errors, 0 warnings）；
 
 
+## Follow-up — 2026-09-02T08:09:41+08:00
 
+对 Milestone 27（Agent 全局 Token 预算与滑动窗口压缩引擎、跨模型容错自愈网关、四大维度工具体系统一调度管道终极集成、多步执行时间线与 Token 统计 UI）执行全量自动化测试套件构建、对抗性加固验证与最终工程交付。
+
+Working directory: D:\work\chat
+Integrity mode: development
+
+## Requirements
+
+### R1. 全面构建与执行 Milestone 27 自动化测试矩阵
+针对 Milestone 27 所有核心模块进行深度测试覆盖：
+1. **`TokenBudgetManager` 预算与压缩引擎测试**：
+   - 字符与 Token 精准估算测试（支持中文、英文、代码、结构化 JSON 与 Emoji）；
+   - 中间轮次工具历史输出滑动窗口修剪与摘要保留测试；
+   - 全局硬上限超限熔断器（Circuit Breaker）触发与工具剥离测试；
+2. **`AgentFaultTolerance` 容错与对抗自愈测试**：
+   - 畸形参数语法自动纠错测试（DeepSeek DSML、Qwen XML、标准 OpenAI JSON、Llama 函数语法中未闭合引号/括号/转义符）；
+   - 指数退避重试与 Jitter 抖动测试；
+   - 工具异常与超时结构化自适应降级提示测试；
+3. **四大维度工具链统一调度管道集成测试 (`UnifiedAgentPipeline`)**：
+   - 跨维度多步工具协同调用（基础工具 ➜ 本地文件 ➜ 原生特权 ➜ MCP 远程工具）端到端链路测试；
+   - `AgentStepTelemetry` 步骤遥测、耗时与 Token 统计数据一致性测试；
+4. **UI 组件与逆向对抗测试**：
+   - `AgentExecutionTimelineWidget` 折叠时间线展开/折叠、各步骤执行状态芯片与时间显示测试；
+   - `TokenBudgetBadge` 与 `CircuitBreakerAlertWidget` 熔断卡片渲染交互测试；
+   - 极端大文本、空数据、畸形入参与主题切换逆向对抗测试。
+
+### R2. 质量门禁与工程交付
+- 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat analyze`，输出 **`No issues found!`**（0 error, 0 warning, 0 lint）；
+- 运行 `D:\work\flutter-sdk\flutter\bin\flutter.bat test`，所有测试用例 **100% 全部通过（0 failures）**；
+- 确保版本号更新为 `1.14.0+15`，并在 `WORK_LOG.md` 与 `.agents/context.md` 中完备记录 Milestone 27；
+- 提交 Git 并成功推送至 `origin/main`。
+
+## Acceptance Criteria
+
+### 自动化测试与质量指标
+- [ ] 所有 Milestone 27 专属测试套件（TokenBudgetManager、AgentFaultTolerance、UnifiedPipeline、Timeline UI、BudgetBadge UI、Adversarial）全部通过；
+- [ ] 现有全部回归测试用例 100% 通过（0 failures）；
+- [ ] 静态分析 `flutter analyze` 结果为 `No issues found!`；
+- [ ] 变更已 commit 并 push 到 Git 远程仓库。

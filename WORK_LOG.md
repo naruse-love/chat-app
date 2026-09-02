@@ -1,3 +1,61 @@
+## 2026-09-02 Testing & Delivery: Milestone 27 Token Budget, Fault Tolerance, Unified Pipeline & Final Delivery (v1.16.0+17)
+
+### 变更文件
+- `lib/services/token_budget_manager.dart`: 实现 `TokenBudgetManager` 全局 Token 预算与滑动窗口压缩引擎（实时字符/Token 精准估算、中间轮次工具历史输出滑动窗口修剪与摘要保留、全局硬上限超限熔断器 `CircuitBreaker` 自动剥离工具与收尾总结）。
+- `lib/services/agent_fault_tolerance.dart`: 实现 `AgentFaultTolerance` 跨模型容错与对抗自愈网关（DeepSeek DSML、Qwen XML、标准 OpenAI JSON、Llama 函数语法畸形入参自动纠错、指数退避重试带 Jitter 抖动、结构化中文自愈错误上下文降级）。
+- `lib/models/agent_step_telemetry.dart`: 实现 `AgentStepTelemetry` 与 `AgentExecutionSummary` 多步执行遥测与统计模型。
+- `lib/services/agent_service.dart`: 深度重构 `AgentService`，终极集成四大维度（基础实用、沙箱与代码、移动原生、动态 MCP）22+ 工具统一调度管道、Token 预算熔断拦截与执行遥测记录。
+- `lib/providers/agent_provider.dart`: 扩展 `AgentState` 与 `AgentNotifier`，支持实时多步遥测步骤流、Token 消耗统计、熔断预警信号发射与清理。
+- `lib/providers/chat_provider.dart`: 升级 `ChatNotifier` 多轮工具链调度逻辑，无缝接入 Token 预算预检、压缩历史与跨维度协同执行。
+- `lib/widgets/agent_execution_timeline.dart`: 实现可折叠多步执行时间线组件 `AgentExecutionTimelineWidget`，直观呈现四大维度工具执行链路、耗时、意图与自愈状态。
+- `lib/widgets/token_budget_badge.dart`: 实现 `TokenBudgetBadge` 响应式 Token 预算指示徽章与 `CircuitBreakerAlertCard` 熔断预警提示卡片。
+- `lib/widgets/chat_bubble.dart` & `lib/screens/home_screen.dart`: 聊天气泡与主界面无缝嵌入执行时间线、Token 胶囊徽章与熔断预警横幅。
+- `test/services/token_budget_manager_test.dart`: 新增 `TokenBudgetManager` 完整单元测试套件（中英文/代码/JSON/Emoji 字符与 Token 估算、滑动窗口修剪与摘要保留、超限熔断与工具剥离）。
+- `test/services/agent_fault_tolerance_test.dart`: 新增 `AgentFaultTolerance` 单元测试套件（多格式畸形语法纠错、退避重试与 Jitter、自愈错误格式化）。
+- `test/services/unified_agent_pipeline_test.dart`: 新增四大维度工具链统一调度管道端到端集成测试（跨维度协同调用、步骤遥测一致性、Token 预算消耗与熔断拦截）。
+- `test/widgets/agent_execution_timeline_test.dart`: 新增时间线组件交互与深浅主题适配 Widget 测试。
+- `test/widgets/token_budget_badge_test.dart`: 新增 Token 预算指示徽章与熔断预警 Widget 测试。
+- `test/services/adversarial_challenge_m27_test.dart`: 新增 Milestone 27 核心服务对抗性与逆向极限测试（超大 Payload、畸形损坏输入、极速熔断、并发压力测试）。
+- `test/widgets/m27_widgets_adversarial_test.dart`: 新增 Milestone 27 UI 逆向对抗与并发渲染压力测试（极速连续点击、空/超大文本、主题即时切换）。
+- `pubspec.yaml`: 依据 `AGENTS.md` 规范递增项目版本号至 `1.16.0+17`。
+
+### 核心改进与技术指标
+1. **全局 Token 预算与滑动窗口压缩引擎 (TokenBudgetManager)**：
+   - 具备高效准确的多模态字符与 Token 估算模型（覆盖中文、英文、代码、Emoji 与结构化 JSON）；
+   - 提供智能滑动窗口压缩算法，自动修剪历史中间工具冗长输出，保留签名与摘要，彻底防止长会话上下文超限；
+   - 具备全局硬上限熔断器（Circuit Breaker），超限时优雅剥离工具并引导模型完成最终总结。
+2. **跨模型对抗容错与自愈网关 (AgentFaultTolerance)**：
+   - 自动修复 DeepSeek DSML、Qwen XML、标准 JSON、Llama 函数语法中未闭合引号/括号/转义符；
+   - 具备指数退避重试（带随机 Jitter）与友好的中文结构化错误降级，保障 Agent 持续自愈。
+3. **四大维度工具链统一调度管道 (Unified Agent Pipeline)**：
+   - 统一协同调度 22+ 基础实用、本地沙箱、移动原生特权与 MCP 远程动态工具；
+   - 提供微秒级耗时追踪、执行步骤计数与 Token 消耗审计全套遥测机制。
+4. **多步执行时间线与 Token UX (Observability & Polish)**：
+   - 高质感折叠时间线与响应式三色 Token 胶囊徽章，极大提升 Agent 思考与执行链路透明度。
+5. **质量指标**：
+   - 静态分析 `flutter analyze` 保持 **`No issues found!`**（0 errors, 0 warnings, 0 lints）；
+   - 全量自动化测试套件通过率 **100% (774/774 全部通过，0 failures)**。
+
+## 2026-09-01 UI & Observability: Milestone 27.3 Agent Execution Timeline & Token UI Widgets (v1.15.0+16)
+
+### 变更文件
+- `lib/widgets/agent_execution_timeline.dart`: 实现高质感可折叠多步执行时间线组件 `AgentExecutionTimelineWidget`，支持四大维度类别徽章色彩映射（`基础实用`、`沙箱与代码`、`移动原生`、`动态MCP`）、执行耗时（ms/s）、推理意图预览、格式化 JSON 参数一键复制、Markdown 执行输出渲染（支持展开/收起长文本）及自愈诊断异常徽标。
+- `lib/widgets/token_budget_badge.dart`: 实现 `TokenBudgetBadge` 响应式 Token 预算可视化胶囊徽章与完整进度条（三色阈值：绿色 <70%、琥珀色 70-89%、红色 >=90%，支持紧凑胶囊 `🪙 1,250 Tokens (↑850 / ↓400)`、预算超限警告与滑动窗口压缩节省统计）与 `CircuitBreakerAlertCard` 超限熔断预警提示横幅卡片。
+- `lib/widgets/chat_bubble.dart`: 无缝集成 `AgentExecutionTimelineWidget`、`TokenBudgetBadge` 与 `CircuitBreakerAlertCard`，完美保持与历史单工具/多工具消息气泡 100% 向下兼容。
+- `lib/screens/home_screen.dart`: 在聊天主界面流式生成区域实时渲染动态 `AgentExecutionTimelineWidget` 进度链路、`TokenBudgetBadge` 预算状态与 `CircuitBreakerAlertCard` 熔断预警。
+- `test/widgets/agent_execution_timeline_test.dart`: 新增 `AgentExecutionTimelineWidget` 单元与 Widget 测试（空状态、单步/多步时间线、四大维度徽章、展开/折叠、Markdown 长文本切换、自愈诊断反馈、参数/输出复制、深浅主题适配）。
+- `test/widgets/token_budget_badge_test.dart`: 新增 `TokenBudgetBadge` 与 `CircuitBreakerAlertCard` 单元与 Widget 测试（紧凑胶囊徽章、三色阈值判定、Token 压缩节省统计、熔断预警提示与关闭回调、深浅主题适配）。
+- `pubspec.yaml`: 依据 `AGENTS.md` 规范递增项目版本号至 `1.15.0+16`。
+
+### 核心改进与技术指标
+1. **多维 Agent 执行链路可观测性 (Timeline & Token UX)**：
+   - 为四大维度 22+ 工具提供统一结构化时间线呈现与细粒度状态指示；
+   - 实时可视化上下文 Token 消耗比例与滑动窗口压缩节省效益；
+   - 优雅的熔断预警卡片保障大模型生成安全总结时的中文友好用户引导。
+2. **质量指标**：
+   - 静态分析 `flutter analyze` 保持 **`No issues found!`**（0 errors, 0 warnings, 0 lints）；
+   - 全量自动化测试套件通过率 **100% (770/770 全部通过，0 failures)**。
+
 ## 2026-09-01 Testing & Delivery: Milestone 26 MCP Testing, Adversarial Hardening & Final Delivery (v1.13.0+14)
 
 ### 变更文件

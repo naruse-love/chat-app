@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/search_service.dart';
 import '../models/tool/tool_confirmation.dart';
+import '../models/agent_step_telemetry.dart';
 
 class AgentState {
   final bool isSearching;
@@ -9,6 +10,9 @@ class AgentState {
   final bool isFetchingUrl;
   final String fetchingUrl;
   final ToolConfirmationRequest? pendingConfirmationRequest;
+  final List<AgentStepTelemetry> stepTelemetries;
+  final TokenBudgetTelemetry? latestTokenBudget;
+  final String? circuitBreakerReason;
 
   bool get isWaitingConfirmation => pendingConfirmationRequest != null;
 
@@ -19,6 +23,9 @@ class AgentState {
     this.isFetchingUrl = false,
     this.fetchingUrl = '',
     this.pendingConfirmationRequest,
+    this.stepTelemetries = const [],
+    this.latestTokenBudget,
+    this.circuitBreakerReason,
   });
 
   AgentState copyWith({
@@ -29,6 +36,11 @@ class AgentState {
     String? fetchingUrl,
     ToolConfirmationRequest? pendingConfirmationRequest,
     bool clearPendingConfirmation = false,
+    List<AgentStepTelemetry>? stepTelemetries,
+    TokenBudgetTelemetry? latestTokenBudget,
+    bool clearTokenBudget = false,
+    String? circuitBreakerReason,
+    bool clearCircuitBreaker = false,
   }) {
     return AgentState(
       isSearching: isSearching ?? this.isSearching,
@@ -39,6 +51,9 @@ class AgentState {
       pendingConfirmationRequest: clearPendingConfirmation
           ? null
           : (pendingConfirmationRequest ?? this.pendingConfirmationRequest),
+      stepTelemetries: stepTelemetries ?? this.stepTelemetries,
+      latestTokenBudget: clearTokenBudget ? null : (latestTokenBudget ?? this.latestTokenBudget),
+      circuitBreakerReason: clearCircuitBreaker ? null : (circuitBreakerReason ?? this.circuitBreakerReason),
     );
   }
 }
@@ -47,13 +62,13 @@ class AgentNotifier extends StateNotifier<AgentState> {
   AgentNotifier() : super(AgentState());
 
   void startSearch(String query) {
-    state = AgentState(
+    state = state.copyWith(
       isSearching: true,
       searchQuery: query,
       searchResults: const [],
       isFetchingUrl: false,
       fetchingUrl: '',
-      pendingConfirmationRequest: null,
+      clearPendingConfirmation: true,
     );
   }
 
@@ -65,13 +80,13 @@ class AgentNotifier extends StateNotifier<AgentState> {
   }
 
   void startUrlFetch(String url) {
-    state = AgentState(
+    state = state.copyWith(
       isSearching: false,
       searchQuery: '',
       searchResults: const [],
       isFetchingUrl: true,
       fetchingUrl: url,
-      pendingConfirmationRequest: null,
+      clearPendingConfirmation: true,
     );
   }
 
@@ -90,6 +105,39 @@ class AgentNotifier extends StateNotifier<AgentState> {
 
   void clearPendingConfirmation() {
     state = state.copyWith(
+      clearPendingConfirmation: true,
+    );
+  }
+
+  void addStepTelemetry(AgentStepTelemetry telemetry) {
+    state = state.copyWith(
+      stepTelemetries: [...state.stepTelemetries, telemetry],
+    );
+  }
+
+  void updateTokenBudget(TokenBudgetTelemetry telemetry) {
+    state = state.copyWith(latestTokenBudget: telemetry);
+  }
+
+  void triggerCircuitBreaker(String reason) {
+    state = state.copyWith(circuitBreakerReason: reason);
+  }
+
+  void clearTelemetry() {
+    state = state.copyWith(
+      stepTelemetries: const [],
+      clearTokenBudget: true,
+      clearCircuitBreaker: true,
+    );
+  }
+
+  void clearTransientState() {
+    state = state.copyWith(
+      isSearching: false,
+      searchQuery: '',
+      searchResults: const [],
+      isFetchingUrl: false,
+      fetchingUrl: '',
       clearPendingConfirmation: true,
     );
   }

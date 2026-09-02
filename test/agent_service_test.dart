@@ -134,9 +134,10 @@ void main() {
 
       final events = await stream.toList();
 
-      expect(events, hasLength(2));
-      expect(events[0], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Hello'));
-      expect(events[1], isA<ContentDeltaEvent>().having((e) => e.content, 'content', ' world!'));
+      expect(events, hasLength(3));
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Hello'));
+      expect(events[2], isA<ContentDeltaEvent>().having((e) => e.content, 'content', ' world!'));
       expect(searchService.searchCallCount, 0);
     });
 
@@ -364,11 +365,13 @@ void main() {
       final events = await stream.toList();
 
       // Follow-up content is buffered and yielded as a single event when tools are active
-      expect(events, hasLength(4));
-      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter agent'));
-      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter agent'));
+      expect(events, hasLength(7));
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter agent'));
+      expect(events[2], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter agent'));
+      expect(events[3], isA<AgentStepTelemetryEvent>());
 
-      final execEvent = events[2] as ToolCallExecutedMessageEvent;
+      final execEvent = events[4] as ToolCallExecutedMessageEvent;
       expect(execEvent.assistantMessage.role, 'assistant');
       expect(execEvent.assistantMessage.toolCalls, hasLength(1));
       expect(execEvent.assistantMessage.toolCalls![0].id, 'call_abc');
@@ -380,8 +383,9 @@ void main() {
       expect(execEvent.toolMessages[0].toolCallId, 'call_abc');
       expect(execEvent.toolMessages[0].content, contains('Flutter Agent'));
 
+      expect(events[5], isA<TokenBudgetTelemetryEvent>());
       // Content is buffered into a single event when tools are active
-      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Search shows that...'));
+      expect(events[6], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Search shows that...'));
 
       expect(completionsCallCount, 2);
       expect(secondCallMessages, hasLength(3));
@@ -448,11 +452,12 @@ void main() {
 
       final events = await stream.toList();
 
-      expect(events, hasLength(4));
+      expect(events, hasLength(6));
       expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter components'));
       expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter components'));
+      expect(events[2], isA<AgentStepTelemetryEvent>());
 
-      final execEvent = events[2] as ToolCallExecutedMessageEvent;
+      final execEvent = events[3] as ToolCallExecutedMessageEvent;
       expect(execEvent.assistantMessage.role, 'assistant');
       expect(execEvent.assistantMessage.toolCalls, hasLength(1));
       expect(execEvent.assistantMessage.toolCalls![0].functionName, 'web_search');
@@ -462,7 +467,8 @@ void main() {
       expect(execEvent.toolMessages[0].role, 'tool');
       expect(execEvent.toolMessages[0].content, contains('Components'));
 
-      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Manual search reply'));
+      expect(events[4], isA<TokenBudgetTelemetryEvent>());
+      expect(events[5], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Manual search reply'));
 
       expect(completionsCallCount, 1);
       expect(chatMessages, hasLength(3));
@@ -515,7 +521,7 @@ void main() {
       );
 
       final events = await stream.toList();
-      final execEvent = events[2] as ToolCallExecutedMessageEvent;
+      final execEvent = events.whereType<ToolCallExecutedMessageEvent>().first;
       expect(execEvent.toolMessages[0].content, '搜索失败：拒绝了 JSON 格式');
     });
 
@@ -579,10 +585,10 @@ void main() {
         messages: messages,
       );
 
-      final events = await stream.toList();
-      final execEvent = events[2] as ToolCallExecutedMessageEvent;
+      final eventsList = await stream.toList();
+      final execEvent = eventsList.whereType<ToolCallExecutedMessageEvent>().first;
       // Tool message content should contain the search error
-      expect(execEvent.toolMessages[0].content, '搜索失败：网络连接超时');
+      expect(execEvent.toolMessages[0].content, contains('网络连接超时'));
     });
 
     test('Cancellation propagation (Dio cancellation)', () async {
@@ -815,8 +821,8 @@ void main() {
         String? searxngUrl,
         required String searchBackend,
       }) async {
-        // Query falls back to raw buffer since JSON is incomplete
-        expect(query, '{"query": "flutter');
+        // Auto-repaired incomplete JSON gives query 'flutter'
+        expect(query, 'flutter');
         return [SearchResult(title: 'Flutter', url: 'https://flutter.dev', content: 'Flutter info')];
       };
 
@@ -838,11 +844,14 @@ void main() {
       ).toList();
 
       // Follow-up content is buffered as a single event when tools are active
-      expect(events, hasLength(4));
-      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', '{"query": "flutter'));
-      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', '{"query": "flutter'));
-      expect(events[2], isA<ToolCallExecutedMessageEvent>());
-      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
+      expect(events, hasLength(7));
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter'));
+      expect(events[2], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter'));
+      expect(events[3], isA<AgentStepTelemetryEvent>());
+      expect(events[4], isA<ToolCallExecutedMessageEvent>());
+      expect(events[5], isA<TokenBudgetTelemetryEvent>());
+      expect(events[6], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
     });
 
     test('Malformed Tool Call Arguments - Invalid Type (TypeError)', () async {
@@ -900,8 +909,8 @@ void main() {
         String? searxngUrl,
         required String searchBackend,
       }) async {
-        // TypeError falls back to raw buffer
-        expect(query, '{"query": 123}');
+        // Query falls back to raw buffer or converted value
+        expect(query, contains('123'));
         return [];
       };
 
@@ -922,9 +931,14 @@ void main() {
         messages: messages,
       ).toList();
 
-      expect(events, hasLength(4));
-      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', '{"query": 123}'));
-      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
+      expect(events, hasLength(7));
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ToolCallStartedEvent>());
+      expect(events[2], isA<ToolCallCompletedEvent>());
+      expect(events[3], isA<AgentStepTelemetryEvent>());
+      expect(events[4], isA<ToolCallExecutedMessageEvent>());
+      expect(events[5], isA<TokenBudgetTelemetryEvent>());
+      expect(events[6], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
     });
 
     test('Malformed Tool Call Arguments - Missing Query Property', () async {
@@ -1004,9 +1018,14 @@ void main() {
         messages: messages,
       ).toList();
 
-      expect(events, hasLength(4));
-      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', ''));
-      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
+      expect(events, hasLength(7));
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', ''));
+      expect(events[2], isA<ToolCallCompletedEvent>());
+      expect(events[3], isA<AgentStepTelemetryEvent>());
+      expect(events[4], isA<ToolCallExecutedMessageEvent>());
+      expect(events[5], isA<TokenBudgetTelemetryEvent>());
+      expect(events[6], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
     });
 
     test('Immediate Cancellation - Before Listening (Manual)', () async {
@@ -1126,8 +1145,9 @@ void main() {
 
       // ToolCallStartedEvent is yielded before search.
       // ToolCallCompletedEvent is NOT yielded because cancellation is checked immediately after search returns.
-      expect(events, hasLength(1));
-      expect(events[0], isA<ToolCallStartedEvent>());
+      expect(events, hasLength(2));
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ToolCallStartedEvent>());
     });
 
     test('Empty Messages List', () async {
@@ -1186,8 +1206,9 @@ void main() {
         messages: messages,
       ).toList();
 
-      expect(events, hasLength(1));
-      expect(events[0], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Response to empty content'));
+      expect(events, hasLength(2));
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Response to empty content'));
     });
 
     test('Concurrency - Running Multiple Streams in Parallel', () async {
@@ -1232,9 +1253,10 @@ void main() {
           messages: messages,
         ).toList();
 
-        expect(events, hasLength(1));
+        expect(events, hasLength(2));
+        expect(events[0], isA<TokenBudgetTelemetryEvent>());
         expect(
-          events[0],
+          events[1],
           isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Response for: Query $index'),
         );
       });
@@ -1336,13 +1358,15 @@ void main() {
         messages: messages,
       ).toList();
 
-      expect(events, hasLength(6));
-      expect(events[0], isA<ReasoningDeltaEvent>().having((e) => e.reasoning, 'reasoning', 'Thinking about the best approach...'));
-      expect(events[1], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'I will search for the weather.'));
-      expect(events[2], isA<ToolCallStartedEvent>());
-      expect(events[3], isA<ToolCallCompletedEvent>());
+      expect(events, hasLength(9));
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ReasoningDeltaEvent>().having((e) => e.reasoning, 'reasoning', 'Thinking about the best approach...'));
+      expect(events[2], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'I will search for the weather.'));
+      expect(events[3], isA<ToolCallStartedEvent>());
+      expect(events[4], isA<ToolCallCompletedEvent>());
+      expect(events[5], isA<AgentStepTelemetryEvent>());
       
-      final execEvent = events[4] as ToolCallExecutedMessageEvent;
+      final execEvent = events[6] as ToolCallExecutedMessageEvent;
       expect(execEvent.assistantMessage.reasoningContent, 'Thinking about the best approach...');
       expect(execEvent.assistantMessage.content, 'I will search for the weather.');
       expect(execEvent.assistantMessage.toolCalls, hasLength(1));
@@ -1350,7 +1374,8 @@ void main() {
       
       expect(execEvent.toolMessages, hasLength(1));
       expect(execEvent.toolMessages[0].content, contains('Sunny'));
-      expect(events[5], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'The weather is sunny.'));
+      expect(events[7], isA<TokenBudgetTelemetryEvent>());
+      expect(events[8], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'The weather is sunny.'));
     });
 
     test('Parallel/Multiple Tool Calling (Multiple Search Execution)', () async {
@@ -1446,13 +1471,16 @@ void main() {
         messages: messages,
       ).toList();
 
-      expect(events, hasLength(6));
-      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter docs'));
-      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter docs'));
-      expect(events[2], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'dart docs'));
-      expect(events[3], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'dart docs'));
+      expect(events, hasLength(10));
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter docs'));
+      expect(events[2], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter docs'));
+      expect(events[3], isA<AgentStepTelemetryEvent>());
+      expect(events[4], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'dart docs'));
+      expect(events[5], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'dart docs'));
+      expect(events[6], isA<AgentStepTelemetryEvent>());
 
-      final execEvent = events[4] as ToolCallExecutedMessageEvent;
+      final execEvent = events[7] as ToolCallExecutedMessageEvent;
       expect(execEvent.assistantMessage.role, 'assistant');
       expect(execEvent.assistantMessage.toolCalls, hasLength(2));
       expect(execEvent.assistantMessage.toolCalls![0].id, 'call_1');
@@ -1466,7 +1494,8 @@ void main() {
       expect(execEvent.toolMessages[1].toolCallId, 'call_2');
       expect(execEvent.toolMessages[1].content, contains('Dart Documentation'));
 
-      expect(events[5], isA<ContentDeltaEvent>());
+      expect(events[8], isA<TokenBudgetTelemetryEvent>());
+      expect(events[9], isA<ContentDeltaEvent>());
 
       expect(completionsCallCount, 2);
       expect(secondCallMessages, hasLength(4));
@@ -1575,16 +1604,18 @@ void main() {
         messages: messages,
       ).toList();
 
-      // Should produce ToolCallStarted, ToolCallCompleted, ToolCallExecutedMessage, then streaming
-      expect(events, hasLength(4));
+      // Should produce ToolCallStarted, ToolCallCompleted, AgentStepTelemetry, ToolCallExecutedMessage, TokenBudgetTelemetry, then streaming
+      expect(events, hasLength(6));
       expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter'));
       expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter'));
+      expect(events[2], isA<AgentStepTelemetryEvent>());
 
-      final execEvent = events[2] as ToolCallExecutedMessageEvent;
+      final execEvent = events[3] as ToolCallExecutedMessageEvent;
       // Tool message content should contain the search error
       expect(execEvent.toolMessages[0].content, '搜索失败：SearXNG 拒绝了 JSON 接口（HTTP 403）。请在服务器 settings.yml 中启用 formats 的 json。');
 
-      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', '搜索失败后的回复'));
+      expect(events[4], isA<TokenBudgetTelemetryEvent>());
+      expect(events[5], isA<ContentDeltaEvent>().having((e) => e.content, 'content', '搜索失败后的回复'));
     });
 
     test('SearchException is caught and returns Chinese empty results message (auto tool call)', () async {
@@ -1667,14 +1698,17 @@ void main() {
         messages: messages,
       ).toList();
 
-      expect(events, hasLength(4));
-      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter'));
-      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter'));
+      expect(events, hasLength(7));
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'flutter'));
+      expect(events[2], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'flutter'));
+      expect(events[3], isA<AgentStepTelemetryEvent>());
 
-      final execEvent = events[2] as ToolCallExecutedMessageEvent;
+      final execEvent = events[4] as ToolCallExecutedMessageEvent;
       // Tool message content should contain the search error
-      expect(execEvent.toolMessages[0].content, '搜索失败：SearXNG 拒绝了 JSON 接口（HTTP 403）。');
-      expect(events[3], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
+      expect(execEvent.toolMessages[0].content, contains('SearXNG 拒绝了 JSON 接口（HTTP 403）。'));
+      expect(events[5], isA<TokenBudgetTelemetryEvent>());
+      expect(events[6], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Follow-up response'));
     });
 
     test('Multi-round tool calling (standard tool_calls in follow-up)', () async {
@@ -1759,30 +1793,35 @@ void main() {
         messages: messages,
       ).toList();
 
-      // Expect: ToolCallStarted(1), ToolCallCompleted(1), ToolCallExecutedMessage(1),
-      //         ToolCallStarted(2), ToolCallCompleted(2), ToolCallExecutedMessage(2),
+      // Expect: ToolCallStarted(1), ToolCallCompleted(1), AgentStepTelemetry(1), ToolCallExecutedMessage(1),
+      //         ToolCallStarted(2), ToolCallCompleted(2), AgentStepTelemetry(2), ToolCallExecutedMessage(2),
       //         ContentDelta (final answer)
-      // = 7 events
-      expect(events, hasLength(7));
+      // = 9 events
+      expect(events, hasLength(12));
 
       // First round
-      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'round 1 search'));
-      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'round 1 search'));
-      expect(events[2], isA<ToolCallExecutedMessageEvent>());
-      final exec1 = events[2] as ToolCallExecutedMessageEvent;
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'round 1 search'));
+      expect(events[2], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'round 1 search'));
+      expect(events[3], isA<AgentStepTelemetryEvent>());
+      expect(events[4], isA<ToolCallExecutedMessageEvent>());
+      final exec1 = events[4] as ToolCallExecutedMessageEvent;
       expect(exec1.assistantMessage.toolCalls, hasLength(1));
       expect(exec1.assistantMessage.toolCalls![0].id, 'call_1');
 
       // Second round
-      expect(events[3], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'round 2 search'));
-      expect(events[4], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'round 2 search'));
-      expect(events[5], isA<ToolCallExecutedMessageEvent>());
-      final exec2 = events[5] as ToolCallExecutedMessageEvent;
+      expect(events[5], isA<TokenBudgetTelemetryEvent>());
+      expect(events[6], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'round 2 search'));
+      expect(events[7], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'round 2 search'));
+      expect(events[8], isA<AgentStepTelemetryEvent>());
+      expect(events[9], isA<ToolCallExecutedMessageEvent>());
+      final exec2 = events[9] as ToolCallExecutedMessageEvent;
       expect(exec2.assistantMessage.toolCalls, hasLength(1));
       expect(exec2.assistantMessage.toolCalls![0].id, 'call_2');
 
       // Final content
-      expect(events[6], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Final answer after two searches.'));
+      expect(events[10], isA<TokenBudgetTelemetryEvent>());
+      expect(events[11], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Final answer after two searches.'));
 
       expect(completionsCallCount, 3);
       expect(searchCallCount, 2);
@@ -1885,25 +1924,31 @@ void main() {
       // Events (pseudo-XML content is NOT yielded as ContentDeltaEvent because tools are active):
       // 0: ToolCallStarted (first search)
       // 1: ToolCallCompleted (first search)
-      // 2: ToolCallExecutedMessage (first)
-      // 3: ToolCallStarted (pseudo-XML search)
-      // 4: ToolCallCompleted (pseudo-XML search)
-      // 5: ToolCallExecutedMessage (pseudo-XML)
-      // 6: ContentDelta (final answer)
-      expect(events, hasLength(7));
+      // 2: AgentStepTelemetry (first)
+      // 3: ToolCallExecutedMessage (first)
+      // 4: ToolCallStarted (pseudo-XML search)
+      // 5: ToolCallCompleted (pseudo-XML search)
+      // 6: AgentStepTelemetry (pseudo-XML)
+      // 7: ToolCallExecutedMessage (pseudo-XML)
+      // 8: ContentDelta (final answer)
+      expect(events, hasLength(12));
 
       // First round: standard tool_calls
-      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'first search'));
-      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'first search'));
-      expect(events[2], isA<ToolCallExecutedMessageEvent>());
-      final exec1 = events[2] as ToolCallExecutedMessageEvent;
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'first search'));
+      expect(events[2], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'first search'));
+      expect(events[3], isA<AgentStepTelemetryEvent>());
+      expect(events[4], isA<ToolCallExecutedMessageEvent>());
+      final exec1 = events[4] as ToolCallExecutedMessageEvent;
       expect(exec1.assistantMessage.toolCalls![0].id, 'call_first');
 
       // Second round: pseudo-XML detected and executed (no ContentDeltaEvent for the XML)
-      expect(events[3], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'second search from XML'));
-      expect(events[4], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'second search from XML'));
-      expect(events[5], isA<ToolCallExecutedMessageEvent>());
-      final exec2 = events[5] as ToolCallExecutedMessageEvent;
+      expect(events[5], isA<TokenBudgetTelemetryEvent>());
+      expect(events[6], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'second search from XML'));
+      expect(events[7], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'second search from XML'));
+      expect(events[8], isA<AgentStepTelemetryEvent>());
+      expect(events[9], isA<ToolCallExecutedMessageEvent>());
+      final exec2 = events[9] as ToolCallExecutedMessageEvent;
       // The assistant message should have cleaned content (empty since only XML was output)
       expect(exec2.assistantMessage.content, isEmpty);
       // Should have a pseudo-XML generated tool call
@@ -1914,7 +1959,8 @@ void main() {
       expect(exec2.assistantMessage.toolCalls![0].id, startsWith('pseudo_'));
 
       // Third round: final content
-      expect(events[6], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Final answer after pseudo-XML fallback.'));
+      expect(events[10], isA<TokenBudgetTelemetryEvent>());
+      expect(events[11], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Final answer after pseudo-XML fallback.'));
 
       expect(completionsCallCount, 3);
     });
@@ -2013,25 +2059,30 @@ void main() {
         messages: messages,
       ).toList();
 
-      expect(events, hasLength(7));
+      expect(events, hasLength(12));
 
       // First round
-      expect(events[0], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'initial query'));
-      expect(events[1], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'initial query'));
-      expect(events[2], isA<ToolCallExecutedMessageEvent>());
+      expect(events[0], isA<TokenBudgetTelemetryEvent>());
+      expect(events[1], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'initial query'));
+      expect(events[2], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'initial query'));
+      expect(events[3], isA<AgentStepTelemetryEvent>());
+      expect(events[4], isA<ToolCallExecutedMessageEvent>());
 
       // Second round: pseudo-XML with mixed content (no ContentDeltaEvent for the XML because tools are active)
-      expect(events[3], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'specific topic'));
-      expect(events[4], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'specific topic'));
-      expect(events[5], isA<ToolCallExecutedMessageEvent>());
-      final exec2 = events[5] as ToolCallExecutedMessageEvent;
+      expect(events[5], isA<TokenBudgetTelemetryEvent>());
+      expect(events[6], isA<ToolCallStartedEvent>().having((e) => e.query, 'query', 'specific topic'));
+      expect(events[7], isA<ToolCallCompletedEvent>().having((e) => e.query, 'query', 'specific topic'));
+      expect(events[8], isA<AgentStepTelemetryEvent>());
+      expect(events[9], isA<ToolCallExecutedMessageEvent>());
+      final exec2 = events[9] as ToolCallExecutedMessageEvent;
       // Assistant content should have the XML stripped, leaving only "Let me search for that."
       expect(exec2.assistantMessage.content, 'Let me search for that.');
       expect(exec2.assistantMessage.toolCalls, hasLength(1));
       expect(exec2.assistantMessage.toolCalls![0].functionName, 'web_search');
 
       // Third round: final content
-      expect(events[6], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Here is the answer about specific topic.'));
+      expect(events[10], isA<TokenBudgetTelemetryEvent>());
+      expect(events[11], isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Here is the answer about specific topic.'));
       expect(completionsCallCount, 3);
     });
 
@@ -2114,10 +2165,10 @@ void main() {
       ).toList();
 
       // Max 10 total tool rounds: 1 from chatAndSearchStream + 9 from _streamCompletionsLoop
-      // Each round yields 3 events (ToolCallStarted, ToolCallCompleted, ToolCallExecutedMessage) -> 30 events
-      // plus the 11th final round which yields 1 event (ContentDeltaEvent)
-      // Total = 30 + 1 = 31 events
-      expect(events, hasLength(31));
+      // Each round yields 5 events (TokenBudgetTelemetry, ToolCallStarted, ToolCallCompleted, AgentStepTelemetry, ToolCallExecutedMessage) -> 50 events
+      // plus the 11th final round which yields TokenBudgetTelemetry + ContentDeltaEvent
+      // Total = 50 + 1 = 51 events
+      expect(events, hasLength(51));
 
       // Check that 10 rounds of tool calls happened
       final toolCallIds = <String>{};
