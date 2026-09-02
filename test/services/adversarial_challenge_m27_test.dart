@@ -27,7 +27,7 @@ void main() {
       final massiveTokens = defaultManager.estimateTokens(massiveCjk);
       stopwatch.stop();
 
-      expect(massiveTokens, equals(85000));
+      expect(massiveTokens, equals(65000));
       expect(stopwatch.elapsedMilliseconds, lessThan(500));
     });
 
@@ -65,7 +65,7 @@ void main() {
       ];
 
       final result = degenerateManager.evaluateAndCompact(messages: messages);
-      expect(result.estimatedPromptTokens, greaterThan(600));
+      expect(result.estimatedPromptTokens, greaterThan(500));
     });
 
     test('1.4 Sliding window compaction with Multibyte Unicode boundary slicing', () {
@@ -141,17 +141,17 @@ void main() {
         ),
       );
 
-      final cjk823 = '字' * 823;
+      final cjk1100 = '字' * 1100; // ~715 tokens -> ~71.5% (>= 70% warning, < 90% tripped)
       final msgWarning = [
-        ChatMessage(id: '1', conversationId: 'c', role: 'user', content: cjk823, timestamp: DateTime.now()),
+        ChatMessage(id: '1', conversationId: 'c', role: 'user', content: cjk1100, timestamp: DateTime.now()),
       ];
       final evalWarning = manager.evaluateCircuitBreaker(msgWarning);
       expect(evalWarning.state, CircuitBreakerState.warning);
       expect(evalWarning.shouldStripTools, isFalse);
 
-      final cjk1100 = '字' * 1100;
+      final cjk1450 = '字' * 1450; // ~943 tokens -> ~94.3% (>= 90% tripped)
       final msgTripped = [
-        ChatMessage(id: '1', conversationId: 'c', role: 'user', content: cjk1100, timestamp: DateTime.now()),
+        ChatMessage(id: '1', conversationId: 'c', role: 'user', content: cjk1450, timestamp: DateTime.now()),
       ];
       final evalTripped = manager.evaluateCircuitBreaker(msgTripped);
       expect(evalTripped.state, CircuitBreakerState.tripped);

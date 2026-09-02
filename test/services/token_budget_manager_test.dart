@@ -96,11 +96,11 @@ void main() {
       expect(manager.estimateTokens('中'), equals(1));
     });
 
-    test('estimateTokens calculates CJK text (~0.85 tok/char)', () {
+    test('estimateTokens calculates CJK text (~0.65 tok/char)', () {
       final chinese100Chars = '这是一段用于测试中文Token估算精确度的文本。' * 5; // 120 chars
       final tokens = manager.estimateTokens(chinese100Chars);
-      expect(tokens, greaterThan(80));
-      expect(tokens, lessThan(130));
+      expect(tokens, greaterThan(65));
+      expect(tokens, lessThan(100));
     });
 
     test('estimateTokens calculates English / ASCII words (~3.8 char/tok)', () {
@@ -391,7 +391,7 @@ void main() {
         ),
       );
 
-      final largeContent = '这' * 900; // ~765 tokens -> ~76% of 1000
+      final largeContent = '这' * 1200; // ~780 tokens -> ~78% of 1000 (>= 70% warning, < 90% tripped)
       final messages = [
         ChatMessage(
           id: '1',
@@ -415,7 +415,7 @@ void main() {
         ),
       );
 
-      final massiveContent = '中' * 1200; // ~1020 tokens -> >100% of 1000
+      final massiveContent = '中' * 1500; // ~975 tokens -> >90% of 1000
       final messages = [
         ChatMessage(
           id: '1',

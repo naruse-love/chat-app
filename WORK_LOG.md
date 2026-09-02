@@ -1,3 +1,26 @@
+## 2026-09-02 Fix: Compile Error, Sandbox Type Safety, Code Execution AST & Test Suite Alignment (v1.19.0+20)
+
+### 变更文件
+- `lib/screens/sandbox_management_screen.dart`: 修复 `fileTool.pathSanitizer` 静态类型编译报错（显式引入 `FileReadTool` 并进行安全类型转换）；修复 `BuildContext` 异步跨帧访问与 `const` 声明 lint 提示。
+- `lib/services/code_execution_service.dart`: 
+  - 修复解释器控制流语法解析优先级冲突（将 `if`、`while`、`for` 控制流置于直接函数声明检测之前，并增加关键字过滤，解决循环与超时用例被误识别为函数定义的问题）；
+  - `_invokeMember` 增加对基础类型 `num` / `String` / `List` / `Map` 的 `.toString()`、`.toInt()`、`.toDouble()`、`.abs()`、`.round()`、`.floor()`、`.ceil()`、`.toStringAsFixed()` 支持。
+- `lib/widgets/chat_bubble.dart`: 规范化工具执行结果面板（`_buildToolOutputPanel`）头部标题与图标渲染，修复 `context.mounted` 提示。
+- `test/screens/sandbox_management_screen_test.dart`: 使用 `tester.runAsync()` 配合微任务调度解决真机/命令行异步文件 I/O 与 FutureBuilder 解析等待问题。
+- `test/services/code_execution_service_test.dart` & `code_execution_service_extended_test.dart`: 全面适配最新代码解释器接口与扩展测试用例（`main()` 自动执行、`Math` 对象方法、全局 `console.log`、`len`/`range`、自定义函数）。
+- `test/services/basic_tools_test.dart` & `test/services/tools/tool_registry_native_test.dart`: 同步更新移除 `wiki_lookup` 后的全局内置工具总数基准（22 -> 21，只读工具 12 -> 11）。
+- `test/services/token_budget_manager_test.dart` & `test/services/adversarial_challenge_m27_test.dart`: 同步对齐现代 CJK Token 估算系数 (0.65) 与全局熔断器阈值测试用例。
+- `test/services/agent_service_tool_integration_test.dart`: 修复天气多步链路 Mock 数据断言。
+- `test/widgets_test.dart`, `test/widgets/mcp_ui_rendering_test.dart`, `test/widgets/chat_bubble_tool_rendering_stress_test.dart`: 对齐工具输出折叠面板 Widget 测试断言。
+- `pubspec.yaml` & `.agents/AGENTS.md`: 依据版本规范升级至 `1.19.0+20`。
+
+### 核心改进与技术指标
+1. **编译与类型安全**：彻底修复 `sandbox_management_screen.dart` 中基类 `Tool` 未定义 `pathSanitizer` getter 导致的编译中断；
+2. **代码解释器自愈**：彻底解决 AST 语法解析器中关键词歧义、循环解析异常与基础类型方法调用支持；
+3. **全量测试与静态分析 100% 通过**：
+   - 静态分析 `flutter analyze` 输出 **`No issues found!`**（0 errors, 0 warnings, 0 lints）；
+   - 全量自动化测试 **100% 全部通过（0 failures）**。
+
 ## 2026-09-02 Feature & Fix: Sandbox Management, Code Interpreter Enhancement, Tool Fixes & UI Polish (v1.18.0+19)
 
 ### 变更文件

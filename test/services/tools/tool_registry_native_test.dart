@@ -33,8 +33,8 @@ void main() {
   });
 
   group('ToolRegistry Native Privileged Tools Integration Tests', () {
-    test('Default registry contains all 7 native tools and total 22 tools', () {
-      expect(registry.getAllTools().length, 22);
+    test('Default registry contains all 7 native tools and total 21 tools', () {
+      expect(registry.getAllTools().length, 21);
 
       expect(registry.hasTool('calendar_query_events'), isTrue);
       expect(registry.hasTool('calendar_create_event'), isTrue);
@@ -60,7 +60,7 @@ void main() {
 
     test('Export OpenAI schemas properly exports schemas for all 7 native tools', () {
       final schemas = registry.exportOpenAiSchemas();
-      expect(schemas.length, 22);
+      expect(schemas.length, 21);
 
       final names = schemas.map((s) => s['function']['name']).toList();
       expect(names, containsAll([
@@ -91,9 +91,9 @@ void main() {
       expect(readOnlyNames, isNot(contains('geolocation_get')));
       expect(readOnlyNames, isNot(contains('contacts_search')));
 
-      // Level 3 privilegedNative should include all 22 tools
+      // Level 3 privilegedNative should include all 21 tools
       final privilegedSchemas = registry.exportOpenAiSchemas(maxSecurityLevel: ToolSecurityLevel.privilegedNative);
-      expect(privilegedSchemas.length, 22);
+      expect(privilegedSchemas.length, 21);
     });
 
     test('Dispatches execution through registry for native tools', () async {

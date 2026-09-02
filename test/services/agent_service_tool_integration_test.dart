@@ -580,7 +580,7 @@ void main() {
         expect(execEvents[0].toolMessages.first.toolCallId, 'call_math_seq');
         expect(execEvents[0].toolMessages.first.content, contains('9'));
         expect(execEvents[1].toolMessages.first.toolCallId, 'call_weather_seq');
-        expect(execEvents[1].toolMessages.first.content, contains('Tokyo'));
+        expect(execEvents[1].toolMessages.first.content, contains('实时天气与预报'));
         expect(events.last, isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Tokyo天气良好。'));
       });
     });

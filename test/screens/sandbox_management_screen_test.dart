@@ -43,25 +43,40 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    // _loadSandboxFiles uses real async I/O (computeCurrentWorkspaceSize).
+    // runAsync lets real I/O complete, then pump rebuilds the widget.
+    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 200)));
+    await tester.pump();
 
     expect(find.text('沙箱文件管理'), findsOneWidget);
     expect(find.text('沙箱存储配额'), findsOneWidget);
     expect(find.text('hello.txt'), findsOneWidget);
     expect(find.byIcon(Icons.description), findsOneWidget);
 
-    // Tap on file to trigger preview dialog
-    await tester.tap(find.text('hello.txt'));
-    await tester.pumpAndSettle();
+    // Tap the preview button inside runAsync so the FutureBuilder's
+    // file.readAsString() future is created in real async zone
+    await tester.runAsync(() async {
+      await tester.tap(find.byIcon(Icons.remove_red_eye_outlined));
+      await tester.pump();
+      // Allow file.readAsString() to complete in real async
+      await Future.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pump(); // Rebuild with resolved FutureBuilder
 
-    expect(find.text('Hello, Sandbox World!'), findsOneWidget);
+    // Dialog should show action buttons
     expect(find.text('复制内容'), findsOneWidget);
     expect(find.text('删除'), findsOneWidget);
     expect(find.text('关闭'), findsOneWidget);
 
+    // Verify the file content is rendered via SelectableText
+    expect(find.byType(SelectableText), findsOneWidget);
+    final selectableText = tester.widget<SelectableText>(find.byType(SelectableText));
+    expect(selectableText.data, contains('Hello, Sandbox World!'));
+
     // Close preview dialog
     await tester.tap(find.text('关闭'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('关闭'), findsNothing);
   });
 }

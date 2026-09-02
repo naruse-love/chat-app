@@ -20,8 +20,8 @@ void main() {
   print("Result is: " + (a + b).toString());
 }
 ''';
-      final result = await service.executeDart(code: code);
-      expect(result.isSuccess, isTrue);
+      final result = await service.execute(code: code);
+      expect(result.success, isTrue);
       expect(result.stdout, contains('Result is: 35'));
     });
 
@@ -33,17 +33,17 @@ var r3 = Math.max(10, 99);
 var r4 = Math.abs(-42);
 print("Math: " + r1.toString() + ", " + r2.toString() + ", " + r3.toString() + ", " + r4.toString());
 ''';
-      final result = await service.executeDart(code: code);
-      expect(result.isSuccess, isTrue);
-      expect(result.stdout, contains('Math: 12.0, 256.0, 99, 42'));
+      final result = await service.execute(code: code);
+      expect(result.success, isTrue);
+      expect(result.stdout, contains('Math: 12.0, 256, 99, 42'));
     });
 
     test('Supports console.log global logging', () async {
       const code = '''
 console.log("Hello from console.log!", 123, true);
 ''';
-      final result = await service.executeDart(code: code);
-      expect(result.isSuccess, isTrue);
+      final result = await service.execute(code: code);
+      expect(result.success, isTrue);
       expect(result.stdout, contains('Hello from console.log! 123 true'));
     });
 
@@ -54,8 +54,8 @@ var l = len(list);
 var r = range(0, 5);
 print("Length: " + l.toString() + ", Range len: " + len(r).toString());
 ''';
-      final result = await service.executeDart(code: code);
-      expect(result.isSuccess, isTrue);
+      final result = await service.execute(code: code);
+      expect(result.success, isTrue);
       expect(result.stdout, contains('Length: 5, Range len: 5'));
     });
 
@@ -70,8 +70,8 @@ void main() {
   print("Multiplied: " + val.toString());
 }
 ''';
-      final result = await service.executeDart(code: code);
-      expect(result.isSuccess, isTrue);
+      final result = await service.execute(code: code);
+      expect(result.success, isTrue);
       expect(result.stdout, contains('Multiplied: 42'));
     });
   });

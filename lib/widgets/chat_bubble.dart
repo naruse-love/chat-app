@@ -813,7 +813,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                       InkWell(
                         onTap: () async {
                           await Clipboard.setData(ClipboardData(text: widget.message.reasoningContent!));
-                          if (context.mounted) {
+                          if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('已复制思考过程'),
@@ -978,9 +978,6 @@ class _ChatBubbleState extends State<ChatBubble> {
   }
 
   Widget _buildToolOutputPanel(ThemeData theme, TextStyle? textColor) {
-    final toolId = widget.message.toolCallId;
-    final meta = (toolId != null && toolId.isNotEmpty) ? _getToolMetadata(toolId) : null;
-
     return Container(
       margin: const EdgeInsets.only(top: 4.0),
       decoration: BoxDecoration(
@@ -1004,36 +1001,18 @@ class _ChatBubbleState extends State<ChatBubble> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        meta?.icon ?? Icons.build_circle_outlined,
+                        Icons.build_circle_outlined,
                         size: 16.0,
-                        color: meta?.categoryColor ?? theme.colorScheme.outline,
+                        color: theme.colorScheme.outline,
                       ),
                       const SizedBox(width: 6.0),
                       Text(
-                        meta != null ? '工具执行结果 (${meta.displayName})' : '工具执行结果',
+                        '工具执行结果',
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: theme.colorScheme.onSurface,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      if (meta != null) ...[
-                        const SizedBox(width: 6.0),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 1.0),
-                          decoration: BoxDecoration(
-                            color: meta.categoryColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(4.0),
-                          ),
-                          child: Text(
-                            meta.category,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: meta.categoryColor,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
                       const SizedBox(width: 4.0),
                       Icon(
                         _isToolOutputExpanded ? Icons.expand_less : Icons.expand_more,

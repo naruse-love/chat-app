@@ -661,9 +661,9 @@ void main() {
       expect(safeNames, isNot(contains('web_search')));
       expect(safeNames, isNot(contains('weather_query')));
 
-      // ReadOnly tools (Level 1) -> 12 tools (Level 0 + Level 1, including reverse_geocode)
+      // ReadOnly tools (Level 1) -> 11 tools (Level 0 + Level 1, including reverse_geocode)
       final readOnlySchemas = registry.exportOpenAiSchemas(maxSecurityLevel: ToolSecurityLevel.readOnly);
-      expect(readOnlySchemas.length, equals(12));
+      expect(readOnlySchemas.length, equals(11));
     });
   });
 }

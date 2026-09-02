@@ -689,15 +689,6 @@ class _Parser {
       return val;
     }
 
-    // Direct function definition: main() { ... }
-    if (_cur.type == _TokenType.identifier && _idx + 1 < tokens.length && tokens[_idx + 1].text == '(') {
-      final lookahead = _findClosingParenIndex(_idx + 1);
-      if (lookahead != -1 && lookahead + 1 < tokens.length && tokens[lookahead + 1].text == '{') {
-        final funcName = _advance().text;
-        return _parseFunctionDecl(funcName);
-      }
-    }
-
     // if statement
     if (_match(['if'])) {
       _consume('(', 'if 条件缺少左括号 "("');
@@ -823,6 +814,16 @@ class _Parser {
       }
     }
 
+    // Direct function definition: main() { ... }
+    const reservedKeywords = {'if', 'while', 'for', 'switch', 'return', 'import', 'break', 'continue', 'true', 'false', 'null'};
+    if (_cur.type == _TokenType.identifier && !reservedKeywords.contains(_cur.text) && _idx + 1 < tokens.length && tokens[_idx + 1].text == '(') {
+      final lookahead = _findClosingParenIndex(_idx + 1);
+      if (lookahead != -1 && lookahead + 1 < tokens.length && tokens[lookahead + 1].text == '{') {
+        final funcName = _advance().text;
+        return _parseFunctionDecl(funcName);
+      }
+    }
+
     // Block { ... }
     if (_check('{')) {
       return _block();
@@ -882,9 +883,8 @@ class _Parser {
 
     final bodyStart = _idx;
     _skipBlockOrStatement();
-    final bodyEnd = _idx;
 
-    final closure = (List<dynamic> args) {
+    dynamic closure(List<dynamic> args) {
       final subParser = _Parser(tokens, interpreter);
       subParser._env.addAll(_env);
       for (int i = 0; i < params.length; i++) {
@@ -896,7 +896,7 @@ class _Parser {
       } on _ReturnException catch (e) {
         return e.value;
       }
-    };
+    }
 
     _setVar(funcName, closure);
     return closure;
@@ -1172,6 +1172,22 @@ class _Parser {
   }
 
   dynamic _invokeMember(dynamic target, String name, List<dynamic> args) {
+    if (name == 'toString') {
+      return target?.toString() ?? 'null';
+    }
+
+    if (target is num) {
+      if (name == 'toInt') return target.toInt();
+      if (name == 'toDouble') return target.toDouble();
+      if (name == 'abs') return target.abs();
+      if (name == 'round') return target.round();
+      if (name == 'floor') return target.floor();
+      if (name == 'ceil') return target.ceil();
+      if (name == 'toStringAsFixed') {
+        return target.toStringAsFixed(args.isNotEmpty ? (args[0] as num).toInt() : 0);
+      }
+    }
+
     if (target is List) {
       if (name == 'add' || name == 'push') {
         target.add(args[0]);

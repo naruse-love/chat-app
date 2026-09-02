@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import '../services/path_sanitizer.dart';
 import '../services/tool_registry.dart';
+import '../services/tools/file_read_tool.dart';
 
 /// Sandbox File Management & Export Screen.
 /// Allows the user to view, inspect, preview, export, and clear files created in the AI sandbox.
@@ -33,8 +34,8 @@ class _SandboxManagementScreenState extends ConsumerState<SandboxManagementScree
     try {
       final registry = ref.read(toolRegistryProvider);
       final fileTool = registry.getTool('file_read');
-      if (fileTool != null && fileTool is dynamic && fileTool.pathSanitizer != null) {
-        _pathSanitizer = fileTool.pathSanitizer as PathSanitizer;
+      if (fileTool != null && fileTool is FileReadTool) {
+        _pathSanitizer = fileTool.pathSanitizer;
       } else {
         _pathSanitizer = await PathSanitizer.createDefault();
       }
@@ -158,13 +159,13 @@ class _SandboxManagementScreenState extends ConsumerState<SandboxManagementScree
               try {
                 final text = await file.readAsString();
                 await Clipboard.setData(ClipboardData(text: text));
-                if (dialogCtx.mounted) {
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('已复制 $relPath 的内容')),
                   );
                 }
               } catch (_) {
-                if (dialogCtx.mounted) {
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('二进制文件无法直接复制为文本')),
                   );
@@ -236,7 +237,7 @@ class _SandboxManagementScreenState extends ConsumerState<SandboxManagementScree
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final maxQuota = PathSanitizer.defaultMaxWorkspaceSize;
+    const maxQuota = PathSanitizer.defaultMaxWorkspaceSize;
     final usageRatio = (_totalBytes / maxQuota).clamp(0.0, 1.0);
 
     return Scaffold(
