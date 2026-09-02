@@ -360,6 +360,10 @@ class McpServerManagementScreen extends ConsumerWidget {
         iconData = Icons.sync_alt;
         iconColor = Colors.blue;
         break;
+      case McpTransportType.http:
+        iconData = Icons.http;
+        iconColor = Colors.purple;
+        break;
     }
 
     return Container(
@@ -390,6 +394,10 @@ class McpServerManagementScreen extends ConsumerWidget {
         label = 'WebSocket';
         color = Colors.blue;
         break;
+      case McpTransportType.http:
+        label = 'HTTP';
+        color = Colors.purple;
+        break;
     }
 
     return Container(
@@ -418,6 +426,7 @@ class McpServerManagementScreen extends ConsumerWidget {
         return '$cmd $args'.trim();
       case McpTransportType.sse:
       case McpTransportType.websocket:
+      case McpTransportType.http:
         return config.url ?? '';
     }
   }
@@ -730,6 +739,146 @@ class _McpServerEditDialogState extends ConsumerState<McpServerEditDialog> {
     });
   }
 
+  void _showImportJsonDialog(BuildContext context) {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.code, size: 20),
+            SizedBox(width: 8),
+            Text('导入 JSON 配置'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '支持粘贴 Claude / Cursor / OpenCode 或标准 MCP 配置 JSON：',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: textController,
+              decoration: const InputDecoration(
+                hintText: '{\n  "servers": {\n    "websearch": {\n      "type": "http",\n      "url": "http://10.0.0.103:8338/mcp"\n    }\n  }\n}',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 6,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final raw = textController.text.trim();
+              if (raw.isNotEmpty) {
+                _parseAndApplyJson(raw);
+              }
+              Navigator.pop(dialogCtx);
+            },
+            child: const Text('解析导入'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _parseAndApplyJson(String jsonStr) {
+    try {
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is! Map) return;
+
+      Map<String, dynamic> target = Map<String, dynamic>.from(decoded);
+
+      // 支持 {"servers": {"name": {...}}} 或 {"mcpServers": {"name": {...}}}
+      String? parsedName;
+      if (target.containsKey('servers') && target['servers'] is Map) {
+        final sMap = target['servers'] as Map;
+        if (sMap.isNotEmpty) {
+          parsedName = sMap.keys.first.toString();
+          target = Map<String, dynamic>.from(sMap[parsedName] as Map);
+        }
+      } else if (target.containsKey('mcpServers') && target['mcpServers'] is Map) {
+        final sMap = target['mcpServers'] as Map;
+        if (sMap.isNotEmpty) {
+          parsedName = sMap.keys.first.toString();
+          target = Map<String, dynamic>.from(sMap[parsedName] as Map);
+        }
+      }
+
+      final name = parsedName ?? target['name']?.toString();
+      if (name != null && name.isNotEmpty) {
+        _nameController.text = name;
+      }
+
+      final rawType = target['type']?.toString().toLowerCase();
+      if (rawType != null) {
+        if (rawType == 'http' || rawType == 'streamable-http' || rawType == 'streamable_http') {
+          _transportType = McpTransportType.http;
+        } else if (rawType == 'sse') {
+          _transportType = McpTransportType.sse;
+        } else if (rawType == 'ws' || rawType == 'websocket') {
+          _transportType = McpTransportType.websocket;
+        } else if (rawType == 'stdio') {
+          _transportType = McpTransportType.stdio;
+        }
+      } else {
+        if (target.containsKey('url')) {
+          final url = target['url'].toString();
+          if (url.startsWith('ws://') || url.startsWith('wss://')) {
+            _transportType = McpTransportType.websocket;
+          } else if (url.endsWith('/mcp')) {
+            _transportType = McpTransportType.http;
+          } else {
+            _transportType = McpTransportType.sse;
+          }
+        } else if (target.containsKey('command')) {
+          _transportType = McpTransportType.stdio;
+        }
+      }
+
+      if (target.containsKey('url')) {
+        _urlController.text = target['url'].toString();
+      }
+      if (target.containsKey('command')) {
+        _commandController.text = target['command'].toString();
+      }
+      if (target.containsKey('args')) {
+        final args = target['args'];
+        if (args is List) {
+          _argumentsController.text = args.map((e) => e.toString()).join(' ');
+        } else {
+          _argumentsController.text = args.toString();
+        }
+      } else if (target.containsKey('arguments')) {
+        final args = target['arguments'];
+        if (args is List) {
+          _argumentsController.text = args.map((e) => e.toString()).join(' ');
+        } else {
+          _argumentsController.text = args.toString();
+        }
+      }
+      if (target.containsKey('headers') && target['headers'] is Map) {
+        _headersController.text = jsonEncode(target['headers']);
+      }
+      if (target.containsKey('env') && target['env'] is Map) {
+        _envController.text = jsonEncode(target['env']);
+      }
+
+      setState(() {
+        _testResultNotice = null;
+      });
+    } catch (_) {}
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -753,7 +902,7 @@ class _McpServerEditDialogState extends ConsumerState<McpServerEditDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 16, 8),
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
               child: Row(
                 children: [
                   Icon(
@@ -761,13 +910,21 @@ class _McpServerEditDialogState extends ConsumerState<McpServerEditDialog> {
                     color: theme.colorScheme.primary,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    isEditing ? '编辑 MCP 服务器' : '添加 MCP 服务器',
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  Expanded(
+                    child: Text(
+                      isEditing ? '编辑 MCP 服务器' : '添加 MCP 服务器',
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.file_download_outlined),
+                    tooltip: '导入 JSON 配置',
+                    onPressed: () => _showImportJsonDialog(context),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.close),
+                    tooltip: '关闭',
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -800,12 +957,17 @@ class _McpServerEditDialogState extends ConsumerState<McpServerEditDialog> {
                       const SizedBox(height: 16),
                       DropdownButtonFormField<McpTransportType>(
                         initialValue: _transportType,
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: '传输通道类型 *',
                           border: OutlineInputBorder(),
                           isDense: true,
                         ),
                         items: const [
+                          DropdownMenuItem(
+                            value: McpTransportType.http,
+                            child: Text('HTTP / Streamable HTTP (/mcp)'),
+                          ),
                           DropdownMenuItem(
                             value: McpTransportType.sse,
                             child: Text('Server-Sent Events (SSE)'),
@@ -830,18 +992,23 @@ class _McpServerEditDialogState extends ConsumerState<McpServerEditDialog> {
                       ),
                       const SizedBox(height: 16),
 
-                      // SSE / WebSocket fields
-                      if (_transportType == McpTransportType.sse ||
+                      // HTTP / SSE / WebSocket fields
+                      if (_transportType == McpTransportType.http ||
+                          _transportType == McpTransportType.sse ||
                           _transportType == McpTransportType.websocket) ...[
                         TextFormField(
                           controller: _urlController,
                           decoration: InputDecoration(
-                            labelText: _transportType == McpTransportType.sse
-                                ? 'SSE 服务端点 URL *'
-                                : 'WebSocket 服务端点 URL *',
-                            hintText: _transportType == McpTransportType.sse
-                                ? '例如: http://127.0.0.1:8000/sse'
-                                : '例如: ws://127.0.0.1:8080/mcp',
+                            labelText: _transportType == McpTransportType.http
+                                ? 'HTTP 服务端点 URL *'
+                                : (_transportType == McpTransportType.sse
+                                    ? 'SSE 服务端点 URL *'
+                                    : 'WebSocket 服务端点 URL *'),
+                            hintText: _transportType == McpTransportType.http
+                                ? '例如: http://10.0.0.103:8338/mcp'
+                                : (_transportType == McpTransportType.sse
+                                    ? '例如: http://127.0.0.1:8000/sse'
+                                    : '例如: ws://127.0.0.1:8080/mcp'),
                             border: const OutlineInputBorder(),
                             isDense: true,
                           ),

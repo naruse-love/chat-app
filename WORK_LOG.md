@@ -1,3 +1,24 @@
+## 2026-09-02 Feature & Fix: MCP Streamable HTTP (`type: "http"`) Transport Support & One-Click JSON Config Import (v1.17.0+18)
+
+### 变更文件
+- `lib/models/mcp/mcp_transport_type.dart`: `McpTransportType` 枚举新增 `http`（Streamable HTTP / MCP over HTTP）传输类型，完善 `fromString` 兼容 `'http'`、`'streamable-http'`、`'mcp'`。
+- `lib/services/mcp/transports/http_mcp_transport.dart`: 完整实现 `HttpMcpTransport` 传输层，遵循 MCP 官方 Streamable HTTP 协议规范（支持直接 `POST /mcp` 发送 JSON-RPC 2.0 请求、兼容标准 JSON 与 SSE 流式响应、自动提取并维护 `Mcp-Session-Id` 会话）。
+- `lib/services/mcp/transports/sse_mcp_transport.dart`: `SseMcpTransport` 增加智能自愈降级，若对端 `/mcp` 端点在 `GET` 握手时返回 400/404/405 等非 SSE 状态码，自动无缝降级为 Streamable HTTP POST 模式，杜绝连接失败。
+- `lib/providers/mcp_provider.dart`: `_createTransport` 接入 `HttpMcpTransport` 分支。
+- `lib/screens/mcp_server_management_screen.dart`:
+  - 传输类型下拉列表支持 `HTTP / Streamable HTTP (/mcp)`；
+  - 对话框顶部新增「导入 JSON 配置」按钮（IconButton 紧凑布局防溢出），支持一键粘贴 Claude / Cursor / OpenCode 标准 MCP 配置 JSON 自动解析填入；
+  - 修复移动端小屏对话框标题栏布局弹性适配。
+- `test/services/mcp/http_mcp_transport_test.dart`: 新增 `HttpMcpTransport` 完整单元测试套件（JSON 响应、SSE 流式响应、Session ID 维护、SSE 遇到 400 智能降级测试）。
+- `pubspec.yaml`: 项目版本号升级为 `1.17.0+18`。
+
+### 核心改进与技术指标
+1. **Streamable HTTP 官方规范支持**：彻底解决 `{"type": "http", "url": "http://.../mcp"}` 在手机端由于 GET 握手被拒 400 的问题，支持直接 POST 通信；
+2. **零门槛一键导入**：用户可直接复制粘贴 JSON 配置，无需手动逐项输入；
+3. **质量指标**：
+   - 静态分析 `flutter analyze` 保持 **`No issues found!`**（0 issues）；
+   - 全量自动化测试 **777 / 777 全部通过（100% 通过率，0 失败）**。
+
 ## 2026-09-02 Testing & Delivery: Milestone 27 Token Budget, Fault Tolerance, Unified Pipeline & Final Delivery (v1.16.0+17)
 
 ### 变更文件

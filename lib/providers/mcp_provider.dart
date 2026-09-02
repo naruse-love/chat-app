@@ -7,6 +7,7 @@ import '../models/mcp/mcp_tool_info.dart';
 import '../models/mcp/mcp_transport_type.dart';
 import '../services/mcp/mcp_client.dart';
 import '../services/mcp/mcp_dynamic_tool.dart';
+import '../services/mcp/transports/http_mcp_transport.dart';
 import '../services/mcp/transports/mcp_transport.dart';
 import '../services/mcp/transports/sse_mcp_transport.dart';
 import '../services/mcp/transports/stdio_mcp_transport.dart';
@@ -517,6 +518,19 @@ class McpNotifier extends StateNotifier<McpState> {
           throw ArgumentError('无效的 WebSocket URL 格式: $urlStr');
         }
         return WebSocketMcpTransport(
+          uri: parsedUri,
+          headers: config.headers,
+        );
+      case McpTransportType.http:
+        final urlStr = config.url?.trim() ?? '';
+        if (urlStr.isEmpty) {
+          throw ArgumentError('HTTP 传输类型必须指定服务 URL (url)');
+        }
+        final parsedUri = Uri.tryParse(urlStr);
+        if (parsedUri == null || !parsedUri.hasScheme) {
+          throw ArgumentError('无效的 HTTP URL 格式: $urlStr');
+        }
+        return HttpMcpTransport(
           uri: parsedUri,
           headers: config.headers,
         );

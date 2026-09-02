@@ -8,6 +8,9 @@ enum McpTransportType {
 
   /// 基于全双工 WebSocket
   websocket,
+
+  /// 基于 Streamable HTTP / MCP over HTTP (POST /mcp)
+  http,
 }
 
 /// MCP 连接生命周期状态
@@ -34,6 +37,8 @@ extension McpTransportTypeExtension on McpTransportType {
         return 'sse';
       case McpTransportType.websocket:
         return 'websocket';
+      case McpTransportType.http:
+        return 'http';
     }
   }
 
@@ -45,6 +50,8 @@ extension McpTransportTypeExtension on McpTransportType {
         return 'Server-Sent Events (SSE)';
       case McpTransportType.websocket:
         return 'WebSocket';
+      case McpTransportType.http:
+        return 'HTTP / Streamable HTTP (/mcp)';
     }
   }
 
@@ -57,6 +64,12 @@ extension McpTransportTypeExtension on McpTransportType {
       case 'websocket':
       case 'ws':
         return McpTransportType.websocket;
+      case 'http':
+      case 'streamable-http':
+      case 'streamable_http':
+      case 'mcp-http':
+      case 'mcp':
+        return McpTransportType.http;
       default:
         return McpTransportType.stdio;
     }

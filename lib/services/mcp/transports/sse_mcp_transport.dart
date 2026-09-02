@@ -19,6 +19,7 @@ class SseMcpTransport implements McpTransport {
   CancelToken? _cancelToken;
   StreamSubscription? _streamSubscription;
   Uri? _postUri;
+  bool _isHttpFallback = false;
   bool _isClosed = false;
 
   SseMcpTransport({
@@ -159,6 +160,17 @@ class SseMcpTransport implements McpTransport {
           _setStatus(McpConnectionStatus.connected);
         }
       });
+    } on DioException catch (dioErr) {
+      // 智能自愈：若 GET 请求返回 400/404/405，说明目标端点为 Streamable HTTP POST /mcp 服务端
+      final statusCode = dioErr.response?.statusCode;
+      if (statusCode == 400 || statusCode == 404 || statusCode == 405) {
+        _isHttpFallback = true;
+        _postUri = uri;
+        _setStatus(McpConnectionStatus.connected);
+        return;
+      }
+      _setStatus(McpConnectionStatus.error);
+      rethrow;
     } catch (e) {
       _setStatus(McpConnectionStatus.error);
       rethrow;
@@ -176,14 +188,44 @@ class SseMcpTransport implements McpTransport {
 
     final postHeaders = <String, dynamic>{
       'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
+      'MCP-Protocol-Version': '2024-11-05',
       if (headers != null) ...headers!,
     };
 
-    await _dio.post(
+    final response = await _dio.post(
       _postUri.toString(),
       data: message,
-      options: Options(headers: postHeaders),
+      options: Options(
+        headers: postHeaders,
+        responseType: ResponseType.plain,
+        validateStatus: (s) => s != null && s < 500,
+      ),
     );
+
+    // 如果处于 Streamable HTTP 降级模式，直接从 POST 响应体中解析消息
+    if (_isHttpFallback) {
+      final data = response.data;
+      if (data != null) {
+        final bodyStr = data.toString().trim();
+        if (bodyStr.startsWith('{') || bodyStr.startsWith('[')) {
+          try {
+            final decoded = jsonDecode(bodyStr);
+            if (decoded is Map<String, dynamic>) {
+              _messageController.add(decoded);
+              return;
+            } else if (decoded is List) {
+              for (final item in decoded) {
+                if (item is Map<String, dynamic>) {
+                  _messageController.add(item);
+                }
+              }
+              return;
+            }
+          } catch (_) {}
+        }
+      }
+    }
   }
 
   @override
