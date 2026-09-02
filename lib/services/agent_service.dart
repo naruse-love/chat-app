@@ -16,7 +16,6 @@ import 'agent_fault_tolerance.dart';
 import 'tools/math_eval_tool.dart';
 import 'tools/time_calculator_tool.dart';
 import 'tools/weather_query_tool.dart';
-import 'tools/wiki_lookup_tool.dart';
 import 'tools/file_write_tool.dart';
 import '../models/tool/tool.dart';
 import '../models/tool/tool_confirmation.dart';
@@ -158,7 +157,6 @@ class AgentService {
       case 'math_eval':
       case 'time_calculator':
       case 'weather_query':
-      case 'wiki_lookup':
       case 'web_search':
       case 'google_search':
       case 'bing_search':
@@ -324,7 +322,6 @@ class AgentService {
         const MathEvalTool().toOpenAiSchema(),
         TimeCalculatorTool().toOpenAiSchema(),
         WeatherQueryTool().toOpenAiSchema(),
-        WikiLookupTool().toOpenAiSchema(),
       ]);
     }
 
@@ -480,7 +477,6 @@ class AgentService {
         name == 'bing_search' ||
         name == 'url_fetch' ||
         name == 'weather_query' ||
-        name == 'wiki_lookup' ||
         name.startsWith('mcp_');
 
     ToolExecutionResult result;
@@ -574,7 +570,7 @@ class AgentService {
       final now = DateTime.now();
       final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-      final enrichedPrompt = '$systemPrompt\n\n当前日期与时间: $dateStr $timeStr';
+      final enrichedPrompt = '$systemPrompt\n\n当前日期与时间: $dateStr $timeStr\n\n【本地安全沙箱环境须知】\n当前环境已启用应用安全沙箱，工作区根目录为 "./"。\n日常读写、列表、删除等文件操作请优先使用相对路径（如 "notes/todo.md"、"output.txt"、"./" 等）。若用户明确要求操作外部绝对路径文件，系统将弹出授权卡片请求用户确认。';
       effectiveMessages = [
         ChatMessage(
           id: _uuid.v4(),

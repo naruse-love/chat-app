@@ -101,8 +101,16 @@ class FileWriteTool extends Tool {
     String content, {
     String mode = 'overwrite',
   }) {
-    final sanitizedRel = pathSanitizer.sanitizeRelativePath(rawPath);
-    final file = pathSanitizer.resolveSafeFile(rawPath);
+    final isExternal = pathSanitizer.isExternalPath(rawPath);
+    final File file;
+    final String displayPath;
+    if (isExternal) {
+      file = File(rawPath);
+      displayPath = rawPath;
+    } else {
+      file = pathSanitizer.resolveSafeFile(rawPath);
+      displayPath = pathSanitizer.getRelativePath(file);
+    }
 
     String oldContent = '';
     bool fileExisted = false;
@@ -125,7 +133,7 @@ class FileWriteTool extends Tool {
     final diffSummary = DiffHelper.summarize(diffLines);
 
     return FileWritePreview(
-      relativePath: sanitizedRel,
+      relativePath: displayPath,
       oldContent: oldContent,
       newContent: effectiveNewContent,
       diffLines: diffLines,
@@ -152,18 +160,29 @@ class FileWriteTool extends Tool {
     }
 
     try {
-      final sanitizedRel = pathSanitizer.sanitizeRelativePath(rawPath);
-      final file = pathSanitizer.resolveSafeFile(rawPath);
+      final isExternal = pathSanitizer.isExternalPath(rawPath);
+      final enableSandbox = arguments['__enableSandbox'] as bool? ?? true;
+      final allowExternal = arguments['__allowExternal'] as bool? ?? false;
+
+      final File file;
+      final String displayPath;
+      if (isExternal && (!enableSandbox || allowExternal)) {
+        file = File(rawPath);
+        displayPath = rawPath;
+      } else {
+        file = pathSanitizer.resolveSafeFile(rawPath);
+        displayPath = pathSanitizer.getRelativePath(file);
+      }
       final exists = file.existsSync();
 
       // Check create_new constraint
       if (mode == 'create_new' && exists) {
         return ToolExecutionResult.failure(
           toolName: name,
-          errorMessage: '文件已存在: "$sanitizedRel" (create_new 模式拒绝覆盖已有文件)',
-          content: '写入失败: 文件 "$sanitizedRel" 已存在，若要覆盖请使用 mode: "overwrite"',
+          errorMessage: '文件已存在: "$displayPath" (create_new 模式拒绝覆盖已有文件)',
+          content: '写入失败: 文件 "$displayPath" 已存在，若要覆盖请使用 mode: "overwrite"',
           executionDuration: stopwatch.elapsed,
-          rawData: {'path': sanitizedRel, 'exists': true},
+          rawData: {'path': displayPath, 'exists': true},
         );
       }
 
@@ -171,7 +190,7 @@ class FileWriteTool extends Tool {
       if (exists && FileSystemEntity.isDirectorySync(file.path)) {
         return ToolExecutionResult.failure(
           toolName: name,
-          errorMessage: '目标路径是已有目录而非文件: "$sanitizedRel"',
+          errorMessage: '目标路径是已有目录而非文件: "$displayPath"',
           executionDuration: stopwatch.elapsed,
         );
       }
@@ -214,7 +233,7 @@ class FileWriteTool extends Tool {
       final modeLabel = mode == 'append' ? '追加' : (exists ? '覆盖更新' : '新建');
 
       final buffer = StringBuffer();
-      buffer.writeln('✅ **文件写入成功**: `$sanitizedRel`');
+      buffer.writeln('✅ **文件写入成功**: `$displayPath`');
       buffer.writeln('- **操作类型**: $modeLabel (模式: `$mode`)');
       buffer.writeln('- **写入数据**: ${contentBytes.length} 字节');
       buffer.writeln('- **当前文件总大小**: $totalSizeBytes 字节');
@@ -224,7 +243,7 @@ class FileWriteTool extends Tool {
         toolName: name,
         content: buffer.toString(),
         rawData: {
-          'path': sanitizedRel,
+          'path': displayPath,
           'bytesWritten': contentBytes.length,
           'totalSizeBytes': totalSizeBytes,
           'mode': mode,
@@ -233,7 +252,7 @@ class FileWriteTool extends Tool {
         },
         executionDuration: stopwatch.elapsed,
         metadata: {
-          'path': sanitizedRel,
+          'path': displayPath,
           'mode': mode,
         },
       );

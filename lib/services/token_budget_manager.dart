@@ -18,7 +18,7 @@ enum BudgetActionStatus {
 
 /// Configuration parameters for TokenBudgetManager.
 class TokenBudgetConfig {
-  /// Maximum context window in tokens (default 32000).
+  /// Maximum context window in tokens (default 1000000 / 1M).
   final int maxContextTokens;
 
   /// Reserved tokens for model output completion (default 4096).
@@ -40,7 +40,7 @@ class TokenBudgetConfig {
   final int compressedTailRunes;
 
   const TokenBudgetConfig({
-    this.maxContextTokens = 32000,
+    this.maxContextTokens = 1000000,
     this.maxOutputTokens = 4096,
     this.compressionThresholdRatio = 0.75,
     this.circuitBreakerThresholdRatio = 0.90,
@@ -144,9 +144,9 @@ class TokenBudgetManager {
   }
 
   /// Estimates token count for a raw text string using hybrid heuristic tokenizer.
-  /// - CJK characters: ~0.85 token/char
+  /// - CJK characters: ~0.65 token/char (aligned with modern LLM tokenizers: Qwen, DeepSeek, GPT-4o, Gemini)
   /// - English/ASCII (words, punctuation, whitespace): ~3.8 char/token
-  /// - Emojis and other multi-byte Unicode: ~1.5 token/code point
+  /// - Emojis and other multi-byte Unicode: ~1.2 token/code point
   int estimateTokens(String text) {
     if (text.isEmpty) return 0;
 
@@ -169,9 +169,9 @@ class TokenBudgetManager {
       }
     }
 
-    final cjkTokens = (cjkCount * 0.85).ceil();
+    final cjkTokens = (cjkCount * 0.65).ceil();
     final asciiTokens = ((asciiCount + whitespaceCount) / 3.8).ceil();
-    final otherTokens = (otherCount * 1.5).ceil();
+    final otherTokens = (otherCount * 1.2).ceil();
 
     final total = cjkTokens + asciiTokens + otherTokens;
     return total > 0 ? total : 1;

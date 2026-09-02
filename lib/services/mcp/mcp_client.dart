@@ -134,6 +134,9 @@ class McpClient {
     if (_isDisposed) {
       throw StateError('McpClient has been disposed');
     }
+    if (!_transport.isConnected) {
+      await _transport.connect();
+    }
 
     final params = cursor != null ? {'cursor': cursor} : null;
     final rawResponse = await _engine.sendRequest(
@@ -168,15 +171,40 @@ class McpClient {
       throw StateError('McpClient has been disposed');
     }
 
+    if (!_transport.isConnected) {
+      try {
+        await _transport.connect();
+      } catch (e) {
+        return McpToolCallResult.error('MCP 传输连接失败: $e');
+      }
+    }
+
     try {
-      final rawResponse = await _engine.sendRequest(
-        'tools/call',
-        {
-          'name': name,
-          'arguments': arguments,
-        },
-        timeout ?? defaultTimeout,
-      );
+      dynamic rawResponse;
+      try {
+        rawResponse = await _engine.sendRequest(
+          'tools/call',
+          {
+            'name': name,
+            'arguments': arguments,
+          },
+          timeout ?? defaultTimeout,
+        );
+      } catch (e) {
+        if (!_transport.isConnected) {
+          await _transport.connect();
+          rawResponse = await _engine.sendRequest(
+            'tools/call',
+            {
+              'name': name,
+              'arguments': arguments,
+            },
+            timeout ?? defaultTimeout,
+          );
+        } else {
+          rethrow;
+        }
+      }
 
       if (rawResponse is Map<String, dynamic>) {
         return McpToolCallResult.fromJson(rawResponse);
@@ -201,6 +229,9 @@ class McpClient {
   }) async {
     if (_isDisposed) {
       throw StateError('McpClient has been disposed');
+    }
+    if (!_transport.isConnected) {
+      await _transport.connect();
     }
 
     final params = cursor != null ? {'cursor': cursor} : null;

@@ -76,16 +76,27 @@ class FileListTool extends Tool {
     }
 
     try {
-      final sanitizedRel = pathSanitizer.sanitizeRelativePath(rawDirectory);
-      final targetDir = pathSanitizer.resolveSafeDirectory(rawDirectory);
+      final isExternal = pathSanitizer.isExternalPath(rawDirectory);
+      final enableSandbox = arguments['__enableSandbox'] as bool? ?? true;
+      final allowExternal = arguments['__allowExternal'] as bool? ?? false;
+
+      final Directory targetDir;
+      final String displayPath;
+      if (isExternal && (!enableSandbox || allowExternal)) {
+        targetDir = Directory(rawDirectory);
+        displayPath = rawDirectory;
+      } else {
+        targetDir = pathSanitizer.resolveSafeDirectory(rawDirectory);
+        displayPath = pathSanitizer.getRelativePath(targetDir);
+      }
 
       if (!targetDir.existsSync()) {
         return ToolExecutionResult.failure(
           toolName: name,
-          errorMessage: '目录未找到: "$sanitizedRel"',
-          content: '列出失败: 沙箱中未找到目录 "$sanitizedRel"',
+          errorMessage: '目录未找到: "$displayPath"',
+          content: '列出失败: 未找到目录 "$displayPath"',
           executionDuration: stopwatch.elapsed,
-          rawData: {'directory': sanitizedRel, 'found': false},
+          rawData: {'directory': displayPath, 'found': false},
         );
       }
 
@@ -117,7 +128,7 @@ class FileListTool extends Tool {
       stopwatch.stop();
 
       final buffer = StringBuffer();
-      buffer.writeln('📁 **目录列表**: `${sanitizedRel == '.' ? '沙箱根目录' : sanitizedRel}`');
+      buffer.writeln('📁 **目录列表**: `${displayPath == '.' ? '沙箱根目录' : displayPath}`');
       buffer.writeln('- **项目总数**: ${items.length} 个 (递归: $recursive, 最大深度: $maxDepth)');
       if (pattern != null && pattern.isNotEmpty) {
         buffer.writeln('- **匹配模式**: `$pattern`');
@@ -146,13 +157,13 @@ class FileListTool extends Tool {
         toolName: name,
         content: truncatedContent,
         rawData: {
-          'directory': sanitizedRel,
+          'directory': displayPath,
           'count': items.length,
           'items': items,
         },
         executionDuration: stopwatch.elapsed,
         metadata: {
-          'directory': sanitizedRel,
+          'directory': displayPath,
           'recursive': recursive,
           'pattern': pattern,
         },

@@ -7,6 +7,7 @@ import 'screens/settings_screen.dart';
 import 'screens/api_config_screen.dart';
 import 'screens/system_prompt_screen.dart';
 import 'screens/mcp_server_management_screen.dart';
+import 'screens/sandbox_management_screen.dart';
 import 'screens/model_selector_screen.dart';
 
 class AppRouter {
@@ -22,6 +23,8 @@ class AppRouter {
         return _slideRoute(const SystemPromptScreen());
       case '/settings/mcp_servers':
         return _slideRoute(const McpServerManagementScreen());
+      case '/settings/sandbox':
+        return _slideRoute(const SandboxManagementScreen());
       case '/model_selector':
         return MaterialPageRoute(
           fullscreenDialog: true,

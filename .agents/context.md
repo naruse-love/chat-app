@@ -11,7 +11,7 @@
 - **Flutter SDK**：`D:\work\flutter-sdk\flutter\bin\flutter.bat`
 - **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支）
 - **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过（777/777），`flutter analyze` 必须 0 issues
-- **当前版本**：`1.17.0+18`
+- **当前版本**：`1.18.0+19`
 
 ---
 
@@ -20,6 +20,7 @@
 | Milestone | 描述 | 状态 |
 |-----------|------|------|
 | 1-27 | 核心体系（从基础模型、数据库、SSE、搜索、图片、UI、全套原生特权、MCP 客户端与动态网桥、Token 预算压缩、自愈容错网关）全部实现并交付 | ✅ 完成 |
+| **沙箱管理系统升级 & 工具自愈 & UI 体验重构** | 实现沙箱开关与应用内文件管理/预览/导出，AI 沙箱感知与外部文件授权；增强代码解释器（`void main`、`Math`、`console`、函数定义、`import` 剥离）；日历/通知多别名自愈与 MCP 自动重连；修复 MCP 标题与时间线溢出，支持独立思考复制；全局 Token 上限提至 1M（2026-09-02） | ✅ 完成 |
 | **MCP Streamable HTTP & 一键导入** | 新增 MCP 官方 Streamable HTTP (`type: "http"`, `POST /mcp`) 传输层 `HttpMcpTransport`，SSE 智能降级自愈，UI 一键导入 JSON 配置与小屏对话框自适应（2026-09-02） | ✅ 完成 |
 | 1 | 数据模型与序列化（ModelInfo、ChatMessage、ApiConfig, ToolCall 等） | ✅ 完成 |
 | 2 | 本地 SQLite 数据库（DatabaseHelper、ApiConfigDao、MessageDao、ConversationDao）+ 安全凭证存储（SecureStorageService） | ✅ 完成 |

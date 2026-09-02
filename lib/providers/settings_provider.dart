@@ -17,6 +17,7 @@ class AppSettings {
   final String googleSearchModel;
   final String bingCookie;
   final String reasoningEffort;
+  final bool enableSandbox;
   final bool isLoaded;
 
   AppSettings({
@@ -29,6 +30,7 @@ class AppSettings {
     this.googleSearchModel = 'gemini-2.5-flash',
     this.bingCookie = '',
     this.reasoningEffort = 'medium',
+    this.enableSandbox = true,
     this.isLoaded = false,
   });
 
@@ -42,6 +44,7 @@ class AppSettings {
     String? googleSearchModel,
     String? bingCookie,
     String? reasoningEffort,
+    bool? enableSandbox,
     bool? isLoaded,
   }) {
     return AppSettings(
@@ -54,6 +57,7 @@ class AppSettings {
       googleSearchModel: googleSearchModel ?? this.googleSearchModel,
       bingCookie: bingCookie ?? this.bingCookie,
       reasoningEffort: reasoningEffort ?? this.reasoningEffort,
+      enableSandbox: enableSandbox ?? this.enableSandbox,
       isLoaded: isLoaded ?? this.isLoaded,
     );
   }
@@ -67,6 +71,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _googleSearchBaseUrlKey = 'google_search_base_url';
   static const _googleSearchModelKey = 'google_search_model';
   static const _reasoningEffortKey = 'reasoning_effort';
+  static const _enableSandboxKey = 'enable_sandbox';
   static const _googleSearchApiKeySecureKey = 'google_search_api_key';
   static const _bingCookieSecureKey = 'bing_cookie';
 
@@ -94,12 +99,21 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         googleSearchModel: prefs.getString(_googleSearchModelKey) ?? 'gemini-2.5-flash',
         bingCookie: bingCookie,
         reasoningEffort: prefs.getString(_reasoningEffortKey) ?? 'medium',
+        enableSandbox: prefs.getBool(_enableSandboxKey) ?? true,
         isLoaded: true,
       );
       isLoaded = true;
     } catch (_) {
       isLoaded = true;
     }
+  }
+
+  Future<void> updateEnableSandbox(bool enabled) async {
+    state = state.copyWith(enableSandbox: enabled);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_enableSandboxKey, enabled);
+    } catch (_) {}
   }
 
   Future<void> updateSearxngUrl(String url) async {

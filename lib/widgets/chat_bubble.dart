@@ -800,12 +800,45 @@ class _ChatBubbleState extends State<ChatBubble> {
                 ],
                 if (widget.message.reasoningContent != null &&
                     widget.message.reasoningContent!.isNotEmpty) ...[
-                  Text(
-                    '思考过程:',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '思考过程:',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      InkWell(
+                        onTap: () async {
+                          await Clipboard.setData(ClipboardData(text: widget.message.reasoningContent!));
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('已复制思考过程'),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.copy, size: 12, color: theme.colorScheme.primary),
+                              const SizedBox(width: 4),
+                              Text(
+                                '复制思考',
+                                style: TextStyle(fontSize: 11, color: theme.colorScheme.primary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Container(
@@ -815,7 +848,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     width: double.infinity,
-                    child: Text(
+                    child: SelectableText(
                       widget.message.reasoningContent!,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontStyle: FontStyle.italic,
@@ -879,11 +912,15 @@ class _ChatBubbleState extends State<ChatBubble> {
                 color: meta.categoryColor,
               ),
               const SizedBox(width: 6.0),
-              Text(
-                meta.displayName,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
+              Flexible(
+                child: Text(
+                  meta.displayName,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 6.0),
@@ -902,7 +939,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                   ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 6.0),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 1.0),
                 decoration: BoxDecoration(
@@ -941,6 +978,9 @@ class _ChatBubbleState extends State<ChatBubble> {
   }
 
   Widget _buildToolOutputPanel(ThemeData theme, TextStyle? textColor) {
+    final toolId = widget.message.toolCallId;
+    final meta = (toolId != null && toolId.isNotEmpty) ? _getToolMetadata(toolId) : null;
+
     return Container(
       margin: const EdgeInsets.only(top: 4.0),
       decoration: BoxDecoration(
@@ -964,18 +1004,36 @@ class _ChatBubbleState extends State<ChatBubble> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.build_circle_outlined,
+                        meta?.icon ?? Icons.build_circle_outlined,
                         size: 16.0,
-                        color: theme.colorScheme.outline,
+                        color: meta?.categoryColor ?? theme.colorScheme.outline,
                       ),
                       const SizedBox(width: 6.0),
                       Text(
-                        '工具执行结果',
+                        meta != null ? '工具执行结果 (${meta.displayName})' : '工具执行结果',
                         style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.outline,
+                          color: theme.colorScheme.onSurface,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      if (meta != null) ...[
+                        const SizedBox(width: 6.0),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 1.0),
+                          decoration: BoxDecoration(
+                            color: meta.categoryColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4.0),
+                          ),
+                          child: Text(
+                            meta.category,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: meta.categoryColor,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(width: 4.0),
                       Icon(
                         _isToolOutputExpanded ? Icons.expand_less : Icons.expand_more,

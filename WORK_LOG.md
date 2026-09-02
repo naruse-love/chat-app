@@ -1,3 +1,35 @@
+## 2026-09-02 Feature & Fix: Sandbox Management, Code Interpreter Enhancement, Tool Fixes & UI Polish (v1.18.0+19)
+
+### 变更文件
+- `lib/providers/settings_provider.dart`: `AppSettings` 与 `SettingsNotifier` 增加 `enableSandbox` 安全沙箱全局开关（默认启用）与 SharedPreferences 持久化。
+- `lib/services/path_sanitizer.dart`: 新增 `isExternalPath` 外部路径检测、`listSandboxEntities` 实体列表、`clearSandbox` 清空工作区、`getDirectFile`/`getDirectDirectory` 外部授权文件解析。
+- `lib/services/tools/file_read_tool.dart` & `file_write_tool.dart` & `file_list_tool.dart` & `file_delete_tool.dart`: 接入沙箱开关与外部路径放行逻辑，支持用户 HITL 授权后操作外部绝对路径。
+- `lib/screens/sandbox_management_screen.dart`: 新增应用内沙箱文件管理与导出页面（存储配额与进度条展示、文件/目录列表、文本/图片预览、一键复制导出、安全清空沙箱）。
+- `lib/screens/settings_screen.dart`: 设置页新增「本地安全沙箱」区块，提供沙箱开关及进入沙箱文件管理界面的入口。
+- `lib/app.dart`: 注册 `/settings/sandbox` 路由。
+- `lib/services/tool_registry.dart`: 移除无用的维基百科工具 (`wiki_lookup`)，并引入统一参数别名自愈机制（自动映射 `title`/`start_time`/`body`/`scheduled_time`/`path`/`code`/`query` 等多种 LLM 非标参数命名）。
+- `lib/services/tools/wiki_lookup_tool.dart`: 彻底删除该工具文件。
+- `lib/services/agent_service.dart`: 移除 `wiki_lookup` 引用；在系统提示词中注入沙箱环境与相对路径使用指引。
+- `lib/services/code_execution_service.dart`: 深度增强纯 Dart 代码解释器，支持 `void main()` / `main()` 自动执行、剥离 `import` 语句、注入 `Math` 与 `console` 全局对象、增加 `len` 与 `range` 辅助函数、支持用户自定义函数定义与递归调用。
+- `lib/services/mcp/mcp_client.dart`: `callTool` / `listTools` / `listResources` 在调用前自动检测 `isConnected` 并在断开时自动重连与恢复会话。
+- `lib/services/token_budget_manager.dart`: 将全局默认 Token 上限从 32K 提升至 1,000,000 (1M)，校准 CJK (0.65 token/char) 与 ASCII Token 估算算法。
+- `lib/models/agent_step_telemetry.dart` & `lib/widgets/token_budget_badge.dart`: 同步更新默认 budgetCap 为 1,000,000。
+- `lib/widgets/chat_bubble.dart`:
+  - 修复 MCP 标题与标签超长导致的 `RIGHT OVERFLOWED BY 171 PIXELS` 溢出（为标题增加 Flexible 与 TextOverflow.ellipsis）；
+  - 思考过程面板增加独立「复制思考」按钮与 `SelectableText`；
+  - 工具输出面板顶部展示工具名称徽章、分类与执行摘要。
+- `lib/screens/home_screen.dart`: 修复生成过程中时间线展开导致的底部溢出 `BOTTOM OVERFLOWED BY 320 PIXELS`（增加最大高度约束与滚动支持）。
+- `pubspec.yaml`: 项目版本号升级为 `1.18.0+19`。
+- `test/screens/sandbox_management_screen_test.dart`: 新增沙箱管理器 UI 测试。
+- `test/services/code_execution_service_extended_test.dart`: 新增代码解释器扩展功能测试套件。
+- `test/services/tool_parameter_normalization_test.dart`: 新增参数别名自愈测试套件。
+
+### 核心改进与技术指标
+1. **沙箱全流程闭环**：用户可自由开关沙箱、查看/预览/复制导出沙箱内部文件，AI 访问外部路径时可获得授权确认。
+2. **工具自愈与稳健性**：修复代码解释器执行、日历/通知参数缺失、MCP 自动重连问题，彻底清理无用维基百科工具。
+3. **UI 体验与布局修复**：彻底消除 MCP 标题右侧溢出和时间线底部溢出，支持独立思考过程复制与工具输出详情展示。
+4. **Token 预算校准**：默认上限提升至 1M，计算更精准。
+
 ## 2026-09-02 Feature & Fix: MCP Streamable HTTP (`type: "http"`) Transport Support & One-Click JSON Config Import (v1.17.0+18)
 
 ### 变更文件

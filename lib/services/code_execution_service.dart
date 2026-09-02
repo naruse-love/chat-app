@@ -345,6 +345,67 @@ class _ScriptInterpreter {
     _globals['jsonEncode'] = (List<dynamic> args) => json.encode(args[0]);
     _globals['jsonDecode'] = (List<dynamic> args) => json.decode(args[0].toString());
     _globals['now'] = (List<dynamic> args) => DateTime.now().toIso8601String();
+
+    final mathMap = <String, dynamic>{
+      'pi': math.pi,
+      'PI': math.pi,
+      'e': math.e,
+      'E': math.e,
+      'sqrt': (List<dynamic> args) => math.sqrt(_asNum(args[0])),
+      'pow': (List<dynamic> args) => math.pow(_asNum(args[0]), _asNum(args[1])),
+      'abs': (List<dynamic> args) => (_asNum(args[0])).abs(),
+      'min': (List<dynamic> args) => math.min(_asNum(args[0]), _asNum(args[1])),
+      'max': (List<dynamic> args) => math.max(_asNum(args[0]), _asNum(args[1])),
+      'round': (List<dynamic> args) => (_asNum(args[0])).round(),
+      'floor': (List<dynamic> args) => (_asNum(args[0])).floor(),
+      'ceil': (List<dynamic> args) => (_asNum(args[0])).ceil(),
+      'sin': (List<dynamic> args) => math.sin(_asNum(args[0])),
+      'cos': (List<dynamic> args) => math.cos(_asNum(args[0])),
+      'tan': (List<dynamic> args) => math.tan(_asNum(args[0])),
+      'log': (List<dynamic> args) => math.log(_asNum(args[0])),
+      'exp': (List<dynamic> args) => math.exp(_asNum(args[0])),
+    };
+    _globals['Math'] = mathMap;
+    _globals['math'] = mathMap;
+
+    _globals['console'] = <String, dynamic>{
+      'log': (List<dynamic> args) {
+        final msg = args.map((e) => e?.toString() ?? 'null').join(' ');
+        onPrint(msg);
+        return null;
+      },
+      'error': (List<dynamic> args) {
+        final msg = args.map((e) => e?.toString() ?? 'null').join(' ');
+        onPrint('ERROR: $msg');
+        return null;
+      },
+      'warn': (List<dynamic> args) {
+        final msg = args.map((e) => e?.toString() ?? 'null').join(' ');
+        onPrint('WARN: $msg');
+        return null;
+      },
+    };
+
+    _globals['len'] = (List<dynamic> args) {
+      final item = args.isNotEmpty ? args[0] : null;
+      if (item is List) return item.length;
+      if (item is Map) return item.length;
+      if (item is String) return item.length;
+      return 0;
+    };
+
+    _globals['range'] = (List<dynamic> args) {
+      final start = args.length > 1 ? _asNum(args[0]).toInt() : 0;
+      final end = args.length > 1 ? _asNum(args[1]).toInt() : (args.isNotEmpty ? _asNum(args[0]).toInt() : 0);
+      final step = args.length > 2 ? _asNum(args[2]).toInt() : 1;
+      final list = <int>[];
+      if (step > 0) {
+        for (int i = start; i < end; i += step) {
+          list.add(i);
+        }
+      }
+      return list;
+    };
   }
 
   num _asNum(dynamic val) {
@@ -557,12 +618,31 @@ class _Parser {
     } on _ReturnException catch (e) {
       return e.value;
     }
+
+    // Auto-invoke main() if defined
+    if (_env.containsKey('main') && _env['main'] is Function) {
+      try {
+        final mainFn = _env['main'] as Function;
+        final mainRes = Function.apply(mainFn, [[]]);
+        return mainRes ?? lastVal;
+      } catch (_) {}
+    }
+
     return lastVal;
   }
 
   dynamic _statement() {
     // Semicolons
     if (_match([';'])) return null;
+
+    // import statement: import '...'; or import "...";
+    if (_match(['import'])) {
+      while (!_check(';') && !_isAtEnd) {
+        _advance();
+      }
+      _match([';']);
+      return null;
+    }
 
     // return statement
     if (_match(['return'])) {
@@ -586,9 +666,20 @@ class _Parser {
       throw const _ContinueException();
     }
 
-    // var / final / let / const declarations
+    // function definition keyword: function, def, void
+    if (_match(['function', 'def', 'void'])) {
+      final funcName = _advance().text;
+      return _parseFunctionDecl(funcName);
+    }
+
+    // var / final / let / const / type declarations OR type foo() { ... }
     if (_match(['var', 'final', 'let', 'const', 'int', 'double', 'String', 'bool', 'List', 'Map', 'dynamic'])) {
       final name = _advance().text;
+      // Check if this is a function definition: int add(a, b) { ... }
+      if (_check('(')) {
+        return _parseFunctionDecl(name);
+      }
+
       dynamic val;
       if (_match(['='])) {
         val = _expression();
@@ -596,6 +687,15 @@ class _Parser {
       _setVar(name, val);
       _match([';']);
       return val;
+    }
+
+    // Direct function definition: main() { ... }
+    if (_cur.type == _TokenType.identifier && _idx + 1 < tokens.length && tokens[_idx + 1].text == '(') {
+      final lookahead = _findClosingParenIndex(_idx + 1);
+      if (lookahead != -1 && lookahead + 1 < tokens.length && tokens[lookahead + 1].text == '{') {
+        final funcName = _advance().text;
+        return _parseFunctionDecl(funcName);
+      }
     }
 
     // if statement
@@ -747,6 +847,59 @@ class _Parser {
     }
     _consume('}', '缺少闭合花括号 "}"');
     return lastVal;
+  }
+
+  int _findClosingParenIndex(int openIdx) {
+    if (openIdx >= tokens.length || tokens[openIdx].text != '(') return -1;
+    int depth = 0;
+    for (int i = openIdx; i < tokens.length; i++) {
+      if (tokens[i].text == '(') depth++;
+      if (tokens[i].text == ')') {
+        depth--;
+        if (depth == 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  dynamic _parseFunctionDecl(String funcName) {
+    _consume('(', '函数定义缺少左括号 "("');
+    final params = <String>[];
+    if (!_check(')')) {
+      do {
+        // Skip optional type like int x or var x
+        if (_match(['int', 'double', 'String', 'bool', 'var', 'final', 'dynamic'])) {
+          if (!_check(',') && !_check(')')) {
+            params.add(_advance().text);
+          }
+        } else if (_cur.type == _TokenType.identifier) {
+          params.add(_advance().text);
+        }
+      } while (_match([',']));
+    }
+    _consume(')', '函数定义缺少右括号 ")"');
+    _match([':']); // Support Python style def foo():
+
+    final bodyStart = _idx;
+    _skipBlockOrStatement();
+    final bodyEnd = _idx;
+
+    final closure = (List<dynamic> args) {
+      final subParser = _Parser(tokens, interpreter);
+      subParser._env.addAll(_env);
+      for (int i = 0; i < params.length; i++) {
+        subParser._setVar(params[i], i < args.length ? args[i] : null);
+      }
+      subParser._idx = bodyStart;
+      try {
+        return subParser._blockOrStatement();
+      } on _ReturnException catch (e) {
+        return e.value;
+      }
+    };
+
+    _setVar(funcName, closure);
+    return closure;
   }
 
   void _skipBlockOrStatement() {
@@ -1049,9 +1202,21 @@ class _Parser {
       }
     }
     if (target is Map) {
-      if (name == 'containsKey') return target.containsKey(args[0]);
-      if (name == 'containsValue') return target.containsValue(args[0]);
-      if (name == 'remove') return target.remove(args[0]);
+      if (target.containsKey(name) && target[name] is Function) {
+        final fn = target[name] as Function;
+        try {
+          return Function.apply(fn, [args]);
+        } catch (_) {
+          return Function.apply(fn, args);
+        }
+      }
+      if (name == 'containsKey') return target.containsKey(args.isNotEmpty ? args[0] : null);
+      if (name == 'containsValue') return target.containsValue(args.isNotEmpty ? args[0] : null);
+      if (name == 'remove') return target.remove(args.isNotEmpty ? args[0] : null);
+      if (name == 'clear') {
+        target.clear();
+        return null;
+      }
     }
     throw _InterpreterException('对象不支持方法: .$name(${args.join(', ')})');
   }

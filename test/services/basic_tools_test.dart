@@ -7,7 +7,6 @@ import 'package:chat/services/tool_registry.dart';
 import 'package:chat/services/tools/math_eval_tool.dart';
 import 'package:chat/services/tools/time_calculator_tool.dart';
 import 'package:chat/services/tools/weather_query_tool.dart';
-import 'package:chat/services/tools/wiki_lookup_tool.dart';
 
 /// Mock HTTP Adapter for Dio to intercept Open-Meteo and Wikipedia requests deterministically.
 class MockHttpClientAdapter implements HttpClientAdapter {
@@ -604,140 +603,10 @@ void main() {
     });
   });
 
-  group('WikiLookupTool Tests', () {
-    test('Tool metadata and parameters', () {
-      final wikiTool = WikiLookupTool();
-      expect(wikiTool.name, equals('wiki_lookup'));
-      expect(wikiTool.displayName, equals('维基百科检索'));
-      expect(wikiTool.securityLevel, equals(ToolSecurityLevel.readOnly));
-      expect(wikiTool.parameters.any((p) => p.name == 'query'), isTrue);
-      expect(wikiTool.parameters.any((p) => p.name == 'language'), isTrue);
-    });
-
-    test('Successful Chinese standard article summary retrieval', () async {
-      final mockDio = Dio();
-      mockDio.httpClientAdapter = MockHttpClientAdapter((options) {
-        final uri = options.uri.toString();
-        if (uri.contains('/api/rest_v1/page/summary/')) {
-          return {
-            'statusCode': 200,
-            'data': {
-              'type': 'standard',
-              'title': '人工智能',
-              'description': '由人造机器呈现的人类智能',
-              'extract': '人工智能（英语：Artificial Intelligence，缩写为AI）指由人制造出来的机器所表现出来的智能。',
-              'content_urls': {
-                'desktop': {'page': 'https://zh.wikipedia.org/wiki/人工智能'}
-              }
-            }
-          };
-        }
-        return {'statusCode': 404, 'data': {}};
-      });
-
-      final tool = WikiLookupTool(dio: mockDio);
-      final result = await tool.execute({'query': '人工智能', 'language': 'zh'});
-
-      expect(result.success, isTrue);
-      expect(result.rawData['type'], equals('summary'));
-      expect(result.rawData['title'], equals('人工智能'));
-      expect(result.rawData['description'], equals('由人造机器呈现的人类智能'));
-      expect(result.content, contains('### 📚 维基百科：人工智能'));
-      expect(result.content, contains('由人制造出来的机器所表现出来的智能'));
-    });
-
-    test('404 summary falls back to MediaWiki search API and formats disambiguation list', () async {
-      final mockDio = Dio();
-      mockDio.httpClientAdapter = MockHttpClientAdapter((options) {
-        final uri = options.uri.toString();
-        if (uri.contains('/api/rest_v1/page/summary/')) {
-          return {
-            'statusCode': 404,
-            'data': {'title': 'Not Found'},
-          };
-        } else if (uri.contains('/w/api.php')) {
-          return {
-            'statusCode': 200,
-            'data': {
-              'query': {
-                'search': [
-                  {
-                    'title': '苹果 (水果)',
-                    'snippet': '蔷薇科苹果属植物及其果实。',
-                  },
-                  {
-                    'title': '苹果公司',
-                    'snippet': '美国跨国科技企业，主营消费电子与软件。',
-                  },
-                  {
-                    'title': '苹果 (电影)',
-                    'snippet': '李玉导演，范冰冰主演的中国剧情电影。',
-                  }
-                ]
-              }
-            }
-          };
-        }
-        return {'statusCode': 404, 'data': {}};
-      });
-
-      final tool = WikiLookupTool(dio: mockDio);
-      final result = await tool.execute({'query': '苹果', 'language': 'zh'});
-
-      expect(result.success, isTrue);
-      expect(result.rawData['type'], equals('disambiguation'));
-      expect(result.rawData['options'].length, equals(3));
-      expect(result.content, contains('维基百科消歧义 / 相关词条: "苹果"'));
-      expect(result.content, contains('苹果公司'));
-      expect(result.content, contains('苹果 (水果)'));
-    });
-
-    test('Handles no search results found', () async {
-      final mockDio = Dio();
-      mockDio.httpClientAdapter = MockHttpClientAdapter((options) {
-        final uri = options.uri.toString();
-        if (uri.contains('/api/rest_v1/page/summary/')) {
-          return {'statusCode': 404, 'data': {}};
-        } else {
-          return {
-            'statusCode': 200,
-            'data': {
-              'query': {'search': []}
-            }
-          };
-        }
-      });
-
-      final tool = WikiLookupTool(dio: mockDio);
-      final result = await tool.execute({'query': 'xyz_non_existent_topic_12345'});
-
-      expect(result.success, isFalse);
-      expect(result.errorMessage, contains('未找到与 "xyz_non_existent_topic_12345" 相关的维基百科词条'));
-    });
-
-    test('Handles network error gracefully', () async {
-      final mockDio = Dio();
-      mockDio.httpClientAdapter = MockHttpClientAdapter((options) {
-        return {
-          'throwDioException': true,
-          'dioExceptionType': DioExceptionType.receiveTimeout,
-          'statusCode': 504,
-          'data': 'Gateway Timeout',
-        };
-      });
-
-      final tool = WikiLookupTool(dio: mockDio);
-      final result = await tool.execute({'query': 'Flutter'});
-
-      expect(result.success, isFalse);
-      expect(result.errorMessage, contains('超时'));
-    });
-  });
-
   group('ToolRegistry Integration Tests for Safe Basic Tools', () {
-    test('Default registry contains all 22 registered tools', () {
+    test('Default registry contains all 21 registered tools', () {
       final registry = ToolRegistry.defaultRegistry();
-      expect(registry.getAllTools().length, equals(22));
+      expect(registry.getAllTools().length, equals(21));
       expect(
         registry.getRegisteredNames(),
         containsAll([
@@ -748,7 +617,6 @@ void main() {
           'math_eval',
           'time_calculator',
           'weather_query',
-          'wiki_lookup',
           'file_read',
           'file_write',
           'file_list',

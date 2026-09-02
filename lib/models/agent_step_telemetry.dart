@@ -197,7 +197,7 @@ class TokenBudgetTelemetry {
     int compressionCount = 0,
     int tokensSaved = 0,
   }) {
-    final effectiveCap = budgetCap > 0 ? budgetCap : 32000;
+    final effectiveCap = budgetCap > 0 ? budgetCap : 1000000;
     final ratio = currentEstimatedTokens / effectiveCap;
     return TokenBudgetTelemetry(
       currentEstimatedTokens: currentEstimatedTokens,
@@ -227,7 +227,7 @@ class TokenBudgetTelemetry {
   factory TokenBudgetTelemetry.fromJson(Map<String, dynamic> json) {
     return TokenBudgetTelemetry(
       currentEstimatedTokens: json['currentEstimatedTokens'] as int? ?? 0,
-      budgetCap: json['budgetCap'] as int? ?? 32000,
+      budgetCap: json['budgetCap'] as int? ?? 1000000,
       usageRatio: (json['usageRatio'] as num?)?.toDouble() ?? 0.0,
       isWarning: json['isWarning'] as bool? ?? false,
       isCircuitBreakerTriggered: json['isCircuitBreakerTriggered'] as bool? ?? false,

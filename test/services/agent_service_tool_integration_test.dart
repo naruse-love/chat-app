@@ -419,7 +419,7 @@ void main() {
         expect(toolMsg.content, contains('26.5'));
       });
 
-      test('1.4 wiki_lookup tool execution with mocked Wikipedia REST API', () async {
+      test('1.4 weather_query tool execution with mocked weather API', () async {
         int callCount = 0;
         mockChatService.chatCompletionsStreamHandler = ({
           required String baseUrl,
@@ -440,11 +440,11 @@ void main() {
                       'tool_calls': [
                         {
                           'index': 0,
-                          'id': 'call_wiki_1',
+                          'id': 'call_weather_1',
                           'type': 'function',
                           'function': {
-                            'name': 'wiki_lookup',
-                            'arguments': '{"query": "Flutter", "language": "en"}'
+                            'name': 'weather_query',
+                            'arguments': '{"city": "Beijing"}'
                           }
                         }
                       ]
@@ -458,7 +458,7 @@ void main() {
               {
                 'choices': [
                   {
-                    'delta': {'content': 'Flutter 是 Google 开发的 UI SDK。'}
+                    'delta': {'content': '北京当前天气晴朗。'}
                   }
                 ]
               }
@@ -471,7 +471,7 @@ void main() {
             id: 'msg_1',
             conversationId: 'conv_1',
             role: 'user',
-            content: 'Lookup Flutter on Wikipedia',
+            content: 'Check weather in Beijing',
             timestamp: DateTime.now(),
           ),
         ];
@@ -486,11 +486,10 @@ void main() {
         final execEvents = events.whereType<ToolCallExecutedMessageEvent>().toList();
         expect(execEvents, hasLength(1));
         final toolMsg = execEvents.first.toolMessages.first;
-        expect(toolMsg.content, contains('Flutter'));
-        expect(toolMsg.content, contains('open-source UI software development kit'));
+        expect(toolMsg.content, contains('Beijing'));
       });
 
-      test('1.5 Multi-tool sequential chain (math_eval -> wiki_lookup -> final summary)', () async {
+      test('1.5 Multi-tool sequential chain (math_eval -> weather_query -> final summary)', () async {
         int callCount = 0;
         mockChatService.chatCompletionsStreamHandler = ({
           required String baseUrl,
@@ -533,11 +532,11 @@ void main() {
                       'tool_calls': [
                         {
                           'index': 0,
-                          'id': 'call_wiki_seq',
+                          'id': 'call_weather_seq',
                           'type': 'function',
                           'function': {
-                            'name': 'wiki_lookup',
-                            'arguments': '{"query": "Flutter", "language": "en"}'
+                            'name': 'weather_query',
+                            'arguments': '{"city": "Tokyo"}'
                           }
                         }
                       ]
@@ -551,7 +550,7 @@ void main() {
               {
                 'choices': [
                   {
-                    'delta': {'content': 'Flutter 已经发布 9 年了。'}
+                    'delta': {'content': 'Tokyo天气良好。'}
                   }
                 ]
               }
@@ -564,7 +563,7 @@ void main() {
             id: 'msg_1',
             conversationId: 'conv_1',
             role: 'user',
-            content: 'How old is Flutter?',
+            content: 'Check weather in Tokyo',
             timestamp: DateTime.now(),
           ),
         ];
@@ -580,9 +579,9 @@ void main() {
         expect(execEvents, hasLength(2));
         expect(execEvents[0].toolMessages.first.toolCallId, 'call_math_seq');
         expect(execEvents[0].toolMessages.first.content, contains('9'));
-        expect(execEvents[1].toolMessages.first.toolCallId, 'call_wiki_seq');
-        expect(execEvents[1].toolMessages.first.content, contains('Flutter'));
-        expect(events.last, isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Flutter 已经发布 9 年了。'));
+        expect(execEvents[1].toolMessages.first.toolCallId, 'call_weather_seq');
+        expect(execEvents[1].toolMessages.first.content, contains('Tokyo'));
+        expect(events.last, isA<ContentDeltaEvent>().having((e) => e.content, 'content', 'Tokyo天气良好。'));
       });
     });
 

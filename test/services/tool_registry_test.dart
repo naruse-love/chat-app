@@ -397,7 +397,7 @@ void main() {
   });
 
   group('Riverpod Provider Tests', () {
-    test('toolRegistryProvider initializes default registry with 22 built-in tools', () {
+    test('toolRegistryProvider initializes default registry with 21 built-in tools', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
@@ -409,7 +409,6 @@ void main() {
       expect(registry.hasTool('math_eval'), isTrue);
       expect(registry.hasTool('time_calculator'), isTrue);
       expect(registry.hasTool('weather_query'), isTrue);
-      expect(registry.hasTool('wiki_lookup'), isTrue);
       expect(registry.hasTool('file_read'), isTrue);
       expect(registry.hasTool('file_write'), isTrue);
       expect(registry.hasTool('file_list'), isTrue);
@@ -424,7 +423,7 @@ void main() {
       expect(registry.hasTool('contacts_search'), isTrue);
       expect(registry.hasTool('geolocation_get'), isTrue);
       expect(registry.hasTool('reverse_geocode'), isTrue);
-      expect(registry.getAllTools().length, equals(22));
+      expect(registry.getAllTools().length, equals(21));
     });
   });
 }

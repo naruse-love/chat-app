@@ -77,12 +77,25 @@ class FileReadTool extends Tool {
     }
 
     try {
-      final file = pathSanitizer.resolveSafeFile(rawPath);
+      final isExternal = pathSanitizer.isExternalPath(rawPath);
+      final enableSandbox = arguments['__enableSandbox'] as bool? ?? true;
+      final allowExternal = arguments['__allowExternal'] as bool? ?? false;
+
+      final File file;
+      final String displayPath;
+      if (isExternal && (!enableSandbox || allowExternal)) {
+        file = File(rawPath);
+        displayPath = rawPath;
+      } else {
+        file = pathSanitizer.resolveSafeFile(rawPath);
+        displayPath = pathSanitizer.getRelativePath(file);
+      }
+
       if (!file.existsSync()) {
         return ToolExecutionResult.failure(
           toolName: name,
           errorMessage: '文件未找到: "$rawPath"',
-          content: '读取失败: 沙箱中未找到文件 "$rawPath"',
+          content: '读取失败: 未找到文件 "$rawPath"',
           executionDuration: stopwatch.elapsed,
           rawData: {'path': rawPath, 'found': false},
         );
@@ -149,7 +162,7 @@ class FileReadTool extends Tool {
       final langTag = ext.isNotEmpty ? ext : '';
 
       final buffer = StringBuffer();
-      buffer.writeln('📁 **文件路径**: `${pathSanitizer.sanitizeRelativePath(rawPath)}` (共 $totalLines 行, ${bytes.length} 字节)');
+      buffer.writeln('📁 **文件路径**: `$displayPath` (共 $totalLines 行, ${bytes.length} 字节)');
       buffer.writeln('📖 **读取范围**: 第 $startLine 行 ~ 第 $endLine 行 (共 ${selectedLines.length} 行)');
       buffer.writeln();
       buffer.writeln('```$langTag');
@@ -166,7 +179,7 @@ class FileReadTool extends Tool {
         toolName: name,
         content: truncatedContent,
         rawData: {
-          'path': pathSanitizer.sanitizeRelativePath(rawPath),
+          'path': displayPath,
           'totalLines': totalLines,
           'startLine': startLine,
           'endLine': endLine,

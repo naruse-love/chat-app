@@ -6,7 +6,6 @@ import 'tools/legacy_tool_adapters.dart';
 import 'tools/math_eval_tool.dart';
 import 'tools/time_calculator_tool.dart';
 import 'tools/weather_query_tool.dart';
-import 'tools/wiki_lookup_tool.dart';
 import 'tools/file_read_tool.dart';
 import 'tools/file_write_tool.dart';
 import 'tools/file_list_tool.dart';
@@ -59,7 +58,6 @@ class ToolRegistry {
       const MathEvalTool(),
       TimeCalculatorTool(),
       WeatherQueryTool(dio: dio),
-      WikiLookupTool(dio: dio),
       // Local sandboxed file tools & code execution & clipboard (Milestone 24)
       FileReadTool(pathSanitizer: pathSanitizer),
       FileWriteTool(pathSanitizer: pathSanitizer),
@@ -246,13 +244,15 @@ class ToolRegistry {
     }
 
     // Merge context into arguments
-    final effectiveArgs = Map<String, dynamic>.from(arguments);
+    final rawMergedArgs = Map<String, dynamic>.from(arguments);
     if (context != null) {
       for (final entry in context.entries) {
-        effectiveArgs.putIfAbsent('__${entry.key}', () => entry.value);
-        effectiveArgs.putIfAbsent(entry.key, () => entry.value);
+        rawMergedArgs.putIfAbsent('__${entry.key}', () => entry.value);
+        rawMergedArgs.putIfAbsent(entry.key, () => entry.value);
       }
     }
+
+    final effectiveArgs = _normalizeArguments(rawMergedArgs);
 
     // Validate parameters
     final validationError = tool.validateArguments(effectiveArgs);
@@ -279,6 +279,93 @@ class ToolRegistry {
         metadata: {'exception': e.toString(), 'stackTrace': stackTrace.toString()},
       );
     }
+  }
+
+  /// Normalizes common parameter name aliases across multiple LLM tool calling formats.
+  static Map<String, dynamic> _normalizeArguments(Map<String, dynamic> args) {
+    final normalized = Map<String, dynamic>.from(args);
+
+    // 1. title aliases
+    if (!normalized.containsKey('title') || normalized['title'] == null || normalized['title'].toString().trim().isEmpty) {
+      for (final alias in ['summary', 'name', 'event_name', 'event_title', 'topic', 'subject', 'headline']) {
+        if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
+          normalized['title'] = normalized[alias];
+          break;
+        }
+      }
+    }
+
+    // 2. start_time aliases
+    if (!normalized.containsKey('start_time') || normalized['start_time'] == null || normalized['start_time'].toString().trim().isEmpty) {
+      for (final alias in ['start', 'startTime', 'start_date', 'begin_time', 'beginTime', 'time']) {
+        if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
+          normalized['start_time'] = normalized[alias];
+          break;
+        }
+      }
+    }
+
+    // 3. end_time aliases
+    if (!normalized.containsKey('end_time') || normalized['end_time'] == null || normalized['end_time'].toString().trim().isEmpty) {
+      for (final alias in ['end', 'endTime', 'end_date', 'finish_time', 'finishTime']) {
+        if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
+          normalized['end_time'] = normalized[alias];
+          break;
+        }
+      }
+    }
+
+    // 4. body aliases
+    if (!normalized.containsKey('body') || normalized['body'] == null || normalized['body'].toString().trim().isEmpty) {
+      for (final alias in ['content', 'message', 'text', 'description', 'payload']) {
+        if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
+          normalized['body'] = normalized[alias];
+          break;
+        }
+      }
+    }
+
+    // 5. scheduled_time aliases
+    if (!normalized.containsKey('scheduled_time') || normalized['scheduled_time'] == null || normalized['scheduled_time'].toString().trim().isEmpty) {
+      for (final alias in ['trigger_time', 'triggerTime', 'time', 'scheduledTime', 'datetime', 'date']) {
+        if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
+          normalized['scheduled_time'] = normalized[alias];
+          break;
+        }
+      }
+    }
+
+    // 6. path aliases
+    if (!normalized.containsKey('path') || normalized['path'] == null || normalized['path'].toString().trim().isEmpty) {
+      for (final alias in ['file_path', 'filePath', 'filepath', 'filename', 'name']) {
+        if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
+          normalized['path'] = normalized[alias];
+          break;
+        }
+      }
+    }
+
+    // 7. code aliases
+    if (!normalized.containsKey('code') || normalized['code'] == null || normalized['code'].toString().trim().isEmpty) {
+      for (final alias in ['script', 'source', 'expression', 'snippet']) {
+        if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
+          normalized['code'] = normalized[alias];
+          break;
+        }
+      }
+    }
+
+    // 8. query aliases
+    if (!normalized.containsKey('query') || normalized['query'] == null || normalized['query'].toString().trim().isEmpty) {
+      for (final alias in ['q', 'keyword', 'keywords', 'search', 'prompt']) {
+        if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
+          normalized['query'] = normalized[alias];
+          break;
+        }
+      }
+    }
+
+    return normalized;
   }
 }
 

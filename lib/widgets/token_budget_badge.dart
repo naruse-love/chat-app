@@ -191,7 +191,7 @@ class TokenBudgetBadge extends StatelessWidget {
 
     // Detailed Bar Mode
     final currentTokens = effectiveBudget?.currentEstimatedTokens ?? (totalTokens ?? 0);
-    final budgetCap = effectiveBudget?.budgetCap ?? 32000;
+    final budgetCap = effectiveBudget?.budgetCap ?? 1000000;
     final clampedRatio = ratio.clamp(0.0, 1.0);
     final percentStr = (ratio * 100).toStringAsFixed(1);
 

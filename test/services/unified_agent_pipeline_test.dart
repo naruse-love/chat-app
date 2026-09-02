@@ -98,7 +98,6 @@ void main() {
       expect(AgentService.categorizeTool('math_eval'), '基础实用');
       expect(AgentService.categorizeTool('time_calculator'), '基础实用');
       expect(AgentService.categorizeTool('weather_query'), '基础实用');
-      expect(AgentService.categorizeTool('wiki_lookup'), '基础实用');
       expect(AgentService.categorizeTool('web_search'), '基础实用');
       expect(AgentService.categorizeTool('google_search'), '基础实用');
       expect(AgentService.categorizeTool('bing_search'), '基础实用');

@@ -61,20 +61,32 @@ class FileDeleteTool extends Tool {
     }
 
     try {
-      final sanitizedRel = pathSanitizer.sanitizeRelativePath(rawPath);
+      final isExternal = pathSanitizer.isExternalPath(rawPath);
+      final enableSandbox = arguments['__enableSandbox'] as bool? ?? true;
+      final allowExternal = arguments['__allowExternal'] as bool? ?? false;
 
-      if (sanitizedRel == '.' || sanitizedRel.isEmpty) {
-        return ToolExecutionResult.failure(
-          toolName: name,
-          errorMessage: '禁止删除沙箱根目录自身',
-          content: '删除失败: 出于系统安全保护，禁止删除沙箱根目录',
-          executionDuration: stopwatch.elapsed,
-        );
+      final File file;
+      final Directory dir;
+      final String displayPath;
+
+      if (isExternal && (!enableSandbox || allowExternal)) {
+        file = File(rawPath);
+        dir = Directory(rawPath);
+        displayPath = rawPath;
+      } else {
+        final sanitizedRel = pathSanitizer.sanitizeRelativePath(rawPath);
+        if (sanitizedRel == '.' || sanitizedRel.isEmpty) {
+          return ToolExecutionResult.failure(
+            toolName: name,
+            errorMessage: '禁止删除沙箱根目录自身',
+            content: '删除失败: 出于系统安全保护，禁止删除沙箱根目录',
+            executionDuration: stopwatch.elapsed,
+          );
+        }
+        dir = pathSanitizer.resolveSafeDirectory(rawPath);
+        file = pathSanitizer.resolveSafeFile(rawPath);
+        displayPath = sanitizedRel;
       }
-
-      // Check if target is directory
-      final dir = pathSanitizer.resolveSafeDirectory(rawPath);
-      final file = pathSanitizer.resolveSafeFile(rawPath);
 
       if (dir.existsSync()) {
         // Target is directory
@@ -82,10 +94,10 @@ class FileDeleteTool extends Tool {
         if (entities.isNotEmpty && !recursive) {
           return ToolExecutionResult.failure(
             toolName: name,
-            errorMessage: '目录非空: "$sanitizedRel" (包含 ${entities.length} 个子项，请设置 recursive: true 以确认递归删除)',
-            content: '删除失败: 目录 "$sanitizedRel" 包含子项，若需连同子项一并删除请设置 recursive: true',
+            errorMessage: '目录非空: "$displayPath" (包含 ${entities.length} 个子项，请设置 recursive: true 以确认递归删除)',
+            content: '删除失败: 目录 "$displayPath" 包含子项，若需连同子项一并删除请设置 recursive: true',
             executionDuration: stopwatch.elapsed,
-            rawData: {'path': sanitizedRel, 'isDirectory': true, 'itemCount': entities.length},
+            rawData: {'path': displayPath, 'isDirectory': true, 'itemCount': entities.length},
           );
         }
 
@@ -94,15 +106,15 @@ class FileDeleteTool extends Tool {
 
         return ToolExecutionResult.success(
           toolName: name,
-          content: '🗑️ **目录删除成功**: `$sanitizedRel` (递归删除: $recursive)',
+          content: '🗑️ **目录删除成功**: `$displayPath` (递归删除: $recursive)',
           rawData: {
-            'path': sanitizedRel,
+            'path': displayPath,
             'isDirectory': true,
             'recursive': recursive,
             'deleted': true,
           },
           executionDuration: stopwatch.elapsed,
-          metadata: {'path': sanitizedRel},
+          metadata: {'path': displayPath},
         );
       } else if (file.existsSync()) {
         // Target is file
@@ -112,23 +124,23 @@ class FileDeleteTool extends Tool {
 
         return ToolExecutionResult.success(
           toolName: name,
-          content: '🗑️ **文件删除成功**: `$sanitizedRel` (已释放 $sizeBytes 字节)',
+          content: '🗑️ **文件删除成功**: `$displayPath` (已释放 $sizeBytes 字节)',
           rawData: {
-            'path': sanitizedRel,
+            'path': displayPath,
             'isDirectory': false,
             'sizeBytes': sizeBytes,
             'deleted': true,
           },
           executionDuration: stopwatch.elapsed,
-          metadata: {'path': sanitizedRel},
+          metadata: {'path': displayPath},
         );
       } else {
         return ToolExecutionResult.failure(
           toolName: name,
-          errorMessage: '文件或目录不存在: "$sanitizedRel"',
-          content: '删除失败: 沙箱中未找到待删除的目标 "$sanitizedRel"',
+          errorMessage: '文件或目录不存在: "$displayPath"',
+          content: '删除失败: 未找到待删除的目标 "$displayPath"',
           executionDuration: stopwatch.elapsed,
-          rawData: {'path': sanitizedRel, 'found': false},
+          rawData: {'path': displayPath, 'found': false},
         );
       }
     } on PathSanitizerException catch (e) {

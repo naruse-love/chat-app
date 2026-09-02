@@ -241,4 +241,60 @@ class PathSanitizer {
     final rel = p.relative(canonicalTarget, from: canonicalSandbox).replaceAll('\\', '/');
     return rel.isEmpty ? '.' : rel;
   }
+
+  /// Checks if [rawPath] points outside the sandbox (e.g. absolute paths, drive letters, ~ or traversal).
+  bool isExternalPath(String rawPath) {
+    final trimmed = rawPath.trim();
+    if (trimmed.isEmpty || trimmed == '.' || trimmed == './' || trimmed == '.\\') {
+      return false;
+    }
+    final normalized = trimmed.replaceAll('\\', '/');
+    if (normalized.startsWith('/') ||
+        RegExp(r'^[a-zA-Z]:').hasMatch(normalized) ||
+        normalized.startsWith('~')) {
+      return true;
+    }
+    try {
+      final canonicalSandbox = p.canonicalize(sandboxDir.path);
+      final targetAbsolute = p.canonicalize(p.join(canonicalSandbox, normalized));
+      return !_isSubPathOrSame(canonicalSandbox, targetAbsolute);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Lists all entities in the sandbox directory.
+  List<FileSystemEntity> listSandboxEntities({bool recursive = false}) {
+    ensureSandboxExists();
+    try {
+      return sandboxDir.listSync(recursive: recursive, followLinks: false);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Clears all files and subdirectories inside the sandbox directory.
+  Future<void> clearSandbox() async {
+    ensureSandboxExists();
+    try {
+      final entities = sandboxDir.listSync(recursive: false, followLinks: false);
+      for (final entity in entities) {
+        if (entity is Directory) {
+          entity.deleteSync(recursive: true);
+        } else if (entity is File) {
+          entity.deleteSync();
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Resolves direct [File] for authorized host file access when sandbox is disabled or user approved.
+  File getDirectFile(String path) {
+    return File(path);
+  }
+
+  /// Resolves direct [Directory] for authorized host directory access when sandbox is disabled or user approved.
+  Directory getDirectDirectory(String path) {
+    return Directory(path);
+  }
 }

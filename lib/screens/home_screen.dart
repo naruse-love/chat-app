@@ -364,9 +364,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           if (chatState.isGenerating && agentState.stepTelemetries.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
-              child: AgentExecutionTimelineWidget(
-                steps: agentState.stepTelemetries,
-                initiallyExpanded: true,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: SingleChildScrollView(
+                  child: AgentExecutionTimelineWidget(
+                    steps: agentState.stepTelemetries,
+                    initiallyExpanded: false,
+                  ),
+                ),
               ),
             ),
 

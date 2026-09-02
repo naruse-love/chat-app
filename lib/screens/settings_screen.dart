@@ -411,6 +411,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Navigator.pushNamed(context, '/settings/mcp_servers');
             },
           ),
+          const Divider(),
+
+          // Security Sandbox Section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Text(
+              '本地安全沙箱',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.shield_outlined),
+            title: const Text('启用本地安全沙箱'),
+            subtitle: const Text('开启后 AI 默认在独立隔离沙箱目录操作文件；访问沙箱外部文件将提示用户授权确认'),
+            value: settings.enableSandbox,
+            onChanged: (value) {
+              notifier.updateEnableSandbox(value);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.folder_shared_outlined, color: Colors.teal),
+            title: const Text('沙箱文件管理与导出'),
+            subtitle: const Text('查看沙箱中的文件列表、预览内容、导出与清空'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.pushNamed(context, '/settings/sandbox');
+            },
+          ),
         ],
       ),
     );
