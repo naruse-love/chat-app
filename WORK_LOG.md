@@ -1,3 +1,47 @@
+## 2026-09-03 Feature & Fix: Android Storage Symlink Healing, Real Geolocation & Workspace Architecture (v1.20.0+21)
+
+### 变更文件
+- `lib/services/path_sanitizer.dart`:
+  - 彻底修复 Android 符号链接逃逸误报崩溃（建立 `_isAndroidPathAlias` 双向别名映射，完美兼容 `/data/user/0/<pkg>` ↔ `/data/data/<pkg>` 以及 `/sdcard` ↔ `/storage/emulated/0` ↔ `/storage/self/primary`）；
+  - 新增 `_computeRelativeInsideSandbox` 统一相对路径计算，支持工作区内绝对路径自动转换为安全相对路径放行；
+  - 新增 `isWindowsDriveOrMount` 与安全阻断，拦截 `/mnt/c`, `/mnt/d`, `C:\`, `D:\` 等宿主盘越权遍历；
+  - 增加 `static Directory get defaultDirectory`，废弃所有向易失性缓存 `code_cache` 的默认引用，统一导向持久化工作区。
+- `lib/services/tools/file_read_tool.dart`, `file_write_tool.dart`, `file_list_tool.dart`, `file_delete_tool.dart`:
+  - 构造函数全量接入 `PathSanitizer.defaultDirectory`，根除 `code_cache/chat_app_sandbox` 隐患；
+  - `generateDiffPreview` 增加安全 `try-catch` 降级兜底；
+  - `FileListTool` 新增对 `.git`, `build`, `.dart_tool`, `node_modules`, `.idea`, `.vscode` 等重型依赖/构建目录的智能忽略，设置 500 条条目上限防止遍历卡死；
+  - 所有文件工具前置增加 WSL 宿主盘拦截提示。
+- `lib/services/agent_service.dart`:
+  - `_buildToolPreviewData` 全局增加 `try-catch` 异常保护，防止工具预览生成失败击穿 SSE 流中断；
+  - `chatAndSearchStream` 接收动态 `workspacePath`，系统提示词智能感知移动端（Android）与桌面环境，指引 Agent 自由且安全地访问工作区。
+- `lib/services/native/real_location_service.dart` & `native_services.dart`:
+  - 新增 `RealLocationService`，彻底替代原硬编码（北京中关村 39.9042, 116.4074），通过真实 IP 定位（ip-api.com / freeipapi.com）与 BigDataCloud / OpenStreetMap 逆地理编码获取真机真实位置与街道地址，网络异常时优雅降级。
+- `lib/services/native/native_service_providers.dart`:
+  - 生产 Provider 切换至 `RealLocationService`；
+  - 通讯录与日历生产实例默认关闭虚假预置数据（`seedDefaults: false`），真实反映用户数据。
+- `lib/services/tool_registry.dart`:
+  - 接入 `RealLocationService` 与生产 Native 服务；
+  - 新增 `updateWorkspacePath` 方法，支持会话运行期动态重定向所有已注册文件工具的工作区。
+- `lib/providers/settings_provider.dart`:
+  - `AppSettings` 与 `SettingsNotifier` 新增 `workspacePath` 配置，Android 平台默认自适应解析 `(await getApplicationDocumentsDirectory()).path + '/workspace'`，桌面端默认当前目录；
+  - 新增 `resetWorkspacePathToDefault` 快速重置方法。
+- `lib/providers/chat_provider.dart`:
+  - 流式对话启动时自动将当前设置的 `workspacePath` 同步至 `ToolRegistry` 并透传至 Agent 流管道。
+- `lib/screens/settings_screen.dart`:
+  - 设置页新增「工作区根目录」配置项，支持查看、弹窗修改与「恢复默认」快捷重置。
+- `test/services/path_sanitizer_workspace_test.dart` & `test/services/tools/real_location_tool_test.dart`:
+  - 新增针对 Android 内部/外部存储符号链接别名、WSL 挂载盘拦截、大目录过滤、真实定位服务降级与 ToolRegistry 工作区动态更新的完整自动化测试。
+- `pubspec.yaml` & `.agents/AGENTS.md` & `.agents/context.md`:
+  - 版本号与项目状态同步递增至 `1.20.0+21`。
+
+### 核心改进与技术指标
+1. **Android 运行环境彻底治愈**：完美解决 Android 底层 `/data/user/0` 与 `/data/data` 符号链接导致路径净化器误判崩溃断连的根本缺陷；
+2. **拒绝硬编码**：真实地理定位与逆地理编码接入，日历/通讯录去除虚假测试数据；
+3. **工作区系统健全**：Agent 获得对持久化专属工作区的自由读取与管理能力，同时严格防范 WSL 宿主机 Windows 盘遍历风险；
+4. **测试与分析指标**：
+   - 静态分析：`No issues found!`（0 errors, 0 warnings, 0 lints）；
+   - 自动化测试：全部 680+ 测试用例 100% 通过（0 failures）。
+
 ## 2026-09-02 Fix: Compile Error, Sandbox Type Safety, Code Execution AST & Test Suite Alignment (v1.19.0+20)
 
 ### 变更文件

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:path/path.dart' as p;
 import '../../models/tool/tool.dart';
 import '../../utils/diff_helper.dart';
 import '../path_sanitizer.dart';
@@ -47,9 +46,7 @@ class FileWriteTool extends Tool {
 
   FileWriteTool({PathSanitizer? pathSanitizer})
       : pathSanitizer = pathSanitizer ??
-            PathSanitizer(
-              sandboxDir: Directory(p.join(Directory.systemTemp.path, 'chat_app_sandbox')),
-            );
+            PathSanitizer(sandboxDir: PathSanitizer.defaultDirectory);
 
   @override
   String get name => 'file_write';
@@ -102,20 +99,24 @@ class FileWriteTool extends Tool {
     String mode = 'overwrite',
   }) {
     final isExternal = pathSanitizer.isExternalPath(rawPath);
-    final File file;
-    final String displayPath;
-    if (isExternal) {
-      file = File(rawPath);
-      displayPath = rawPath;
-    } else {
-      file = pathSanitizer.resolveSafeFile(rawPath);
-      displayPath = pathSanitizer.getRelativePath(file);
+    File? file;
+    String displayPath = rawPath;
+    try {
+      if (isExternal) {
+        file = File(rawPath);
+        displayPath = rawPath;
+      } else {
+        file = pathSanitizer.resolveSafeFile(rawPath);
+        displayPath = pathSanitizer.getRelativePath(file);
+      }
+    } catch (_) {
+      file = null;
     }
 
     String oldContent = '';
     bool fileExisted = false;
 
-    if (file.existsSync()) {
+    if (file != null && file.existsSync()) {
       fileExisted = true;
       try {
         oldContent = file.readAsStringSync();
@@ -155,6 +156,16 @@ class FileWriteTool extends Tool {
       return ToolExecutionResult.failure(
         toolName: name,
         errorMessage: '文件路径不能为空',
+        executionDuration: stopwatch.elapsed,
+      );
+    }
+
+    if (PathSanitizer.isWindowsDriveOrMount(rawPath)) {
+      stopwatch.stop();
+      return ToolExecutionResult.failure(
+        toolName: name,
+        errorMessage: '【WSL 环境保护】禁止访问 Windows 挂载盘路径 ("$rawPath")，请在工作区内操作。',
+        content: '写入失败: 【WSL 环境保护】禁止访问 Windows 挂载盘路径 ("$rawPath")。',
         executionDuration: stopwatch.elapsed,
       );
     }

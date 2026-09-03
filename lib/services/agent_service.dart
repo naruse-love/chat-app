@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:uuid/uuid.dart';
 import '../models/chat_message.dart';
@@ -423,46 +424,51 @@ class AgentService {
 
   /// Generates tool preview metadata for Level 2 confirmation cards.
   dynamic _buildToolPreviewData(String name, Tool? toolObj, Map<String, dynamic> args) {
-    if (name == 'file_write' && toolObj is FileWriteTool) {
-      final rawPath = args['path']?.toString() ?? '';
-      final content = args['content']?.toString() ?? '';
-      final mode = args['mode']?.toString() ?? 'overwrite';
-      return toolObj.generateDiffPreview(rawPath, content, mode: mode);
-    } else if (name == 'file_delete') {
-      return {
-        'path': args['path']?.toString() ?? '',
-        'recursive': args['recursive'] == true,
-      };
-    } else if (name == 'code_eval') {
-      return {
-        'code': args['code']?.toString() ?? '',
-        'timeout_ms': args['timeout_ms'] ?? 3000,
-      };
-    } else if (name == 'clipboard_write') {
-      return {
-        'text': args['text']?.toString() ?? '',
-      };
-    } else if (name == 'calendar_create_event') {
-      return {
-        'title': args['title']?.toString() ?? '',
-        'start_time': args['start_time']?.toString() ?? '',
-        'end_time': args['end_time']?.toString() ?? '',
-        'location': args['location']?.toString(),
-        'description': args['description']?.toString(),
-        'reminder_minutes': args['reminder_minutes'] ?? args['remind_minutes_before'],
-        'is_all_day': args['is_all_day'] == true,
-      };
-    } else if (name == 'notification_schedule') {
-      return {
-        'title': args['title']?.toString() ?? '',
-        'body': args['body']?.toString() ?? '',
-        'scheduled_time': args['scheduled_time']?.toString() ?? args['trigger_time']?.toString() ?? '',
-        'notification_id': args['notification_id']?.toString(),
-        'payload': args['payload']?.toString(),
-        'is_exact_alarm': args['is_exact_alarm'] != false,
-      };
+    try {
+      if (name == 'file_write' && toolObj is FileWriteTool) {
+        final rawPath = args['path']?.toString() ?? '';
+        final content = args['content']?.toString() ?? '';
+        final mode = args['mode']?.toString() ?? 'overwrite';
+        return toolObj.generateDiffPreview(rawPath, content, mode: mode);
+      } else if (name == 'file_delete') {
+        return {
+          'path': args['path']?.toString() ?? '',
+          'recursive': args['recursive'] == true,
+        };
+      } else if (name == 'code_eval') {
+        return {
+          'code': args['code']?.toString() ?? '',
+          'timeout_ms': args['timeout_ms'] ?? 3000,
+        };
+      } else if (name == 'clipboard_write') {
+        return {
+          'text': args['text']?.toString() ?? '',
+        };
+      } else if (name == 'calendar_create_event') {
+        return {
+          'title': args['title']?.toString() ?? '',
+          'start_time': args['start_time']?.toString() ?? '',
+          'end_time': args['end_time']?.toString() ?? '',
+          'location': args['location']?.toString(),
+          'description': args['description']?.toString(),
+          'reminder_minutes': args['reminder_minutes'] ?? args['remind_minutes_before'],
+          'is_all_day': args['is_all_day'] == true,
+        };
+      } else if (name == 'notification_schedule') {
+        return {
+          'title': args['title']?.toString() ?? '',
+          'body': args['body']?.toString() ?? '',
+          'scheduled_time': args['scheduled_time']?.toString() ?? args['trigger_time']?.toString() ?? '',
+          'notification_id': args['notification_id']?.toString(),
+          'payload': args['payload']?.toString(),
+          'is_exact_alarm': args['is_exact_alarm'] != false,
+        };
+      }
+      return args;
+    } catch (e) {
+      developer.log('Failed to build preview data for $name: $e', name: 'AgentService');
+      return args;
     }
-    return args;
   }
 
   /// Executes a tool with fault-tolerant exponential backoff retry and self-healing diagnostic error packaging.
@@ -558,6 +564,7 @@ class AgentService {
     String? bingCookie,
     String? reasoningEffort,
     bool enableAutoSearch = true,
+    String? workspacePath,
     CancelToken? cancelToken,
     int maxToolRounds = 100,
     AgentLoopGuard? guard,
@@ -570,7 +577,13 @@ class AgentService {
       final now = DateTime.now();
       final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-      final enrichedPrompt = '$systemPrompt\n\n当前日期与时间: $dateStr $timeStr\n\n【本地安全沙箱环境须知】\n当前环境已启用应用安全沙箱，工作区根目录为 "./"。\n日常读写、列表、删除等文件操作请优先使用相对路径（如 "notes/todo.md"、"output.txt"、"./" 等）。若用户明确要求操作外部绝对路径文件，系统将弹出授权卡片请求用户确认。';
+      final wsDisplay = (workspacePath != null && workspacePath.trim().isNotEmpty)
+          ? workspacePath.trim()
+          : './';
+      final platformNotice = Platform.isAndroid
+          ? '【运行环境：Android 移动端应用】'
+          : '【运行环境：桌面/终端】';
+      final enrichedPrompt = '$systemPrompt\n\n当前日期与时间: $dateStr $timeStr\n\n$platformNotice\n当前工作区根目录为: "$wsDisplay"（相对路径根目录为 "./"）。\n你可以自由访问、读取、列出与操作当前工作区内的文件与代码。\n文件操作请优先使用相对路径（如 "notes.txt"、"data/info.json"、"./" 等）。\n注意：禁止访问工作区外部的系统敏感根目录或 Windows 挂载盘（如 /mnt/c, /mnt/d）。\n修改与删除操作仍需经过用户安全确认。';
       effectiveMessages = [
         ChatMessage(
           id: _uuid.v4(),

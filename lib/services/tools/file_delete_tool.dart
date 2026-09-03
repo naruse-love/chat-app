@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:path/path.dart' as p;
 import '../../models/tool/tool.dart';
 import '../path_sanitizer.dart';
 
@@ -12,9 +11,7 @@ class FileDeleteTool extends Tool {
 
   FileDeleteTool({PathSanitizer? pathSanitizer})
       : pathSanitizer = pathSanitizer ??
-            PathSanitizer(
-              sandboxDir: Directory(p.join(Directory.systemTemp.path, 'chat_app_sandbox')),
-            );
+            PathSanitizer(sandboxDir: PathSanitizer.defaultDirectory);
 
   @override
   String get name => 'file_delete';
@@ -56,6 +53,16 @@ class FileDeleteTool extends Tool {
       return ToolExecutionResult.failure(
         toolName: name,
         errorMessage: '待删除路径不能为空',
+        executionDuration: stopwatch.elapsed,
+      );
+    }
+
+    if (PathSanitizer.isWindowsDriveOrMount(rawPath)) {
+      stopwatch.stop();
+      return ToolExecutionResult.failure(
+        toolName: name,
+        errorMessage: '【WSL 环境保护】禁止访问 Windows 挂载盘路径 ("$rawPath")，请在工作区内操作。',
+        content: '删除失败: 【WSL 环境保护】禁止访问 Windows 挂载盘路径 ("$rawPath")。',
         executionDuration: stopwatch.elapsed,
       );
     }

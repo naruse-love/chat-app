@@ -13,9 +13,7 @@ class FileListTool extends Tool {
 
   FileListTool({PathSanitizer? pathSanitizer})
       : pathSanitizer = pathSanitizer ??
-            PathSanitizer(
-              sandboxDir: Directory(p.join(Directory.systemTemp.path, 'chat_app_sandbox')),
-            );
+            PathSanitizer(sandboxDir: PathSanitizer.defaultDirectory);
 
   @override
   String get name => 'file_list';
@@ -73,6 +71,16 @@ class FileListTool extends Tool {
       maxDepth = maxDepthArg.toInt().clamp(1, 10);
     } else if (maxDepthArg is String) {
       maxDepth = (int.tryParse(maxDepthArg) ?? 3).clamp(1, 10);
+    }
+
+    if (PathSanitizer.isWindowsDriveOrMount(rawDirectory)) {
+      stopwatch.stop();
+      return ToolExecutionResult.failure(
+        toolName: name,
+        errorMessage: '【WSL 环境保护】禁止访问 Windows 挂载盘路径 ("$rawDirectory")，请在工作区内操作。',
+        content: '列出失败: 【WSL 环境保护】禁止访问 Windows 挂载盘路径 ("$rawDirectory")。',
+        executionDuration: stopwatch.elapsed,
+      );
     }
 
     try {
@@ -187,6 +195,15 @@ class FileListTool extends Tool {
     }
   }
 
+  static const Set<String> _ignoredDirNames = {
+    '.git',
+    'build',
+    '.dart_tool',
+    'node_modules',
+    '.idea',
+    '.vscode',
+  };
+
   void _walkDirectory(
     Directory currentDir,
     String canonicalTarget, {
@@ -196,7 +213,7 @@ class FileListTool extends Tool {
     required RegExp? patternRegex,
     required List<Map<String, dynamic>> collected,
   }) {
-    if (currentDepth > maxDepth) return;
+    if (currentDepth > maxDepth || collected.length >= 500) return;
 
     List<FileSystemEntity> entities;
     try {
@@ -206,9 +223,16 @@ class FileListTool extends Tool {
     }
 
     for (final entity in entities) {
+      if (collected.length >= 500) break;
+
       final isDir = entity is Directory;
       final fileName = p.basename(entity.path);
       final relPath = pathSanitizer.getRelativePath(entity);
+
+      // Skip common heavy development / cache directories during recursive walk
+      if (isDir && _ignoredDirNames.contains(fileName.toLowerCase())) {
+        continue;
+      }
 
       bool matches = true;
       if (patternRegex != null) {
@@ -239,7 +263,7 @@ class FileListTool extends Tool {
         }
       }
 
-      if (isDir && recursive && currentDepth < maxDepth) {
+      if (isDir && recursive && currentDepth < maxDepth && collected.length < 500) {
         _walkDirectory(
           entity,
           canonicalTarget,

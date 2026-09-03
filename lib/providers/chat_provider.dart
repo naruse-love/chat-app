@@ -345,6 +345,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
     int? pendingPromptTokens;
     int? pendingCompletionTokens;
 
+    if (settings.workspacePath.isNotEmpty) {
+      _ref.read(toolRegistryProvider).updateWorkspacePath(settings.workspacePath);
+    }
+
     try {
       final stream = _agentService.chatAndSearchStream(
         baseUrl: activeConfig.baseUrl,
@@ -360,6 +364,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         bingCookie: settings.bingCookie.isNotEmpty ? settings.bingCookie : null,
         reasoningEffort: settings.reasoningEffort,
         enableAutoSearch: settings.enableAutoSearch,
+        workspacePath: settings.workspacePath,
         cancelToken: _cancelToken,
         onConfirmTool: _handleToolConfirmation,
       );

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/tool/tool.dart';
@@ -40,12 +41,14 @@ class ToolRegistry {
     ContactsSanitizer? contactsSanitizer,
     PermissionManagerService? permissionManagerService,
   }) {
-    final effectiveCalendar = calendarService ?? InMemoryCalendarService();
+    final effectiveCalendar = calendarService ?? InMemoryCalendarService(seedDefaults: false);
     final effectiveNotification = notificationService ?? InMemoryNotificationService();
-    final effectiveContacts = contactsService ?? InMemoryContactsService();
-    final effectiveLocation = locationService ?? InMemoryLocationService();
+    final effectiveContacts = contactsService ?? InMemoryContactsService(seedDefaults: false);
+    final effectiveLocation = locationService ?? RealLocationService();
     final effectiveSanitizer = contactsSanitizer ?? const ContactsSanitizer();
     final effectivePermission = permissionManagerService ?? PermissionManagerService();
+    final effectivePathSanitizer = pathSanitizer ??
+        PathSanitizer(sandboxDir: PathSanitizer.defaultDirectory);
 
     final registry = ToolRegistry();
     registry.registerTools([
@@ -59,10 +62,10 @@ class ToolRegistry {
       TimeCalculatorTool(),
       WeatherQueryTool(dio: dio),
       // Local sandboxed file tools & code execution & clipboard (Milestone 24)
-      FileReadTool(pathSanitizer: pathSanitizer),
-      FileWriteTool(pathSanitizer: pathSanitizer),
-      FileListTool(pathSanitizer: pathSanitizer),
-      FileDeleteTool(pathSanitizer: pathSanitizer),
+      FileReadTool(pathSanitizer: effectivePathSanitizer),
+      FileWriteTool(pathSanitizer: effectivePathSanitizer),
+      FileListTool(pathSanitizer: effectivePathSanitizer),
+      FileDeleteTool(pathSanitizer: effectivePathSanitizer),
       CodeEvalTool(codeExecutionService: codeExecutionService),
       const ClipboardReadTool(),
       const ClipboardWriteTool(),
@@ -113,6 +116,24 @@ class ToolRegistry {
     for (final tool in tools) {
       register(tool, enabled: enabled);
     }
+  }
+
+  /// Dynamically updates the active workspace root for all registered file tools.
+  void updateWorkspacePath(String newWorkspacePath) {
+    final cleanPath = newWorkspacePath.trim();
+    if (cleanPath.isEmpty) return;
+    final newDir = Directory(cleanPath);
+    if (!newDir.existsSync()) {
+      try {
+        newDir.createSync(recursive: true);
+      } catch (_) {}
+    }
+
+    final newSanitizer = PathSanitizer(sandboxDir: newDir);
+    register(FileReadTool(pathSanitizer: newSanitizer), enabled: isToolEnabled('file_read'));
+    register(FileWriteTool(pathSanitizer: newSanitizer), enabled: isToolEnabled('file_write'));
+    register(FileListTool(pathSanitizer: newSanitizer), enabled: isToolEnabled('file_list'));
+    register(FileDeleteTool(pathSanitizer: newSanitizer), enabled: isToolEnabled('file_delete'));
   }
 
   /// Unregisters a tool by name. Returns true if removed, false otherwise.
@@ -371,5 +392,19 @@ class ToolRegistry {
 
 /// Global Riverpod Provider for ToolRegistry.
 final toolRegistryProvider = Provider<ToolRegistry>((ref) {
-  return ToolRegistry.defaultRegistry();
+  final calendarSvc = ref.watch(calendarServiceProvider);
+  final notificationSvc = ref.watch(notificationServiceProvider);
+  final contactsSvc = ref.watch(contactsServiceProvider);
+  final locationSvc = ref.watch(locationServiceProvider);
+  final sanitizer = ref.watch(contactsSanitizerProvider);
+  final permissionMgr = ref.watch(permissionManagerServiceProvider);
+
+  return ToolRegistry.defaultRegistry(
+    calendarService: calendarSvc,
+    notificationService: notificationSvc,
+    contactsService: contactsSvc,
+    locationService: locationSvc,
+    contactsSanitizer: sanitizer,
+    permissionManagerService: permissionMgr,
+  );
 });

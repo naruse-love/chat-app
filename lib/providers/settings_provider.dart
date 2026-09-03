@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/system_prompt_template.dart';
@@ -18,6 +21,7 @@ class AppSettings {
   final String bingCookie;
   final String reasoningEffort;
   final bool enableSandbox;
+  final String workspacePath;
   final bool isLoaded;
 
   AppSettings({
@@ -31,6 +35,7 @@ class AppSettings {
     this.bingCookie = '',
     this.reasoningEffort = 'medium',
     this.enableSandbox = true,
+    this.workspacePath = '',
     this.isLoaded = false,
   });
 
@@ -45,6 +50,7 @@ class AppSettings {
     String? bingCookie,
     String? reasoningEffort,
     bool? enableSandbox,
+    String? workspacePath,
     bool? isLoaded,
   }) {
     return AppSettings(
@@ -58,6 +64,7 @@ class AppSettings {
       bingCookie: bingCookie ?? this.bingCookie,
       reasoningEffort: reasoningEffort ?? this.reasoningEffort,
       enableSandbox: enableSandbox ?? this.enableSandbox,
+      workspacePath: workspacePath ?? this.workspacePath,
       isLoaded: isLoaded ?? this.isLoaded,
     );
   }
@@ -72,6 +79,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   static const _googleSearchModelKey = 'google_search_model';
   static const _reasoningEffortKey = 'reasoning_effort';
   static const _enableSandboxKey = 'enable_sandbox';
+  static const _workspacePathKey = 'workspace_path';
   static const _googleSearchApiKeySecureKey = 'google_search_api_key';
   static const _bingCookieSecureKey = 'bing_cookie';
 
@@ -83,11 +91,31 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     initialization = _loadSettings();
   }
 
+  static Future<String> resolveDefaultWorkspacePath() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      try {
+        final docs = await getApplicationDocumentsDirectory();
+        final wsDir = Directory(p.join(docs.path, 'workspace'));
+        if (!wsDir.existsSync()) {
+          wsDir.createSync(recursive: true);
+        }
+        return wsDir.path;
+      } catch (_) {
+        return '/data/user/0/com.example.chat/app_flutter/workspace';
+      }
+    }
+    return Directory.current.path;
+  }
+
   Future<void> _loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final apiKey = await _secureStorage.read(_googleSearchApiKeySecureKey) ?? '';
       final bingCookie = await _secureStorage.read(_bingCookieSecureKey) ?? '';
+      final savedWs = prefs.getString(_workspacePathKey);
+      final workspacePath = (savedWs != null && savedWs.isNotEmpty)
+          ? savedWs
+          : await resolveDefaultWorkspacePath();
       if (!mounted) return;
       state = AppSettings(
         searxngUrl: prefs.getString(_searxngKey) ?? '',
@@ -100,12 +128,26 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         bingCookie: bingCookie,
         reasoningEffort: prefs.getString(_reasoningEffortKey) ?? 'medium',
         enableSandbox: prefs.getBool(_enableSandboxKey) ?? true,
+        workspacePath: workspacePath,
         isLoaded: true,
       );
       isLoaded = true;
     } catch (_) {
       isLoaded = true;
     }
+  }
+
+  Future<void> updateWorkspacePath(String path) async {
+    state = state.copyWith(workspacePath: path);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_workspacePathKey, path);
+    } catch (_) {}
+  }
+
+  Future<void> resetWorkspacePathToDefault() async {
+    final defaultWs = await resolveDefaultWorkspacePath();
+    await updateWorkspacePath(defaultWs);
   }
 
   Future<void> updateEnableSandbox(bool enabled) async {

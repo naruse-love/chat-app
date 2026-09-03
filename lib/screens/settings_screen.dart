@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/theme_provider.dart';
@@ -431,6 +432,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             value: settings.enableSandbox,
             onChanged: (value) {
               notifier.updateEnableSandbox(value);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.workspaces_outlined, color: Colors.indigo),
+            title: const Text('工作区根目录'),
+            subtitle: Text(
+              settings.workspacePath.isNotEmpty ? settings.workspacePath : '未设置（默认当前项目或应用沙箱）',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: const Icon(Icons.edit_outlined),
+            onTap: () async {
+              final controller = TextEditingController(text: settings.workspacePath);
+              final result = await showDialog<String>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('设置工作区根目录'),
+                  content: TextField(
+                    controller: controller,
+                    decoration: InputDecoration(
+                      labelText: '工作区物理路径',
+                      hintText: Platform.isAndroid ? '如 /sdcard/Documents/ChatApp' : '如 /home/as/chat',
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () async {
+                        await notifier.resetWorkspacePathToDefault();
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                      child: const Text('恢复默认'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('取消'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                      child: const Text('保存'),
+                    ),
+                  ],
+                ),
+              );
+              if (result != null) {
+                notifier.updateWorkspacePath(result);
+              }
             },
           ),
           ListTile(

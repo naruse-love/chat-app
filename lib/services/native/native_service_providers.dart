@@ -6,9 +6,11 @@ import 'location_service.dart';
 import 'contacts_sanitizer.dart';
 import 'permission_manager_service.dart';
 
+import 'real_location_service.dart';
+
 /// Provider for calendar operations.
 final calendarServiceProvider = Provider<ICalendarService>((ref) {
-  return InMemoryCalendarService();
+  return InMemoryCalendarService(seedDefaults: false);
 });
 
 /// Provider for local/scheduled notification operations.
@@ -18,12 +20,12 @@ final notificationServiceProvider = Provider<INotificationService>((ref) {
 
 /// Provider for contacts address book operations.
 final contactsServiceProvider = Provider<IContactsService>((ref) {
-  return InMemoryContactsService();
+  return InMemoryContactsService(seedDefaults: false);
 });
 
 /// Provider for GPS geolocation and geocoding operations.
 final locationServiceProvider = Provider<ILocationService>((ref) {
-  return InMemoryLocationService();
+  return RealLocationService();
 });
 
 /// Provider for contacts privacy sanitization.

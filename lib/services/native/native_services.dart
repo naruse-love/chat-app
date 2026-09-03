@@ -3,6 +3,7 @@ export 'calendar_service.dart';
 export 'notification_service.dart';
 export 'contacts_service.dart';
 export 'location_service.dart';
+export 'real_location_service.dart';
 export 'contacts_sanitizer.dart';
 export 'permission_manager_service.dart';
 export 'native_service_providers.dart';
