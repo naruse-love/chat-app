@@ -44,6 +44,37 @@ class ContactsSearchTool extends Tool {
           defaultValue: '',
         ),
         ToolParameter(
+          name: 'name',
+          type: 'string',
+          description: '联系人姓名 (用于精确查找某人，或添加新联系人)',
+          required: false,
+        ),
+        ToolParameter(
+          name: 'phone',
+          type: 'string',
+          description: '联系人电话号码 (添加联系人时提供，或用于号码反查)',
+          required: false,
+        ),
+        ToolParameter(
+          name: 'email',
+          type: 'string',
+          description: '联系人电子邮箱 (添加联系人时可选)',
+          required: false,
+        ),
+        ToolParameter(
+          name: 'company',
+          type: 'string',
+          description: '联系人公司或组织机构名称 (可选)',
+          required: false,
+        ),
+        ToolParameter(
+          name: 'action',
+          type: 'string',
+          description: '操作类型: "search" (默认搜索通讯录) 或 "add" (添加新联系人)',
+          required: false,
+          defaultValue: 'search',
+        ),
+        ToolParameter(
           name: 'limit',
           type: 'integer',
           description: '返回结果数量上限 (默认 5，根据隐私规则最大限制 5 条)',
@@ -139,7 +170,20 @@ class ContactsSearchTool extends Tool {
         );
       }
 
-      final query = arguments['query']?.toString().trim() ?? '';
+      var query = arguments['query']?.toString().trim() ?? '';
+      if (query.isEmpty) {
+        final nameAlias = (arguments['name'] ??
+                arguments['contact_name'] ??
+                arguments['person'] ??
+                arguments['phone'] ??
+                arguments['keyword'] ??
+                arguments['q'])
+            ?.toString()
+            .trim();
+        if (nameAlias != null && nameAlias.isNotEmpty) {
+          query = nameAlias;
+        }
+      }
       final rawLimit = (arguments['limit'] as num?)?.toInt() ?? 5;
       final effectiveLimit = (rawLimit > 0 && rawLimit <= 5) ? rawLimit : 5;
 

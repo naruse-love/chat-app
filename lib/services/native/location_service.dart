@@ -206,8 +206,8 @@ class InMemoryLocationService implements ILocationService {
       }
     }
 
-    // If within ~0.5 degree (~50km), return closest or customized coordinates
-    if (closest != null && minDistance < 0.5) {
+    // If within ~0.005 degree (~500m), return closest landmark with precise street address
+    if (closest != null && minDistance < 0.005) {
       return GeoAddress(
         formattedAddress: closest.formattedAddress,
         country: closest.country,
@@ -216,6 +216,29 @@ class InMemoryLocationService implements ILocationService {
         district: closest.district,
         street: closest.street,
         streetNumber: closest.streetNumber,
+        postalCode: closest.postalCode,
+        countryCode: closest.countryCode,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+
+    // If within 0.3 degree (~30km), return city-level region without faking exact building
+    if (closest != null && minDistance < 0.3) {
+      final parts = [closest.country, closest.province, closest.city]
+          .where((s) => s.isNotEmpty && !s.contains('未知'))
+          .toSet()
+          .toList();
+      final region = parts.isNotEmpty ? parts.join(' ') : '当前区域';
+      final latStr = latitude.toStringAsFixed(4);
+      final lngStr = longitude.toStringAsFixed(4);
+      return GeoAddress(
+        formattedAddress: '$region 附近 (经纬度: $latStr, $lngStr)',
+        country: closest.country,
+        province: closest.province,
+        city: closest.city,
+        district: closest.district,
+        street: '周边区域',
         postalCode: closest.postalCode,
         countryCode: closest.countryCode,
         latitude: latitude,

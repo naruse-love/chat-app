@@ -42,12 +42,22 @@ class ReverseGeocodeTool extends Tool {
       ];
 
   @override
+  String? validateArguments(Map<String, dynamic> arguments) {
+    final lat = arguments['latitude'] ?? arguments['lat'] ?? arguments['y'];
+    final lng = arguments['longitude'] ?? arguments['lng'] ?? arguments['lon'] ?? arguments['long'] ?? arguments['x'];
+    if (lat == null || lng == null) {
+      return '缺少必需的经纬度参数 (latitude, longitude)';
+    }
+    return null;
+  }
+
+  @override
   Future<ToolExecutionResult> execute(Map<String, dynamic> arguments) async {
     final stopwatch = Stopwatch()..start();
 
     try {
-      final rawLat = arguments['latitude'];
-      final rawLng = arguments['longitude'];
+      final rawLat = arguments['latitude'] ?? arguments['lat'] ?? arguments['y'];
+      final rawLng = arguments['longitude'] ?? arguments['lng'] ?? arguments['lon'] ?? arguments['long'] ?? arguments['x'];
 
       if (rawLat == null || rawLng == null) {
         stopwatch.stop();

@@ -198,20 +198,7 @@ class McpDynamicTool extends Tool {
     final stopwatch = Stopwatch()..start();
 
     // 剔除内部注入的上下文参数（以 __ 开头，或内部框架 context 键，或 CancelToken 等非 JSON 编码对象）
-    final cleanArgs = <String, dynamic>{};
-    for (final entry in arguments.entries) {
-      final key = entry.key;
-      if (key.startsWith('__')) continue;
-      if (key == 'cancelToken' || entry.value.runtimeType.toString().contains('CancelToken')) continue;
-      if (key == 'searxngUrl' || key == 'searchBackend' || key == 'googleApiKey' ||
-          key == 'googleBaseUrl' || key == 'googleSearchModel' || key == 'bingCookie' ||
-          key == 'enableSandbox' || key == 'allowExternal' || key == 'maxCharacters' ||
-          key == 'workspacePath') {
-        continue;
-      }
-      if (!_isJsonEncodable(entry.value)) continue;
-      cleanArgs[key] = entry.value;
-    }
+    final cleanArgs = _deepSanitizeArgs(arguments);
 
     try {
       final mcpResult = await client.callTool(originalToolName, cleanArgs);
@@ -264,17 +251,59 @@ class McpDynamicTool extends Tool {
     }
   }
 
-  static bool _isJsonEncodable(dynamic value) {
-    if (value == null || value is num || value is String || value is bool) {
-      return true;
+  static Map<String, dynamic> _deepSanitizeArgs(Map<String, dynamic> raw) {
+    final clean = <String, dynamic>{};
+    for (final entry in raw.entries) {
+      final key = entry.key;
+      if (key.startsWith('__')) continue;
+      if (key == 'cancelToken' || entry.value.runtimeType.toString().contains('CancelToken')) continue;
+      if (key == 'searxngUrl' ||
+          key == 'searchBackend' ||
+          key == 'googleApiKey' ||
+          key == 'googleBaseUrl' ||
+          key == 'googleSearchModel' ||
+          key == 'bingCookie' ||
+          key == 'enableSandbox' ||
+          key == 'allowExternal' ||
+          key == 'maxCharacters' ||
+          key == 'workspacePath') {
+        continue;
+      }
+      final sanitized = _deepSanitizeVal(entry.value);
+      if (sanitized != null) {
+        clean[key] = sanitized;
+      }
     }
-    if (value is List) {
-      return value.every(_isJsonEncodable);
+    return clean;
+  }
+
+  static dynamic _deepSanitizeVal(dynamic val) {
+    if (val == null || val is num || val is String || val is bool) {
+      return val;
     }
-    if (value is Map) {
-      return value.entries.every((e) => e.key is String && _isJsonEncodable(e.value));
+    if (val.runtimeType.toString().contains('CancelToken')) {
+      return null;
     }
-    return false;
+    if (val is List) {
+      return val.map(_deepSanitizeVal).where((e) => e != null).toList();
+    }
+    if (val is Map) {
+      final res = <String, dynamic>{};
+      for (final e in val.entries) {
+        final k = e.key.toString();
+        if (k.startsWith('__') ||
+            k == 'cancelToken' ||
+            e.value.runtimeType.toString().contains('CancelToken')) {
+          continue;
+        }
+        final s = _deepSanitizeVal(e.value);
+        if (s != null) {
+          res[k] = s;
+        }
+      }
+      return res;
+    }
+    return null;
   }
 
   @override

@@ -42,13 +42,13 @@ class NotificationScheduleTool extends Tool {
         ToolParameter(
           name: 'body',
           type: 'string',
-          description: '通知提醒正文内容',
-          required: true,
+          description: '通知提醒正文内容 (可选，未提供时默认使用标题)',
+          required: false,
         ),
         ToolParameter(
           name: 'scheduled_time',
           type: 'string',
-          description: '预定触发时间 (ISO 8601 格式，如 "2026-08-30T18:00:00Z")',
+          description: '预定触发时间 (ISO 8601 格式或自然时间，如 "10分钟后", "明天 09:00", "明天上午9点")',
           required: true,
         ),
         ToolParameter(
@@ -71,6 +71,17 @@ class NotificationScheduleTool extends Tool {
           defaultValue: true,
         ),
       ];
+
+  @override
+  String? validateArguments(Map<String, dynamic> arguments) {
+    for (final param in parameters) {
+      if (param.name == 'body') continue;
+      final value = arguments[param.name];
+      final error = param.validate(value);
+      if (error != null) return error;
+    }
+    return null;
+  }
 
   @override
   Future<ToolExecutionResult> execute(Map<String, dynamic> arguments) async {
@@ -217,7 +228,19 @@ class NotificationCancelTool extends Tool {
         ToolParameter(
           name: 'notification_id',
           type: 'string',
-          description: '待取消的通知 ID (与 cancel_all 或 list_pending 至少选一)',
+          description: '待取消的通知 ID (与 title, cancel_all 或 list_pending 至少选一)',
+          required: false,
+        ),
+        ToolParameter(
+          name: 'title',
+          type: 'string',
+          description: '待取消的通知标题关键词 (支持根据标题模糊匹配并取消)',
+          required: false,
+        ),
+        ToolParameter(
+          name: 'query',
+          type: 'string',
+          description: '通知关键词搜索并取消 (或配合 action: "list" 筛选)',
           required: false,
         ),
         ToolParameter(
@@ -257,8 +280,8 @@ class NotificationCancelTool extends Tool {
     try {
       final listPending = arguments['list_pending'] == true ||
           arguments['list'] == true ||
-          arguments['query'] == true ||
-          arguments['action'] == 'list';
+          arguments['action'] == 'list' ||
+          (arguments['query'] == true);
 
       if (listPending) {
         final pending = await notificationService.getPendingNotifications();
@@ -305,34 +328,62 @@ class NotificationCancelTool extends Tool {
         );
       }
 
-      if (rawId == null || rawId.isEmpty) {
+      if (rawId != null && rawId.isNotEmpty) {
+        final removed = await notificationService.cancelNotification(rawId);
         stopwatch.stop();
-        return ToolExecutionResult.failure(
-          toolName: name,
-          errorMessage: '请提供待取消的通知 ID (notification_id) 或设置 cancel_all: true',
-          content: '取消通知失败: 缺少通知 ID 或清空指令',
-          executionDuration: stopwatch.elapsed,
-        );
+
+        if (removed) {
+          return ToolExecutionResult.success(
+            toolName: name,
+            content: '✅ **通知已成功取消** (通知ID: `$rawId`)',
+            rawData: {'notificationId': rawId, 'cancelled': true},
+            executionDuration: stopwatch.elapsed,
+          );
+        } else {
+          return ToolExecutionResult.success(
+            toolName: name,
+            content: 'ℹ️ **未找到待取消通知**：ID 为 `$rawId` 的通知不存在或已被触发。',
+            rawData: {'notificationId': rawId, 'cancelled': false, 'found': false},
+            executionDuration: stopwatch.elapsed,
+          );
+        }
       }
 
-      final removed = await notificationService.cancelNotification(rawId);
+      // If ID not provided, try title or keyword match
+      final keyword = (arguments['title'] ?? arguments['query'] ?? arguments['keyword'] ?? arguments['name'])?.toString().trim();
+      if (keyword != null && keyword.isNotEmpty) {
+        final pending = await notificationService.getPendingNotifications();
+        final match = pending.where((n) =>
+            n.title.toLowerCase().contains(keyword.toLowerCase()) ||
+            n.body.toLowerCase().contains(keyword.toLowerCase())).toList();
+        if (match.isNotEmpty) {
+          final target = match.first;
+          await notificationService.cancelNotification(target.id);
+          stopwatch.stop();
+          return ToolExecutionResult.success(
+            toolName: name,
+            content: '✅ **已成功取消提醒通知**: "${target.title}" (通知ID: `${target.id}`)',
+            rawData: {'notificationId': target.id, 'title': target.title, 'cancelled': true},
+            executionDuration: stopwatch.elapsed,
+          );
+        } else {
+          stopwatch.stop();
+          return ToolExecutionResult.success(
+            toolName: name,
+            content: 'ℹ️ **未找到待取消通知**：未找到与 "$keyword" 匹配的待触发定时通知。',
+            rawData: {'query': keyword, 'cancelled': false, 'found': false},
+            executionDuration: stopwatch.elapsed,
+          );
+        }
+      }
+
       stopwatch.stop();
-
-      if (removed) {
-        return ToolExecutionResult.success(
-          toolName: name,
-          content: '✅ **通知已成功取消** (通知ID: `$rawId`)',
-          rawData: {'notificationId': rawId, 'cancelled': true},
-          executionDuration: stopwatch.elapsed,
-        );
-      } else {
-        return ToolExecutionResult.success(
-          toolName: name,
-          content: 'ℹ️ **未找到待取消通知**：ID 为 `$rawId` 的通知不存在或已被触发。',
-          rawData: {'notificationId': rawId, 'cancelled': false, 'found': false},
-          executionDuration: stopwatch.elapsed,
-        );
-      }
+      return ToolExecutionResult.failure(
+        toolName: name,
+        errorMessage: '请提供待取消的通知 ID (notification_id) 或标题关键词 (title)，或设置 cancel_all: true',
+        content: '取消通知失败: 缺少通知 ID 或标题关键词',
+        executionDuration: stopwatch.elapsed,
+      );
     } catch (e, stackTrace) {
       stopwatch.stop();
       return ToolExecutionResult.failure(
@@ -375,17 +426,82 @@ DateTime? _parseFlexibleScheduledTime(String input) {
     }
   }
 
-  if (trimmed == '半小时后' || trimmed == '30分钟后') {
-    return DateTime.now().add(const Duration(minutes: 30));
+  // 2. Relative date keyword + optional time (e.g. "明天 09:00", "明天上午9点", "今天下午3点", "后天上午10点")
+  final now = DateTime.now();
+  final relDateMatch = RegExp(
+    r'^(今天|今日|明天|次日|后天|大后天|today|tomorrow)\s*(.*)$',
+    caseSensitive: false,
+  ).firstMatch(trimmed);
+
+  if (relDateMatch != null) {
+    final kw = relDateMatch.group(1)!.toLowerCase();
+    final timePart = relDateMatch.group(2)?.trim() ?? '';
+    DateTime? baseDate;
+    switch (kw) {
+      case '今天':
+      case '今日':
+      case 'today':
+        baseDate = DateTime(now.year, now.month, now.day);
+        break;
+      case '明天':
+      case '次日':
+      case 'tomorrow':
+        baseDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+        break;
+      case '后天':
+        baseDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 2));
+        break;
+      case '大后天':
+        baseDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 3));
+        break;
+    }
+    if (baseDate != null) {
+      if (timePart.isEmpty) {
+        return baseDate.add(const Duration(hours: 9)); // Default to 9 AM
+      }
+      final parsed = _parseNotificationTime(baseDate, timePart);
+      if (parsed != null) return parsed;
+    }
   }
 
-  // 2. Standard ISO parse
+  // 3. Chinese date with 年月日 (e.g. "2026年9月5日 18:00" or "9月5日 18:00")
+  final cnDateFull = RegExp(r'^(\d{4})年(\d{1,2})月(\d{1,2})[日号]?\s*(.*)$').firstMatch(trimmed);
+  if (cnDateFull != null) {
+    final y = int.parse(cnDateFull.group(1)!);
+    final m = int.parse(cnDateFull.group(2)!);
+    final d = int.parse(cnDateFull.group(3)!);
+    final rest = cnDateFull.group(4)?.trim() ?? '';
+    final base = DateTime(y, m, d);
+    if (rest.isEmpty) return base.add(const Duration(hours: 9));
+    final parsed = _parseNotificationTime(base, rest);
+    if (parsed != null) return parsed;
+  }
+
+  final cnDateShort = RegExp(r'^(\d{1,2})月(\d{1,2})[日号]?\s*(.*)$').firstMatch(trimmed);
+  if (cnDateShort != null) {
+    final y = now.year;
+    final m = int.parse(cnDateShort.group(1)!);
+    final d = int.parse(cnDateShort.group(2)!);
+    final rest = cnDateShort.group(3)?.trim() ?? '';
+    final base = DateTime(y, m, d);
+    if (rest.isEmpty) return base.add(const Duration(hours: 9));
+    final parsed = _parseNotificationTime(base, rest);
+    if (parsed != null) return parsed;
+  }
+
+  // 4. Standalone time today (e.g. "下午3点", "上午10点半", "18:00")
+  final todayTime = _parseNotificationTime(DateTime(now.year, now.month, now.day), trimmed);
+  if (todayTime != null) {
+    return todayTime;
+  }
+
+  // 5. Standard ISO parse
   final parsed = DateTime.tryParse(trimmed);
   if (parsed != null) {
     return parsed.isUtc ? parsed.toLocal() : parsed;
   }
 
-  // 3. Normalize "YYYY/MM/DD" or "YYYY.MM.DD" or "YYYY-MM-DD HH:mm:ss"
+  // 6. Normalize "YYYY/MM/DD" or "YYYY.MM.DD" or "YYYY-MM-DD HH:mm:ss"
   var normalized = trimmed.replaceAll('/', '-').replaceAll('.', '-');
   if (normalized.contains(' ') && !normalized.contains('T')) {
     normalized = normalized.replaceFirst(' ', 'T');
@@ -397,4 +513,45 @@ DateTime? _parseFlexibleScheduledTime(String input) {
 
   return null;
 }
+
+DateTime? _parseNotificationTime(DateTime base, String timeStr) {
+  final s = timeStr.trim();
+  if (s.isEmpty) return null;
+
+  final isPm = s.contains('下午') || s.contains('晚上') || s.contains('傍晚') || s.contains('夜间') || s.toLowerCase().contains('pm');
+  final isAm = s.contains('上午') || s.contains('早上') || s.contains('早晨') || s.contains('清晨') || s.toLowerCase().contains('am');
+
+  final clean = s
+      .replaceAll(RegExp(r'(?:上午|下午|早上|早晨|清晨|晚上|傍晚|夜间|am|pm)', caseSensitive: false), '')
+      .trim();
+
+  // "14:30" or "14:30:00"
+  final colonMatch = RegExp(r'^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$').firstMatch(clean);
+  if (colonMatch != null) {
+    var hour = int.parse(colonMatch.group(1)!);
+    final minute = int.parse(colonMatch.group(2)!);
+    final second = colonMatch.group(3) != null ? int.parse(colonMatch.group(3)!) : 0;
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour == 12) hour = 0;
+    return DateTime(base.year, base.month, base.day, hour, minute, second);
+  }
+
+  // "10点30分", "10点半", "10点", "10时"
+  final cnMatch = RegExp(r'^(\d{1,2})\s*(?:点|时)\s*(?:(\d{1,2})\s*分?|(半))?$').firstMatch(clean);
+  if (cnMatch != null) {
+    var hour = int.parse(cnMatch.group(1)!);
+    int minute = 0;
+    if (cnMatch.group(3) == '半') {
+      minute = 30;
+    } else if (cnMatch.group(2) != null) {
+      minute = int.parse(cnMatch.group(2)!);
+    }
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour == 12) hour = 0;
+    return DateTime(base.year, base.month, base.day, hour, minute);
+  }
+
+  return null;
+}
+
 

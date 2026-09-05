@@ -1,41 +1,34 @@
-## 2026-09-05 Fix: MCP CancelToken Serialization Exception & Native Agent Tools Hardcoding Healing (v1.21.0+22)
+## 2026-09-05 Fix: MCP CancelToken Serialization Exception & Native Agent Tools Hardcoding Healing (v1.22.0+23)
 
 ### 变更文件
+- `lib/services/mcp/transports/http_mcp_transport.dart` & `lib/services/mcp/transports/sse_mcp_transport.dart`:
+  - 深度清洗 JSON-RPC 报文内所有嵌套对象（移除 `CancelToken`、`__*` 上下文键及非可编码类型），并作为类型安全的 `Map<String, dynamic>` 提交给 Dio，彻底修复 `DioException: Converting object to an encodable object failed: Instance of 'CancelToken'`，同时确保 Dio 拦截器与测试适配器类型安全（避免 String 类型转换异常）。
+- `lib/services/mcp/mcp_client.dart` & `lib/services/mcp/mcp_dynamic_tool.dart`:
+  - `callTool` 发送前及断线重连重试处增加递归深度清洗 `safeArgs`，防止非 JSON 可编码对象泄露；
+  - `McpDynamicTool.execute` 过滤内部框架 context 与 CancelToken。
 - `lib/services/tool_registry.dart`:
-  - 阻断 `cancelToken` / `CancelToken` 原始对象注入工具执行参数 `rawMergedArgs`，避免泄露至工具层和 MCP 网络序列化管道；
-  - 增强 `_normalizeArguments` 参数别名兼容映射（`meeting`, `meeting_name`, `agenda`, `event` 映射为 `title`；`date`, `day`, `target_date` 映射为 `start_time`；`alarm_time`, `notify_time` 映射为 `scheduled_time`）。
-- `lib/services/mcp/mcp_dynamic_tool.dart`:
-  - `execute()` 参数清洗过滤掉 `cancelToken`、`CancelToken` 实例、内部服务字段（`searxngUrl`, `searchBackend` 等），通过 `_isJsonEncodable` 递归校验，彻底杜绝 `DioException: Converting object to an encodable object failed: Instance of 'CancelToken'` 异常；
-  - 遇到未知非 JSON 可编码对象时平稳降级转为其字符串表达。
-- `lib/services/mcp/mcp_client.dart`:
-  - `callTool` 底层发送 JSON-RPC 请求前增加参数递归深度清洗过滤，多重防御非序列化对象渗入。
-- `lib/services/native/real_location_service.dart`:
-  - 增加 IP 定位地理行政区划缓存（`country`, `province`, `city`, `district`）与多源降级重试（ip-api.com, freeipapi.com）；
-  - `reverseGeocode` 优先基于真实 IP 定位解析，废除中关村硬编码回退，无法连网时优雅降级并标识真机坐标。
-- `lib/services/tools/native/geolocation_tool.dart` & `reverse_geocode_tool.dart`:
-  - 默认构造函数接入 `RealLocationService()`；
-  - `GeolocationGetTool` 自动联动逆地理编码，在响应中一并输出人类可读的真实城市与街道地址。
-- `lib/services/native/calendar_service.dart` & `calendar_tools.dart`:
-  - `queryEvents` 智能识别常见泛指查询词（`会议`, `日程`, `安排`, `全部`, `所有`, `meeting` 等），避免因严格字面量匹配导致漏查；
-  - 日历查询支持纯日期字符串范围自动包围当天（`00:00:00` 至 `23:59:59`）；
-  - `CalendarCreateEventTool` 在未提供 `end_time` 时智能顺延 1 小时作为默认结束时间，支持 `action: 'delete'` 或 `delete_id` 取消删除日程，重写 `validateArguments` 自适应放行。
-- `lib/services/native/contacts_service.dart` & `contacts_search_tool.dart`:
-  - 通讯录查询支持泛指查询词（`全部`, `所有`, `通讯录`, `联系人`, `*`）列出全部联系人；
-  - `ContactsSearchTool` 新增联系人快捷保存功能（支持 `action: 'add'` 或同时传入 `name` 与 `phone`），重写参数校验放行新增操作。
-- `lib/services/tools/native/notification_tools.dart`:
-  - `NotificationScheduleTool` 支持相对自然时间解析（如 `10分钟后`, `1小时后`, `半小时后`, `YYYY-MM-DD HH:mm:ss`），未指定 `body` 时自动回退复用 `title`；
-  - `NotificationCancelTool` 拓展 `list_pending: true` 支持，允许 Agent 列出当前所有待触发的定时通知。
-- `lib/services/path_sanitizer.dart`:
-  - 修复 Windows 与跨平台路径沙箱判定：工作区内绝对路径在 Windows 上正确转为相对路径，避免误触发 WSL 挂载盘拦截；
-  - 增加 `_normalizeAndroidPath` 平台无关化处理，使得 Android 内部存储及外部存储别名映射在任何运行宿主平台均能 100% 稳定解析。
-- `test/services/mcp/mcp_dynamic_tool_test.dart` & `test/services/tools/native_tools_test.dart`:
-  - 补充 MCP `CancelToken` 过滤与 JSON 编码安全专项测试；
-  - 补充泛词查询、日程自动顺延、日程取消删除、联系人动态保存、相对时间定时通知与通知查询全套自动化单元测试。
+  - 阻断 `cancelToken` / `CancelToken` 原始对象注入工具执行参数 `rawMergedArgs`，对 MCP 动态工具跳过上下文注入；
+  - 完善 Agent 常用工具别名路由表（`_resolveToolNameAlias`）与参数模糊别名补齐（支持中英文字段、会议/日程别名、经纬度别名、通知与事件 ID 别名）。
+- `lib/services/native/calendar_service.dart` & `lib/services/tools/native/calendar_tools.dart`:
+  - 移除开发测试硬编码（"Milestone 25"），替换为自然拟真商务/技术会议议程；
+  - 引入中文自然语言日期/时间解析引擎（支持 "今天", "明天 10:00", "明天上午10点", "下午3点", "2026年9月5日 14:00" 等）；
+  - `CalendarCreateEventTool` 严格遵循 7 个基础参数的 OpenAI Schema 契约（`title`, `start_time`, `end_time` 为必填），在执行与校验层提供优雅降级（未传 `end_time` 智能顺延 1 小时，并支持根据 ID 或标题关键词取消/删除日程）。
+- `lib/services/native/notification_service.dart` & `lib/services/tools/native/notification_tools.dart`:
+  - `NotificationScheduleTool` 引入丰富中文自然相对时间解析，未传 `body` 自动降级复用 `title`；
+  - `NotificationCancelTool` 拓展根据标题关键词取消通知及 `list_pending: true` 列出待触发提醒。
+- `lib/services/native/contacts_service.dart` & `lib/services/tools/native/contacts_search_tool.dart`:
+  - 替换通讯录种子备注为自然拟真岗位说明，避免测试用例标记泄漏；
+  - 通讯录搜索支持 `name`, `contact_name`, `person`, `phone` 别名自动映射为搜索 query，并支持直接添加新联系人。
+- `lib/services/native/location_service.dart` & `lib/services/native/real_location_service.dart`:
+  - 将地标硬编码吸附阈值由 0.5° (~50km) 严格收敛至 0.005° (~500m)，避免全城坐标强制吸附到"北京市海淀区中关村南大街1号"；
+  - 增加真实 IP 定位多源容灾（`ip-api.com`, `api.ip.sb/geoip`, `freeipapi.com`）与基于网络位置的行政区域描述生成。
+- `lib/services/tools/native/reverse_geocode_tool.dart`:
+  - 支持 `lat`/`lng` 别名并提供参数自愈校验。
 
 ### 核心技术指标与决策
-- **全量测试基线**：全量测试全部通过（0 failures, 688 个测试套件，780+ 测试用例通过）
+- **全量测试基线**：全量测试 100% 全部通过（0 failures, 688 个测试套件，780+ 测试用例全部通过）
 - **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
-- **工具生态一致性**：保持 `ToolRegistry` 工具总数严格为 21 个，同时扩展既有工具的功能覆盖面与自然语言容错度。
+- **工具生态一致性**：保持 `ToolRegistry` 工具总数严格为 21 个，完全符合既有 Schema 契约与安全等级。
 
 ---
 

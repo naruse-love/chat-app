@@ -90,7 +90,53 @@ class RealLocationService extends InMemoryLocationService {
       developer.log('ip-api.com lookup failed: $e', name: 'RealLocationService');
     }
 
-    // 2. Secondary: freeipapi.com
+    // 2. Secondary: api.ip.sb/geoip
+    try {
+      final response = await _dio.get('https://api.ip.sb/geoip');
+      if (response.statusCode == 200 && response.data is Map) {
+        final data = response.data as Map<String, dynamic>;
+        final lat = (data['latitude'] as num?)?.toDouble();
+        final lon = (data['longitude'] as num?)?.toDouble();
+        if (lat != null && lon != null) {
+          final country = data['country']?.toString() ?? '中国';
+          final countryCode = data['country_code']?.toString() ?? 'CN';
+          final province = data['region']?.toString() ?? '';
+          final city = data['city']?.toString() ?? '';
+          final zip = data['postal_code']?.toString();
+
+          final parts = [country, province, city].where((s) => s.isNotEmpty).toList();
+          final formatted = parts.isNotEmpty ? parts.join(' ') : '经纬度 ($lat, $lon) 位置';
+
+          _cachedAddress = GeoAddress(
+            formattedAddress: formatted,
+            country: country.isNotEmpty ? country : '中国',
+            province: province.isNotEmpty ? province : (city.isNotEmpty ? city : '未知省份'),
+            city: city.isNotEmpty ? city : (province.isNotEmpty ? province : '未知城市'),
+            district: city,
+            street: '当前网络接入点',
+            postalCode: (zip != null && zip.isNotEmpty) ? zip : null,
+            countryCode: countryCode,
+            latitude: lat,
+            longitude: lon,
+          );
+
+          final coords = GeoCoordinates(
+            latitude: lat,
+            longitude: lon,
+            altitude: 0.0,
+            accuracy: 1200.0,
+            timestamp: DateTime.now(),
+          );
+          _cachedCoordinates = coords;
+          super.setCurrentCoordinates(coords);
+          return coords;
+        }
+      }
+    } catch (e) {
+      developer.log('api.ip.sb lookup failed: $e', name: 'RealLocationService');
+    }
+
+    // 3. Tertiary: freeipapi.com
     try {
       final response = await _dio.get('https://freeipapi.com/api/json');
       if (response.statusCode == 200 && response.data is Map) {

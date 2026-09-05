@@ -39,7 +39,7 @@ class InMemoryContactsService implements IContactsService {
         company: '未来科技',
         jobTitle: '技术总监',
         address: '北京市海淀区中关村南大街1号',
-        note: '核心业务负责人，微信同手机号，负责整体技术架构',
+        note: '技术总监，负责团队研发管理',
       ),
       ContactItem(
         id: 'contact-2',
@@ -49,7 +49,7 @@ class InMemoryContactsService implements IContactsService {
         company: '极客软件',
         jobTitle: '产品负责人',
         address: '上海市浦东新区张江高科技园区',
-        note: '负责Agent工具平台与移动端交互设计',
+        note: '产品总监，负责产品体验与业务需求规划',
       ),
       ContactItem(
         id: 'contact-3',
@@ -59,7 +59,7 @@ class InMemoryContactsService implements IContactsService {
         company: '创新工场',
         jobTitle: '投资总监',
         address: '深圳市南山区科技园',
-        note: '关注移动端AI与大模型应用生态',
+        note: '投资总监，关注前沿科技生态',
       ),
       ContactItem(
         id: 'contact-4',
@@ -69,7 +69,7 @@ class InMemoryContactsService implements IContactsService {
         company: '未来科技',
         jobTitle: '高级前端架构师',
         address: '北京市朝阳区望京SOHO',
-        note: '精通Flutter与原生通道通信',
+        note: '高级前端架构师，负责客户端工程',
       ),
       ContactItem(
         id: 'contact-5',
@@ -79,7 +79,7 @@ class InMemoryContactsService implements IContactsService {
         company: '华云科技',
         jobTitle: '基础设施VP',
         address: '北京市海淀区上地十街',
-        note: '机房与服务器运维核心对接人',
+        note: '基础设施负责人，负责服务器与系统高可用',
       ),
       ContactItem(
         id: 'contact-6',
@@ -89,7 +89,7 @@ class InMemoryContactsService implements IContactsService {
         company: '极客软件',
         jobTitle: '算法研究员',
         address: '杭州市西湖区文三路',
-        note: '负责大模型微调与RAG调优',
+        note: '算法研究员，负责模型与算法研究',
       ),
       ContactItem(
         id: 'contact-7',

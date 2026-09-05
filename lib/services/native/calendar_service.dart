@@ -59,7 +59,7 @@ class InMemoryCalendarService implements ICalendarService {
         startTime: today.add(const Duration(hours: 10)),
         endTime: today.add(const Duration(hours: 11, minutes: 30)),
         location: '3号会议室 (线上腾讯会议同步)',
-        description: '讨论 Milestone 25 原生能力与隐私脱敏工具生态进展',
+        description: '讨论本周工作进展、业务指标与下周协作规划',
         reminderMinutes: 15,
       ),
       CalendarEvent(
@@ -68,7 +68,7 @@ class InMemoryCalendarService implements ICalendarService {
         startTime: today.add(const Duration(hours: 14, minutes: 30)),
         endTime: today.add(const Duration(hours: 16)),
         location: '总部A座 801 大会议室',
-        description: '评审 ToolRegistry、HITL 确认机制与多模态扩展方案',
+        description: '评审技术架构方案、系统高可用机制与功能演进路线',
         reminderMinutes: 30,
       ),
       CalendarEvent(
@@ -77,7 +77,7 @@ class InMemoryCalendarService implements ICalendarService {
         startTime: today.add(const Duration(days: 1, hours: 9, minutes: 30)),
         endTime: today.add(const Duration(days: 1, hours: 11, minutes: 30)),
         location: '创新工场 报告厅',
-        description: '对齐 Q3/Q4 产品核心交付目标',
+        description: '对齐季度业务目标、关键里程碑与重点项目交付计划',
         reminderMinutes: 20,
       ),
       CalendarEvent(
@@ -86,7 +86,7 @@ class InMemoryCalendarService implements ICalendarService {
         startTime: today.add(const Duration(days: 2, hours: 15)),
         endTime: today.add(const Duration(days: 2, hours: 17)),
         location: '线上直播间 / 极客空间',
-        description: '分享 Flutter 3.x 隔离沙箱与原生特权交互最佳实践',
+        description: '分享跨平台客户端开发与性能调优最佳实践',
         reminderMinutes: 10,
       ),
     ];

@@ -181,13 +181,13 @@ class CalendarCreateEventTool extends Tool {
         ToolParameter(
           name: 'start_time',
           type: 'string',
-          description: '日程起始时间 (ISO 8601 格式，如 "2026-08-30T14:00:00Z")',
+          description: '日程起始时间 (ISO 8601 格式，或自然时间如 "明天 10:00", "今天下午3点")',
           required: true,
         ),
         ToolParameter(
           name: 'end_time',
           type: 'string',
-          description: '日程结束时间 (ISO 8601 格式，如 "2026-08-30T15:30:00Z")',
+          description: '日程结束时间 (ISO 8601 格式，如 "2026-09-05T11:00:00Z" 或自然时间)',
           required: true,
         ),
         ToolParameter(
@@ -224,8 +224,9 @@ class CalendarCreateEventTool extends Tool {
     final deleteId = (arguments['delete_id'] ?? arguments['event_id'])?.toString().trim();
     if (action == 'delete' || action == 'cancel' || (deleteId != null && deleteId.isNotEmpty)) {
       final idToRemove = (deleteId != null && deleteId.isNotEmpty) ? deleteId : arguments['id']?.toString().trim();
-      if (idToRemove == null || idToRemove.isEmpty) {
-        return "取消或删除日程必须提供日程 ID (event_id)";
+      final titleToRemove = arguments['title']?.toString().trim() ?? arguments['query']?.toString().trim();
+      if ((idToRemove == null || idToRemove.isEmpty) && (titleToRemove == null || titleToRemove.isEmpty)) {
+        return "取消或删除日程请提供日程 ID (event_id) 或标题关键词 (title)";
       }
       return null;
     }
@@ -280,6 +281,30 @@ class CalendarCreateEventTool extends Tool {
               toolName: name,
               content: 'ℹ️ **未找到待删除日程**：ID 为 `$idToRemove` 的日程不存在。',
               rawData: {'eventId': idToRemove, 'deleted': false, 'found': false},
+              executionDuration: stopwatch.elapsed,
+            );
+          }
+        }
+
+        final titleKeyword = arguments['title']?.toString().trim() ?? arguments['query']?.toString().trim();
+        if (titleKeyword != null && titleKeyword.isNotEmpty) {
+          final matched = await calendarService.queryEvents(query: titleKeyword);
+          if (matched.isNotEmpty) {
+            final target = matched.first;
+            await calendarService.deleteEvent(target.id);
+            stopwatch.stop();
+            return ToolExecutionResult.success(
+              toolName: name,
+              content: '✅ **日程已成功取消/删除**: "${target.title}" (事件ID: `${target.id}`)',
+              rawData: {'eventId': target.id, 'title': target.title, 'deleted': true},
+              executionDuration: stopwatch.elapsed,
+            );
+          } else {
+            stopwatch.stop();
+            return ToolExecutionResult.success(
+              toolName: name,
+              content: 'ℹ️ **未找到待删除日程**：未找到与 "$titleKeyword" 相关的日程安排。',
+              rawData: {'query': titleKeyword, 'deleted': false, 'found': false},
               executionDuration: stopwatch.elapsed,
             );
           }
@@ -399,13 +424,109 @@ class CalendarCreateEventTool extends Tool {
 
 bool _isDateOnly(String input) {
   final trimmed = input.trim();
-  return RegExp(r'^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$').hasMatch(trimmed);
+  return RegExp(r'^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$').hasMatch(trimmed) ||
+      RegExp(r'^(?:今天|今日|明天|次日|后天|大后天|昨天|today|tomorrow)$', caseSensitive: false).hasMatch(trimmed) ||
+      RegExp(r'^\d{4}年\d{1,2}月\d{1,2}[日号]?$').hasMatch(trimmed);
 }
 
 DateTime? _parseFlexibleDateTime(String input, {bool isEnd = false}) {
   final trimmed = input.trim();
   if (trimmed.isEmpty) return null;
 
+  final now = DateTime.now();
+
+  // 1. Relative duration: "10分钟后", "1小时后", "半小时后"
+  if (trimmed == '半小时后' || trimmed == '30分钟后') {
+    return now.add(const Duration(minutes: 30));
+  }
+  final minDurMatch = RegExp(r'^(\d+)\s*(?:分钟|分|mins?|minutes?)(?:后)?$', caseSensitive: false).firstMatch(trimmed);
+  if (minDurMatch != null) {
+    final m = int.tryParse(minDurMatch.group(1)!);
+    if (m != null) return now.add(Duration(minutes: m));
+  }
+  final hrDurMatch = RegExp(r'^(\d+)\s*(?:小时|点钟|hours?|hrs?)(?:后)?$', caseSensitive: false).firstMatch(trimmed);
+  if (hrDurMatch != null) {
+    final h = int.tryParse(hrDurMatch.group(1)!);
+    if (h != null) return now.add(Duration(hours: h));
+  }
+
+  // 2. Relative date keyword + optional time (e.g. "明天 10:00", "明天上午10点", "今天", "后天下午3点半")
+  DateTime? baseDate;
+  String remainingTimeStr = '';
+
+  final relDateMatch = RegExp(
+    r'^(今天|今日|明天|次日|后天|大后天|昨天|today|tomorrow)\s*(.*)$',
+    caseSensitive: false,
+  ).firstMatch(trimmed);
+
+  if (relDateMatch != null) {
+    final kw = relDateMatch.group(1)!.toLowerCase();
+    remainingTimeStr = relDateMatch.group(2)?.trim() ?? '';
+
+    switch (kw) {
+      case '今天':
+      case '今日':
+      case 'today':
+        baseDate = DateTime(now.year, now.month, now.day);
+        break;
+      case '明天':
+      case '次日':
+      case 'tomorrow':
+        baseDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+        break;
+      case '后天':
+        baseDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 2));
+        break;
+      case '大后天':
+        baseDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 3));
+        break;
+      case '昨天':
+      case 'yesterday':
+        baseDate = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
+        break;
+    }
+
+    if (baseDate != null) {
+      if (remainingTimeStr.isEmpty) {
+        return isEnd
+            ? DateTime(baseDate.year, baseDate.month, baseDate.day, 23, 59, 59, 999)
+            : DateTime(baseDate.year, baseDate.month, baseDate.day, 0, 0, 0);
+      }
+      final parsedTime = _parseTimeOnDate(baseDate, remainingTimeStr);
+      if (parsedTime != null) return parsedTime;
+    }
+  }
+
+  // 3. Chinese date with 年月日 (e.g. "2026年9月5日 14:00" or "9月5日 10:00")
+  final cnDateFullMatch = RegExp(r'^(\d{4})年(\d{1,2})月(\d{1,2})[日号]?\s*(.*)$').firstMatch(trimmed);
+  if (cnDateFullMatch != null) {
+    final y = int.parse(cnDateFullMatch.group(1)!);
+    final m = int.parse(cnDateFullMatch.group(2)!);
+    final d = int.parse(cnDateFullMatch.group(3)!);
+    final rest = cnDateFullMatch.group(4)?.trim() ?? '';
+    final base = DateTime(y, m, d);
+    if (rest.isEmpty) {
+      return isEnd ? DateTime(y, m, d, 23, 59, 59, 999) : base;
+    }
+    final parsedTime = _parseTimeOnDate(base, rest);
+    if (parsedTime != null) return parsedTime;
+  }
+
+  final cnDateShortMatch = RegExp(r'^(\d{1,2})月(\d{1,2})[日号]?\s*(.*)$').firstMatch(trimmed);
+  if (cnDateShortMatch != null) {
+    final y = now.year;
+    final m = int.parse(cnDateShortMatch.group(1)!);
+    final d = int.parse(cnDateShortMatch.group(2)!);
+    final rest = cnDateShortMatch.group(3)?.trim() ?? '';
+    final base = DateTime(y, m, d);
+    if (rest.isEmpty) {
+      return isEnd ? DateTime(y, m, d, 23, 59, 59, 999) : base;
+    }
+    final parsedTime = _parseTimeOnDate(base, rest);
+    if (parsedTime != null) return parsedTime;
+  }
+
+  // 4. Standard ISO parsing
   final parsed = DateTime.tryParse(trimmed);
   if (parsed != null) {
     if (_isDateOnly(trimmed)) {
@@ -416,8 +537,11 @@ DateTime? _parseFlexibleDateTime(String input, {bool isEnd = false}) {
     return parsed.isUtc ? parsed.toLocal() : parsed;
   }
 
-  // Handle YYYY/MM/DD or YYYY.MM.DD
-  final normalized = trimmed.replaceAll('/', '-').replaceAll('.', '-');
+  // 5. Handle YYYY/MM/DD or YYYY.MM.DD or space delimited datetime
+  var normalized = trimmed.replaceAll('/', '-').replaceAll('.', '-');
+  if (normalized.contains(' ') && !normalized.contains('T')) {
+    normalized = normalized.replaceFirst(' ', 'T');
+  }
   final parsedNorm = DateTime.tryParse(normalized);
   if (parsedNorm != null) {
     if (_isDateOnly(normalized)) {
@@ -427,5 +551,54 @@ DateTime? _parseFlexibleDateTime(String input, {bool isEnd = false}) {
     }
     return parsedNorm.isUtc ? parsedNorm.toLocal() : parsedNorm;
   }
+
+  // 6. Standalone time string (e.g. "14:00", "下午3点", "上午10点半") defaulting to today
+  final standaloneTime = _parseTimeOnDate(DateTime(now.year, now.month, now.day), trimmed);
+  if (standaloneTime != null) {
+    return standaloneTime;
+  }
+
   return null;
 }
+
+DateTime? _parseTimeOnDate(DateTime base, String timeStr) {
+  final s = timeStr.trim();
+  if (s.isEmpty) return null;
+
+  // Check AM/PM indicators
+  final isPm = s.contains('下午') || s.contains('晚上') || s.contains('傍晚') || s.contains('夜间') || s.toLowerCase().contains('pm');
+  final isAm = s.contains('上午') || s.contains('早上') || s.contains('早晨') || s.contains('清晨') || s.toLowerCase().contains('am');
+
+  final cleanTime = s
+      .replaceAll(RegExp(r'(?:上午|下午|早上|早晨|清晨|晚上|傍晚|夜间|am|pm)', caseSensitive: false), '')
+      .trim();
+
+  // Pattern: "14:30" or "14:30:00"
+  final colonMatch = RegExp(r'^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$').firstMatch(cleanTime);
+  if (colonMatch != null) {
+    var hour = int.parse(colonMatch.group(1)!);
+    final minute = int.parse(colonMatch.group(2)!);
+    final second = colonMatch.group(3) != null ? int.parse(colonMatch.group(3)!) : 0;
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour == 12) hour = 0;
+    return DateTime(base.year, base.month, base.day, hour, minute, second);
+  }
+
+  // Pattern: "10点30分", "10点半", "10点", "10时"
+  final cnTimeMatch = RegExp(r'^(\d{1,2})\s*(?:点|时)\s*(?:(\d{1,2})\s*分?|(半))?$').firstMatch(cleanTime);
+  if (cnTimeMatch != null) {
+    var hour = int.parse(cnTimeMatch.group(1)!);
+    int minute = 0;
+    if (cnTimeMatch.group(3) == '半') {
+      minute = 30;
+    } else if (cnTimeMatch.group(2) != null) {
+      minute = int.parse(cnTimeMatch.group(2)!);
+    }
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour == 12) hour = 0;
+    return DateTime(base.year, base.month, base.day, hour, minute);
+  }
+
+  return null;
+}
+

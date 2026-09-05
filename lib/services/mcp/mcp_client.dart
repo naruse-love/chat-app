@@ -179,12 +179,7 @@ class McpClient {
       }
     }
 
-    final safeArgs = Map<String, dynamic>.fromEntries(
-      arguments.entries.where((e) =>
-          !e.key.startsWith('__') &&
-          e.key != 'cancelToken' &&
-          !e.value.runtimeType.toString().contains('CancelToken')),
-    );
+    final safeArgs = _deepSanitizeArgs(arguments);
 
     try {
       dynamic rawResponse;
@@ -204,7 +199,7 @@ class McpClient {
             'tools/call',
             {
               'name': name,
-              'arguments': arguments,
+              'arguments': safeArgs,
             },
             timeout ?? defaultTimeout,
           );
@@ -363,4 +358,50 @@ class McpClient {
 
   /// 兼容释放接口
   Future<void> dispose() => close();
+
+  static Map<String, dynamic> _deepSanitizeArgs(Map<String, dynamic> raw) {
+    final clean = <String, dynamic>{};
+    for (final entry in raw.entries) {
+      final key = entry.key;
+      if (key.startsWith('__') ||
+          key == 'cancelToken' ||
+          entry.value.runtimeType.toString().contains('CancelToken')) {
+        continue;
+      }
+      final sanitizedVal = _deepSanitizeVal(entry.value);
+      if (sanitizedVal != null) {
+        clean[key] = sanitizedVal;
+      }
+    }
+    return clean;
+  }
+
+  static dynamic _deepSanitizeVal(dynamic val) {
+    if (val == null || val is num || val is String || val is bool) {
+      return val;
+    }
+    if (val.runtimeType.toString().contains('CancelToken')) {
+      return null;
+    }
+    if (val is List) {
+      return val.map(_deepSanitizeVal).where((e) => e != null).toList();
+    }
+    if (val is Map) {
+      final mapResult = <String, dynamic>{};
+      for (final e in val.entries) {
+        final k = e.key.toString();
+        if (k.startsWith('__') ||
+            k == 'cancelToken' ||
+            e.value.runtimeType.toString().contains('CancelToken')) {
+          continue;
+        }
+        final sanitized = _deepSanitizeVal(e.value);
+        if (sanitized != null) {
+          mapResult[k] = sanitized;
+        }
+      }
+      return mapResult;
+    }
+    return null;
+  }
 }

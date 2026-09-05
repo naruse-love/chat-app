@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../../../models/mcp/mcp_transport_type.dart';
@@ -90,12 +90,15 @@ class HttpMcpTransport implements McpTransport {
       if (headers != null) ...headers!,
     };
 
+    final safeMessage = _deepSanitizeForJson(message) as Map<String, dynamic>;
+
     try {
       final response = await _dio.post(
         uri.toString(),
-        data: message,
+        data: safeMessage,
         options: Options(
           headers: postHeaders,
+          contentType: 'application/json',
           responseType: ResponseType.plain, // 允许灵活处理纯文本/JSON/SSE
           validateStatus: (status) => status != null && status < 500, // 接收 4xx 里的 JSON-RPC 错误
         ),
@@ -177,5 +180,42 @@ class HttpMcpTransport implements McpTransport {
     _cancelToken?.cancel('Transport closed');
     await _statusController.close();
     await _messageController.close();
+  }
+
+  static dynamic _deepSanitizeForJson(dynamic val) {
+    if (val == null || val is num || val is String || val is bool) {
+      return val;
+    }
+    if (val.runtimeType.toString().contains('CancelToken')) {
+      return null;
+    }
+    if (val is List) {
+      return val
+          .map(_deepSanitizeForJson)
+          .where((e) => e != null)
+          .toList();
+    }
+    if (val is Map) {
+      final result = <String, dynamic>{};
+      for (final entry in val.entries) {
+        final k = entry.key.toString();
+        if (k.startsWith('__') ||
+            k == 'cancelToken' ||
+            entry.value.runtimeType.toString().contains('CancelToken')) {
+          continue;
+        }
+        final cleaned = _deepSanitizeForJson(entry.value);
+        if (cleaned != null) {
+          result[k] = cleaned;
+        }
+      }
+      return result;
+    }
+    try {
+      final enc = jsonEncode(val);
+      return jsonDecode(enc);
+    } catch (_) {
+      return val.toString();
+    }
   }
 }
