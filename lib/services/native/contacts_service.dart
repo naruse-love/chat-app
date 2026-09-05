@@ -121,7 +121,8 @@ class InMemoryContactsService implements IContactsService {
   @override
   Future<List<ContactItem>> searchContacts(String query, {int limit = 20}) async {
     final cleanQuery = query.trim().toLowerCase();
-    if (cleanQuery.isEmpty) {
+    const genericKeywords = {'全部', '所有', '通讯录', '联系人', 'all', '*'};
+    if (cleanQuery.isEmpty || genericKeywords.contains(cleanQuery)) {
       return getAllContacts(limit: limit);
     }
 

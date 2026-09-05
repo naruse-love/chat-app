@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:chat/models/mcp/mcp_tool_info.dart';
 import 'package:chat/models/mcp/mcp_transport_type.dart';
 import 'package:chat/models/tool/tool_security_level.dart';
@@ -6,6 +7,7 @@ import 'package:chat/services/mcp/mcp_client.dart';
 import 'package:chat/services/mcp/mcp_dynamic_tool.dart';
 import 'package:chat/services/mcp/transports/mcp_transport.dart';
 import 'package:chat/services/tool_registry.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _MockMcpTransport implements McpTransport {
@@ -394,6 +396,70 @@ void main() {
       final removed = registry.unregister(dynamicTool.name);
       expect(removed, isTrue);
       expect(registry.hasTool(dynamicTool.name), isFalse);
+    });
+
+    test('filters CancelToken and context framework parameters from MCP arguments safely', () async {
+      final registry = ToolRegistry();
+      final dynamicTool = McpDynamicTool(
+        client: client,
+        serverId: 'srv-remote',
+        serverName: 'Remote Server',
+        toolInfo: const McpToolInfo(
+          name: 'query_db',
+          description: 'Query database',
+          inputSchema: {
+            'type': 'object',
+            'properties': {
+              'sql': {'type': 'string'},
+            },
+            'required': ['sql'],
+          },
+        ),
+      );
+      registry.register(dynamicTool);
+
+      final cancelToken = CancelToken();
+      final execFuture = registry.execute(
+        dynamicTool.name,
+        {'sql': 'SELECT * FROM users;'},
+        context: {
+          'cancelToken': cancelToken,
+          '__cancelToken': cancelToken,
+          'searxngUrl': 'http://localhost:8888',
+          'searchBackend': 'searxng',
+          'sessionId': 'session-xyz',
+        },
+      );
+
+      expect(transport.sentMessages.length, 1);
+      final sent = transport.sentMessages.first;
+      expect(sent['params']['name'], 'query_db');
+      final sentArgs = sent['params']['arguments'] as Map<String, dynamic>;
+      expect(sentArgs['sql'], 'SELECT * FROM users;');
+      // CancelToken and internal context keys must not be present in arguments
+      expect(sentArgs.containsKey('cancelToken'), isFalse);
+      expect(sentArgs.containsKey('__cancelToken'), isFalse);
+      expect(sentArgs.containsKey('searxngUrl'), isFalse);
+      expect(sentArgs.containsKey('searchBackend'), isFalse);
+
+      // Verify that json.encode succeeds without throwing "Converting object to an encodable object failed"
+      final encoded = json.encode(sent);
+      expect(encoded, isNotEmpty);
+      expect(encoded, isNot(contains('CancelToken')));
+
+      transport.receiveFromServer({
+        'jsonrpc': '2.0',
+        'id': sent['id'],
+        'result': {
+          'content': [
+            {'type': 'text', 'text': 'Found 3 records'}
+          ],
+        },
+      });
+
+      final res = await execFuture;
+      expect(res.success, isTrue);
+      expect(res.content, 'Found 3 records');
     });
   });
 }

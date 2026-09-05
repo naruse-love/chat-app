@@ -179,6 +179,13 @@ class McpClient {
       }
     }
 
+    final safeArgs = Map<String, dynamic>.fromEntries(
+      arguments.entries.where((e) =>
+          !e.key.startsWith('__') &&
+          e.key != 'cancelToken' &&
+          !e.value.runtimeType.toString().contains('CancelToken')),
+    );
+
     try {
       dynamic rawResponse;
       try {
@@ -186,7 +193,7 @@ class McpClient {
           'tools/call',
           {
             'name': name,
-            'arguments': arguments,
+            'arguments': safeArgs,
           },
           timeout ?? defaultTimeout,
         );

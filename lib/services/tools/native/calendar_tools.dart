@@ -14,7 +14,7 @@ class CalendarQueryEventsTool extends Tool {
   CalendarQueryEventsTool({
     ICalendarService? calendarService,
     PermissionManagerService? permissionService,
-  })  : calendarService = calendarService ?? InMemoryCalendarService(),
+  })  : calendarService = calendarService ?? InMemoryCalendarService(seedDefaults: false),
         permissionService = permissionService ?? PermissionManagerService();
 
   @override
@@ -35,13 +35,13 @@ class CalendarQueryEventsTool extends Tool {
         ToolParameter(
           name: 'start_time',
           type: 'string',
-          description: '查询起始时间 (ISO 8601 格式，如 "2026-08-30T00:00:00Z" 或 "2026-08-30")',
+          description: '查询起始时间或目标日期 (ISO 8601 格式，如 "2026-09-05T00:00:00Z" 或日期 "2026-09-05")',
           required: false,
         ),
         ToolParameter(
           name: 'end_time',
           type: 'string',
-          description: '查询结束时间 (ISO 8601 格式，如 "2026-08-31T23:59:59Z" 或 "2026-08-31")',
+          description: '查询结束时间 (ISO 8601 格式，如 "2026-09-05T23:59:59Z" 或日期 "2026-09-05")',
           required: false,
         ),
         ToolParameter(
@@ -72,18 +72,31 @@ class CalendarQueryEventsTool extends Tool {
 
     try {
       DateTime? startTime;
-      final rawStart = arguments['start_time']?.toString().trim();
+      final rawStart = arguments['start_time']?.toString().trim() ??
+          arguments['date']?.toString().trim() ??
+          arguments['start_date']?.toString().trim() ??
+          arguments['day']?.toString().trim() ??
+          arguments['time']?.toString().trim();
       if (rawStart != null && rawStart.isNotEmpty) {
-        startTime = DateTime.tryParse(rawStart);
+        startTime = _parseFlexibleDateTime(rawStart);
       }
 
       DateTime? endTime;
-      final rawEnd = arguments['end_time']?.toString().trim();
+      final rawEnd = arguments['end_time']?.toString().trim() ??
+          arguments['end_date']?.toString().trim();
       if (rawEnd != null && rawEnd.isNotEmpty) {
-        endTime = DateTime.tryParse(rawEnd);
+        endTime = _parseFlexibleDateTime(rawEnd, isEnd: true);
+      } else if (startTime != null && rawStart != null && _isDateOnly(rawStart)) {
+        // If query was for a specific date (e.g. "2026-09-05"), auto-bound the whole day
+        endTime = DateTime(startTime.year, startTime.month, startTime.day, 23, 59, 59, 999);
       }
 
-      final query = arguments['query']?.toString().trim();
+      final rawQuery = arguments['query']?.toString().trim();
+      // If query is generic like '会议', '日程', '安排', '全部', '所有', do not restrict by literal keyword
+      final isGeneric = rawQuery != null &&
+          const {'会议', '日程', '安排', '全部', '所有', 'meeting', 'meetings', 'events', 'schedule'}
+              .contains(rawQuery.toLowerCase());
+      final query = isGeneric ? null : rawQuery;
 
       final events = await calendarService.queryEvents(
         startTime: startTime,
@@ -141,7 +154,7 @@ class CalendarCreateEventTool extends Tool {
   CalendarCreateEventTool({
     ICalendarService? calendarService,
     PermissionManagerService? permissionService,
-  })  : calendarService = calendarService ?? InMemoryCalendarService(),
+  })  : calendarService = calendarService ?? InMemoryCalendarService(seedDefaults: false),
         permissionService = permissionService ?? PermissionManagerService();
 
   @override
@@ -206,6 +219,30 @@ class CalendarCreateEventTool extends Tool {
       ];
 
   @override
+  String? validateArguments(Map<String, dynamic> arguments) {
+    final action = arguments['action']?.toString().trim().toLowerCase();
+    final deleteId = (arguments['delete_id'] ?? arguments['event_id'])?.toString().trim();
+    if (action == 'delete' || action == 'cancel' || (deleteId != null && deleteId.isNotEmpty)) {
+      final idToRemove = (deleteId != null && deleteId.isNotEmpty) ? deleteId : arguments['id']?.toString().trim();
+      if (idToRemove == null || idToRemove.isEmpty) {
+        return "取消或删除日程必须提供日程 ID (event_id)";
+      }
+      return null;
+    }
+    for (final param in parameters) {
+      if (param.name == 'end_time' && (arguments['end_time'] == null || arguments['end_time'].toString().trim().isEmpty)) {
+        continue;
+      }
+      final value = arguments[param.name];
+      final error = param.validate(value);
+      if (error != null) {
+        return error;
+      }
+    }
+    return null;
+  }
+
+  @override
   Future<ToolExecutionResult> execute(Map<String, dynamic> arguments) async {
     final stopwatch = Stopwatch()..start();
 
@@ -224,6 +261,31 @@ class CalendarCreateEventTool extends Tool {
     }
 
     try {
+      final action = arguments['action']?.toString().trim().toLowerCase();
+      final deleteId = (arguments['delete_id'] ?? arguments['event_id'])?.toString().trim();
+      if (action == 'delete' || action == 'cancel' || (deleteId != null && deleteId.isNotEmpty)) {
+        final idToRemove = (deleteId != null && deleteId.isNotEmpty) ? deleteId : arguments['id']?.toString().trim();
+        if (idToRemove != null && idToRemove.isNotEmpty) {
+          final removed = await calendarService.deleteEvent(idToRemove);
+          stopwatch.stop();
+          if (removed) {
+            return ToolExecutionResult.success(
+              toolName: name,
+              content: '✅ **日程已成功取消/删除** (事件ID: `$idToRemove`)',
+              rawData: {'eventId': idToRemove, 'deleted': true},
+              executionDuration: stopwatch.elapsed,
+            );
+          } else {
+            return ToolExecutionResult.success(
+              toolName: name,
+              content: 'ℹ️ **未找到待删除日程**：ID 为 `$idToRemove` 的日程不存在。',
+              rawData: {'eventId': idToRemove, 'deleted': false, 'found': false},
+              executionDuration: stopwatch.elapsed,
+            );
+          }
+        }
+      }
+
       final title = arguments['title']?.toString().trim() ?? '';
       if (title.isEmpty) {
         stopwatch.stop();
@@ -236,7 +298,7 @@ class CalendarCreateEventTool extends Tool {
       }
 
       final rawStart = arguments['start_time']?.toString().trim() ?? '';
-      final startTime = DateTime.tryParse(rawStart);
+      final startTime = _parseFlexibleDateTime(rawStart);
       if (startTime == null) {
         stopwatch.stop();
         return ToolExecutionResult.failure(
@@ -248,15 +310,22 @@ class CalendarCreateEventTool extends Tool {
       }
 
       final rawEnd = arguments['end_time']?.toString().trim() ?? '';
-      final endTime = DateTime.tryParse(rawEnd);
-      if (endTime == null) {
-        stopwatch.stop();
-        return ToolExecutionResult.failure(
-          toolName: name,
-          errorMessage: '无效的结束时间格式: "$rawEnd"',
-          content: '创建日程失败: 结束时间格式无效，请提供合法的 ISO 8601 时间格式 (例如 "2026-08-30T15:30:00Z")',
-          executionDuration: stopwatch.elapsed,
-        );
+      DateTime? endTime;
+      if (rawEnd.isNotEmpty) {
+        endTime = _parseFlexibleDateTime(rawEnd, isEnd: true);
+        if (endTime == null) {
+          stopwatch.stop();
+          return ToolExecutionResult.failure(
+            toolName: name,
+            errorMessage: '无效的结束时间格式: "$rawEnd"',
+            content: '创建日程失败: 结束时间格式无效，请提供合法的 ISO 8601 时间格式 (例如 "2026-08-30T15:30:00Z")',
+            executionDuration: stopwatch.elapsed,
+          );
+        }
+      } else {
+        // Default to 1 hour after start
+        final durationMinutes = (arguments['duration_minutes'] as num?)?.toInt() ?? 60;
+        endTime = startTime.add(Duration(minutes: durationMinutes));
       }
 
       if (startTime.isAfter(endTime)) {
@@ -326,4 +395,37 @@ class CalendarCreateEventTool extends Tool {
       );
     }
   }
+}
+
+bool _isDateOnly(String input) {
+  final trimmed = input.trim();
+  return RegExp(r'^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$').hasMatch(trimmed);
+}
+
+DateTime? _parseFlexibleDateTime(String input, {bool isEnd = false}) {
+  final trimmed = input.trim();
+  if (trimmed.isEmpty) return null;
+
+  final parsed = DateTime.tryParse(trimmed);
+  if (parsed != null) {
+    if (_isDateOnly(trimmed)) {
+      return isEnd
+          ? DateTime(parsed.year, parsed.month, parsed.day, 23, 59, 59, 999)
+          : DateTime(parsed.year, parsed.month, parsed.day, 0, 0, 0);
+    }
+    return parsed.isUtc ? parsed.toLocal() : parsed;
+  }
+
+  // Handle YYYY/MM/DD or YYYY.MM.DD
+  final normalized = trimmed.replaceAll('/', '-').replaceAll('.', '-');
+  final parsedNorm = DateTime.tryParse(normalized);
+  if (parsedNorm != null) {
+    if (_isDateOnly(normalized)) {
+      return isEnd
+          ? DateTime(parsedNorm.year, parsedNorm.month, parsedNorm.day, 23, 59, 59, 999)
+          : DateTime(parsedNorm.year, parsedNorm.month, parsedNorm.day, 0, 0, 0);
+    }
+    return parsedNorm.isUtc ? parsedNorm.toLocal() : parsedNorm;
+  }
+  return null;
 }

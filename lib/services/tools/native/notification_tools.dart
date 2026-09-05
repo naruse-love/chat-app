@@ -102,7 +102,13 @@ class NotificationScheduleTool extends Tool {
         );
       }
 
-      final body = arguments['body']?.toString().trim() ?? '';
+      var body = arguments['body']?.toString().trim();
+      if (body == null) {
+        final fallback = arguments['content']?.toString().trim() ??
+            arguments['message']?.toString().trim() ??
+            arguments['description']?.toString().trim();
+        body = (fallback != null && fallback.isNotEmpty) ? fallback : title;
+      }
       if (body.isEmpty) {
         stopwatch.stop();
         return ToolExecutionResult.failure(
@@ -115,8 +121,9 @@ class NotificationScheduleTool extends Tool {
 
       final rawScheduled = arguments['scheduled_time']?.toString().trim() ??
           arguments['trigger_time']?.toString().trim() ??
+          arguments['time']?.toString().trim() ??
           '';
-      final scheduledTime = DateTime.tryParse(rawScheduled);
+      final scheduledTime = _parseFlexibleScheduledTime(rawScheduled);
       if (scheduledTime == null) {
         stopwatch.stop();
         return ToolExecutionResult.failure(
@@ -210,13 +217,20 @@ class NotificationCancelTool extends Tool {
         ToolParameter(
           name: 'notification_id',
           type: 'string',
-          description: '待取消的通知 ID (与 cancel_all 至少二选一)',
+          description: '待取消的通知 ID (与 cancel_all 或 list_pending 至少选一)',
           required: false,
         ),
         ToolParameter(
           name: 'cancel_all',
           type: 'boolean',
           description: '是否清空取消所有待触发的定时通知 (默认为 false)',
+          required: false,
+          defaultValue: false,
+        ),
+        ToolParameter(
+          name: 'list_pending',
+          type: 'boolean',
+          description: '是否查询并列出当前所有待触发的定时通知 (默认为 false)',
           required: false,
           defaultValue: false,
         ),
@@ -241,6 +255,42 @@ class NotificationCancelTool extends Tool {
     }
 
     try {
+      final listPending = arguments['list_pending'] == true ||
+          arguments['list'] == true ||
+          arguments['query'] == true ||
+          arguments['action'] == 'list';
+
+      if (listPending) {
+        final pending = await notificationService.getPendingNotifications();
+        stopwatch.stop();
+        if (pending.isEmpty) {
+          return ToolExecutionResult.success(
+            toolName: name,
+            content: 'ℹ️ **暂无待触发的系统定时通知**。',
+            rawData: {'count': 0, 'notifications': []},
+            executionDuration: stopwatch.elapsed,
+          );
+        }
+        final buffer = StringBuffer();
+        buffer.writeln('📋 **当前共有 ${pending.length} 条待触发的定时通知**：\n');
+        for (int i = 0; i < pending.length; i++) {
+          final item = pending[i];
+          buffer.writeln('${i + 1}. **${item.title}** (ID: `${item.id}`)');
+          buffer.writeln('   - 内容: ${item.body}');
+          buffer.writeln('   - 预定时间: ${item.scheduledTime.toLocal().toString()}');
+          buffer.writeln('   - 精确闹钟: ${item.isExactAlarm ? "是" : "否"}');
+        }
+        return ToolExecutionResult.success(
+          toolName: name,
+          content: buffer.toString().trimRight(),
+          rawData: {
+            'count': pending.length,
+            'notifications': pending.map((e) => e.toJson()).toList(),
+          },
+          executionDuration: stopwatch.elapsed,
+        );
+      }
+
       final cancelAll = arguments['cancel_all'] as bool? ?? false;
       final rawId = arguments['notification_id']?.toString().trim();
 
@@ -295,3 +345,56 @@ class NotificationCancelTool extends Tool {
     }
   }
 }
+
+DateTime? _parseFlexibleScheduledTime(String input) {
+  final trimmed = input.trim();
+  if (trimmed.isEmpty) return null;
+
+  // 1. Relative time patterns: e.g. "5分钟后", "10分钟", "10m", "10 mins", "1小时后", "2 hours"
+  final minMatch = RegExp(r'^(\d+)\s*(?:分钟|分|mins?|minutes?)(?:后)?$', caseSensitive: false).firstMatch(trimmed);
+  if (minMatch != null) {
+    final mins = int.tryParse(minMatch.group(1)!);
+    if (mins != null) {
+      return DateTime.now().add(Duration(minutes: mins));
+    }
+  }
+
+  final hourMatch = RegExp(r'^(\d+)\s*(?:小时|点钟|hours?|hrs?)(?:后)?$', caseSensitive: false).firstMatch(trimmed);
+  if (hourMatch != null) {
+    final hours = int.tryParse(hourMatch.group(1)!);
+    if (hours != null) {
+      return DateTime.now().add(Duration(hours: hours));
+    }
+  }
+
+  final secMatch = RegExp(r'^(\d+)\s*(?:秒|seconds?|secs?)(?:后)?$', caseSensitive: false).firstMatch(trimmed);
+  if (secMatch != null) {
+    final secs = int.tryParse(secMatch.group(1)!);
+    if (secs != null) {
+      return DateTime.now().add(Duration(seconds: secs));
+    }
+  }
+
+  if (trimmed == '半小时后' || trimmed == '30分钟后') {
+    return DateTime.now().add(const Duration(minutes: 30));
+  }
+
+  // 2. Standard ISO parse
+  final parsed = DateTime.tryParse(trimmed);
+  if (parsed != null) {
+    return parsed.isUtc ? parsed.toLocal() : parsed;
+  }
+
+  // 3. Normalize "YYYY/MM/DD" or "YYYY.MM.DD" or "YYYY-MM-DD HH:mm:ss"
+  var normalized = trimmed.replaceAll('/', '-').replaceAll('.', '-');
+  if (normalized.contains(' ') && !normalized.contains('T')) {
+    normalized = normalized.replaceFirst(' ', 'T');
+  }
+  final parsedNorm = DateTime.tryParse(normalized);
+  if (parsedNorm != null) {
+    return parsedNorm.isUtc ? parsedNorm.toLocal() : parsedNorm;
+  }
+
+  return null;
+}
+

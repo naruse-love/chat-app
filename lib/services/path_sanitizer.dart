@@ -119,12 +119,20 @@ class PathSanitizer {
     return normTarget.startsWith('$normBase$separator') || normTarget.startsWith('$normBase/');
   }
 
+  static String _normalizeAndroidPath(String path) {
+    var s = path.replaceAll('\\', '/');
+    if (RegExp(r'^[a-zA-Z]:/(data|sdcard|storage)/', caseSensitive: false).hasMatch(s)) {
+      s = s.substring(2);
+    }
+    return p.posix.normalize(s).toLowerCase();
+  }
+
   /// Android system path alias checking:
   /// 1. Internal app data: `/data/user/0/<pkg>` <=> `/data/data/<pkg>`
   /// 2. External shared storage: `/sdcard` <=> `/storage/emulated/0` <=> `/storage/self/primary`
   bool _isAndroidPathAlias(String base, String target) {
-    final normBase = p.canonicalize(base).toLowerCase();
-    final normTarget = p.canonicalize(target).toLowerCase();
+    final normBase = _normalizeAndroidPath(base);
+    final normTarget = _normalizeAndroidPath(target);
 
     // 1. /data/user/0 <=> /data/data
     if (normBase.startsWith('/data/user/0/')) {
@@ -182,18 +190,16 @@ class PathSanitizer {
       throw const PathSanitizerException('路径非法: 包含 URL 编码的越权路径序列');
     }
 
-    // 2. WSL and Windows mount check
-    if (isWindowsDriveOrMount(trimmed)) {
-      throw PathSanitizerException('【WSL 环境保护】禁止访问 Windows 挂载盘路径 ("$trimmed")，请在工作区内操作。');
-    }
-
     final normalizedInput = trimmed.replaceAll('\\', '/');
 
-    // 3. If absolute path, check if it resides safely within the workspace
+    // 2. If absolute path, check if it resides safely within the workspace
     if (normalizedInput.startsWith('/') || RegExp(r'^[a-zA-Z]:').hasMatch(normalizedInput)) {
       final canonicalTarget = p.canonicalize(normalizedInput);
       if (_isPathInsideSandbox(canonicalTarget)) {
         return _computeRelativeInsideSandbox(canonicalTarget);
+      }
+      if (normalizedInput.toLowerCase().startsWith('/mnt/') || (!Platform.isWindows && isWindowsDriveOrMount(trimmed))) {
+        throw PathSanitizerException('【WSL 环境保护】禁止访问 Windows 挂载盘路径 ("$trimmed")，请在工作区内操作。');
       }
       throw PathSanitizerException('禁止使用工作区外部绝对路径: "$trimmed"');
     }
@@ -365,27 +371,32 @@ class PathSanitizer {
       final rel = p.relative(canonicalTarget, from: rSandbox).replaceAll('\\', '/');
       return rel.isEmpty ? '.' : rel;
     }
+
+    final normTarget = _normalizeAndroidPath(canonicalTarget);
+    final normCSandbox = _normalizeAndroidPath(cSandbox);
+    final normRSandbox = _normalizeAndroidPath(rSandbox);
+
     if (_isAndroidPathAlias(cSandbox, canonicalTarget) || _isAndroidPathAlias(rSandbox, canonicalTarget)) {
       // 1. /data/data <=> /data/user/0
-      if (canonicalTarget.startsWith('/data/data/')) {
-        final swapped = canonicalTarget.replaceFirst('/data/data/', '/data/user/0/');
-        if (_isSubPathOrSame(cSandbox, swapped)) {
-          final rel = p.relative(swapped, from: cSandbox).replaceAll('\\', '/');
+      if (normTarget.startsWith('/data/data/')) {
+        final swapped = normTarget.replaceFirst('/data/data/', '/data/user/0/');
+        if (_isSubPathOrSame(normCSandbox, swapped)) {
+          final rel = p.posix.relative(swapped, from: normCSandbox);
           return rel.isEmpty ? '.' : rel;
         }
-        if (_isSubPathOrSame(rSandbox, swapped)) {
-          final rel = p.relative(swapped, from: rSandbox).replaceAll('\\', '/');
+        if (_isSubPathOrSame(normRSandbox, swapped)) {
+          final rel = p.posix.relative(swapped, from: normRSandbox);
           return rel.isEmpty ? '.' : rel;
         }
       }
-      if (canonicalTarget.startsWith('/data/user/0/')) {
-        final swapped = canonicalTarget.replaceFirst('/data/user/0/', '/data/data/');
-        if (_isSubPathOrSame(cSandbox, swapped)) {
-          final rel = p.relative(swapped, from: cSandbox).replaceAll('\\', '/');
+      if (normTarget.startsWith('/data/user/0/')) {
+        final swapped = normTarget.replaceFirst('/data/user/0/', '/data/data/');
+        if (_isSubPathOrSame(normCSandbox, swapped)) {
+          final rel = p.posix.relative(swapped, from: normCSandbox);
           return rel.isEmpty ? '.' : rel;
         }
-        if (_isSubPathOrSame(rSandbox, swapped)) {
-          final rel = p.relative(swapped, from: rSandbox).replaceAll('\\', '/');
+        if (_isSubPathOrSame(normRSandbox, swapped)) {
+          final rel = p.posix.relative(swapped, from: normRSandbox);
           return rel.isEmpty ? '.' : rel;
         }
       }
@@ -393,15 +404,15 @@ class PathSanitizer {
       // 2. /sdcard <=> /storage/emulated/0 <=> /storage/self/primary
       const externalPrefixes = ['/sdcard', '/storage/emulated/0', '/storage/self/primary'];
       for (final p1 in externalPrefixes) {
-        if (canonicalTarget == p1 || canonicalTarget.startsWith('$p1/')) {
+        if (normTarget == p1 || normTarget.startsWith('$p1/')) {
           for (final p2 in externalPrefixes) {
-            final swapped = canonicalTarget.replaceFirst(p1, p2);
-            if (_isSubPathOrSame(cSandbox, swapped)) {
-              final rel = p.relative(swapped, from: cSandbox).replaceAll('\\', '/');
+            final swapped = normTarget.replaceFirst(p1, p2);
+            if (_isSubPathOrSame(normCSandbox, swapped)) {
+              final rel = p.posix.relative(swapped, from: normCSandbox);
               return rel.isEmpty ? '.' : rel;
             }
-            if (_isSubPathOrSame(rSandbox, swapped)) {
-              final rel = p.relative(swapped, from: rSandbox).replaceAll('\\', '/');
+            if (_isSubPathOrSame(normRSandbox, swapped)) {
+              final rel = p.posix.relative(swapped, from: normRSandbox);
               return rel.isEmpty ? '.' : rel;
             }
           }
@@ -418,9 +429,6 @@ class PathSanitizer {
     final trimmed = rawPath.trim();
     if (trimmed.isEmpty || trimmed == '.' || trimmed == './' || trimmed == '.\\') {
       return false;
-    }
-    if (isWindowsDriveOrMount(trimmed)) {
-      return true;
     }
     final normalized = trimmed.replaceAll('\\', '/');
     if (normalized.startsWith('~')) {

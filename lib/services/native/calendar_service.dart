@@ -115,12 +115,15 @@ class InMemoryCalendarService implements ICalendarService {
 
     if (query != null && query.trim().isNotEmpty) {
       final q = query.trim().toLowerCase();
-      list = list.where((e) {
-        final matchTitle = e.title.toLowerCase().contains(q);
-        final matchLoc = e.location?.toLowerCase().contains(q) ?? false;
-        final matchDesc = e.description?.toLowerCase().contains(q) ?? false;
-        return matchTitle || matchLoc || matchDesc;
-      }).toList();
+      const genericKeywords = {'会议', '日程', '安排', '全部', '所有', 'meeting', 'meetings', 'events', 'schedule'};
+      if (!genericKeywords.contains(q)) {
+        list = list.where((e) {
+          final matchTitle = e.title.toLowerCase().contains(q);
+          final matchLoc = e.location?.toLowerCase().contains(q) ?? false;
+          final matchDesc = e.description?.toLowerCase().contains(q) ?? false;
+          return matchTitle || matchLoc || matchDesc;
+        }).toList();
+      }
     }
 
     // Sort by startTime ascending

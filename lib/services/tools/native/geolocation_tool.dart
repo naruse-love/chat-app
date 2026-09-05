@@ -1,6 +1,7 @@
 import '../../../models/native/native_models.dart';
 import '../../../models/tool/tool.dart';
 import '../../native/location_service.dart';
+import '../../native/real_location_service.dart';
 import '../../native/permission_manager_service.dart';
 
 /// GPS Geolocation tool [Level 3 Privileged].
@@ -14,7 +15,7 @@ class GeolocationGetTool extends Tool {
   GeolocationGetTool({
     ILocationService? locationService,
     PermissionManagerService? permissionService,
-  })  : locationService = locationService ?? InMemoryLocationService(),
+  })  : locationService = locationService ?? RealLocationService(),
         permissionService = permissionService ?? PermissionManagerService();
 
   @override
@@ -63,10 +64,28 @@ class GeolocationGetTool extends Tool {
       final highAccuracy = arguments['high_accuracy'] as bool? ?? true;
       final coords = await locationService.getCurrentCoordinates(highAccuracy: highAccuracy);
 
+      GeoAddress? address;
+      try {
+        address = await locationService.reverseGeocode(
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+        );
+      } catch (_) {}
+
       stopwatch.stop();
 
       final buffer = StringBuffer();
       buffer.writeln('📍 **当前设备定位成功**\n');
+      if (address != null && address.formattedAddress.isNotEmpty) {
+        buffer.writeln('- **当前位置**: ${address.formattedAddress}');
+        final areaParts = [address.country, address.province, address.city, address.district]
+            .where((s) => s.isNotEmpty && !s.contains('未知'))
+            .toSet()
+            .toList();
+        if (areaParts.isNotEmpty) {
+          buffer.writeln('- **行政区域**: ${areaParts.join(' ')}');
+        }
+      }
       buffer.writeln('- **标准坐标**: ${coords.toFormattedString()}');
       buffer.writeln('- **DMS 格式**: ${coords.toDmsString()}');
       buffer.writeln('- **纬度 (Latitude)**: `${coords.latitude.toStringAsFixed(6)}`');
@@ -75,10 +94,18 @@ class GeolocationGetTool extends Tool {
       buffer.writeln('- **定位精度 (Accuracy)**: ±${coords.accuracy.toStringAsFixed(1)} 米');
       buffer.writeln('- **定位时间**: ${coords.timestamp.toIso8601String()}');
 
+      final rawData = coords.toJson();
+      if (address != null) {
+        rawData['formattedAddress'] = address.formattedAddress;
+        rawData['city'] = address.city;
+        rawData['province'] = address.province;
+        rawData['country'] = address.country;
+      }
+
       return ToolExecutionResult.success(
         toolName: name,
         content: buffer.toString().trimRight(),
-        rawData: coords.toJson(),
+        rawData: rawData,
         executionDuration: stopwatch.elapsed,
       );
     } catch (e, stackTrace) {

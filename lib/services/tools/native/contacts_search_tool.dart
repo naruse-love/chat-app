@@ -17,7 +17,7 @@ class ContactsSearchTool extends Tool {
     IContactsService? contactsService,
     ContactsSanitizer? contactsSanitizer,
     PermissionManagerService? permissionService,
-  })  : contactsService = contactsService ?? InMemoryContactsService(),
+  })  : contactsService = contactsService ?? InMemoryContactsService(seedDefaults: false),
         contactsSanitizer = contactsSanitizer ?? const ContactsSanitizer(),
         permissionService = permissionService ?? PermissionManagerService();
 
@@ -71,6 +71,74 @@ class ContactsSearchTool extends Tool {
     }
 
     try {
+      final action = arguments['action']?.toString().trim().toLowerCase();
+      final nameParam = (arguments['name'] ?? arguments['add_name'])?.toString().trim();
+      final phoneParam = (arguments['phone'] ?? arguments['add_phone'])?.toString().trim();
+
+      // Support adding new contacts if action is add or name & phone are provided
+      if (action == 'add' || (nameParam != null && phoneParam != null && nameParam.isNotEmpty && phoneParam.isNotEmpty)) {
+        if (nameParam == null || nameParam.isEmpty) {
+          stopwatch.stop();
+          return ToolExecutionResult.failure(
+            toolName: name,
+            errorMessage: '保存联系人失败: 缺少姓名 (name)',
+            content: '保存联系人失败: 缺少有效的联系人姓名',
+            executionDuration: stopwatch.elapsed,
+          );
+        }
+        if (phoneParam == null || phoneParam.isEmpty) {
+          stopwatch.stop();
+          return ToolExecutionResult.failure(
+            toolName: name,
+            errorMessage: '保存联系人失败: 缺少电话号码 (phone)',
+            content: '保存联系人失败: 缺少有效的电话号码',
+            executionDuration: stopwatch.elapsed,
+          );
+        }
+
+        final email = arguments['email']?.toString().trim();
+        final company = arguments['company']?.toString().trim();
+        final jobTitle = arguments['job_title']?.toString().trim();
+        final note = arguments['note']?.toString().trim();
+        final address = arguments['address']?.toString().trim();
+
+        final contactItem = ContactItem(
+          id: 'contact_${DateTime.now().millisecondsSinceEpoch}',
+          name: nameParam,
+          phones: [phoneParam],
+          emails: (email != null && email.isNotEmpty) ? [email] : const [],
+          company: company,
+          jobTitle: jobTitle,
+          note: note,
+          address: address,
+        );
+
+        await contactsService.addContact(contactItem);
+        stopwatch.stop();
+
+        final maskedPhone = contactsSanitizer.maskPhoneNumber(phoneParam);
+        final buffer = StringBuffer();
+        buffer.writeln('✅ **联系人已成功保存至通讯录**\n');
+        buffer.writeln('- **姓名**: $nameParam');
+        buffer.writeln('- **电话**: $maskedPhone');
+        if (company != null && company.isNotEmpty) {
+          buffer.writeln('- **公司/组织**: $company');
+        }
+        if (jobTitle != null && jobTitle.isNotEmpty) {
+          buffer.writeln('- **职位**: $jobTitle');
+        }
+        if (email != null && email.isNotEmpty) {
+          buffer.writeln('- **邮箱**: $email');
+        }
+
+        return ToolExecutionResult.success(
+          toolName: name,
+          content: buffer.toString().trimRight(),
+          rawData: contactItem.toJson(),
+          executionDuration: stopwatch.elapsed,
+        );
+      }
+
       final query = arguments['query']?.toString().trim() ?? '';
       final rawLimit = (arguments['limit'] as num?)?.toInt() ?? 5;
       final effectiveLimit = (rawLimit > 0 && rawLimit <= 5) ? rawLimit : 5;

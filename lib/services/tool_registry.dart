@@ -268,8 +268,12 @@ class ToolRegistry {
     final rawMergedArgs = Map<String, dynamic>.from(arguments);
     if (context != null) {
       for (final entry in context.entries) {
-        rawMergedArgs.putIfAbsent('__${entry.key}', () => entry.value);
-        rawMergedArgs.putIfAbsent(entry.key, () => entry.value);
+        final prefixedKey = entry.key.startsWith('__') ? entry.key : '__${entry.key}';
+        rawMergedArgs.putIfAbsent(prefixedKey, () => entry.value);
+        // Do not inject CancelToken as un-prefixed parameter to prevent leaking into tools/MCP
+        if (entry.key != 'cancelToken' && entry.value is! CancelToken) {
+          rawMergedArgs.putIfAbsent(entry.key, () => entry.value);
+        }
       }
     }
 
@@ -306,9 +310,9 @@ class ToolRegistry {
   static Map<String, dynamic> _normalizeArguments(Map<String, dynamic> args) {
     final normalized = Map<String, dynamic>.from(args);
 
-    // 1. title aliases
+    // 1. title aliases (support meeting, agenda, etc.)
     if (!normalized.containsKey('title') || normalized['title'] == null || normalized['title'].toString().trim().isEmpty) {
-      for (final alias in ['summary', 'name', 'event_name', 'event_title', 'topic', 'subject', 'headline']) {
+      for (final alias in ['summary', 'name', 'event_name', 'event_title', 'topic', 'subject', 'headline', 'meeting', 'meeting_name', 'agenda', 'event']) {
         if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
           normalized['title'] = normalized[alias];
           break;
@@ -316,9 +320,9 @@ class ToolRegistry {
       }
     }
 
-    // 2. start_time aliases
+    // 2. start_time aliases (support date, day, target_date, etc.)
     if (!normalized.containsKey('start_time') || normalized['start_time'] == null || normalized['start_time'].toString().trim().isEmpty) {
-      for (final alias in ['start', 'startTime', 'start_date', 'begin_time', 'beginTime', 'time']) {
+      for (final alias in ['start', 'startTime', 'start_date', 'begin_time', 'beginTime', 'time', 'date', 'day', 'target_date']) {
         if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
           normalized['start_time'] = normalized[alias];
           break;
@@ -346,9 +350,9 @@ class ToolRegistry {
       }
     }
 
-    // 5. scheduled_time aliases
+    // 5. scheduled_time aliases (support alarm_time, notify_time, etc.)
     if (!normalized.containsKey('scheduled_time') || normalized['scheduled_time'] == null || normalized['scheduled_time'].toString().trim().isEmpty) {
-      for (final alias in ['trigger_time', 'triggerTime', 'time', 'scheduledTime', 'datetime', 'date']) {
+      for (final alias in ['trigger_time', 'triggerTime', 'time', 'scheduledTime', 'datetime', 'date', 'alarm_time', 'notify_time']) {
         if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
           normalized['scheduled_time'] = normalized[alias];
           break;
@@ -378,7 +382,7 @@ class ToolRegistry {
 
     // 8. query aliases
     if (!normalized.containsKey('query') || normalized['query'] == null || normalized['query'].toString().trim().isEmpty) {
-      for (final alias in ['q', 'keyword', 'keywords', 'search', 'prompt']) {
+      for (final alias in ['q', 'keyword', 'keywords', 'search', 'prompt', 'target']) {
         if (normalized.containsKey(alias) && normalized[alias] != null && normalized[alias].toString().trim().isNotEmpty) {
           normalized['query'] = normalized[alias];
           break;

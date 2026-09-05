@@ -8,6 +8,8 @@ import 'location_service.dart';
 class RealLocationService extends InMemoryLocationService {
   final Dio _dio;
   bool _customCoordinatesSet = false;
+  GeoAddress? _cachedAddress;
+  GeoCoordinates? _cachedCoordinates;
 
   RealLocationService({
     Dio? dio,
@@ -15,8 +17,8 @@ class RealLocationService extends InMemoryLocationService {
   })  : _dio = dio ??
             Dio(
               BaseOptions(
-                connectTimeout: const Duration(seconds: 3),
-                receiveTimeout: const Duration(seconds: 3),
+                connectTimeout: const Duration(seconds: 5),
+                receiveTimeout: const Duration(seconds: 5),
                 headers: {
                   'User-Agent': 'ChatApp/1.0 (https://github.com/naruse-love/chat-app)',
                   'Accept': 'application/json',
@@ -24,9 +26,13 @@ class RealLocationService extends InMemoryLocationService {
               ),
             );
 
+  /// Currently cached real address if available from IP geolocation.
+  GeoAddress? get cachedAddress => _cachedAddress;
+
   @override
   void setCurrentCoordinates(GeoCoordinates coordinates) {
     _customCoordinatesSet = true;
+    _cachedCoordinates = coordinates;
     super.setCurrentCoordinates(coordinates);
   }
 
@@ -35,23 +41,46 @@ class RealLocationService extends InMemoryLocationService {
     if (_customCoordinatesSet) {
       return super.getCurrentCoordinates(highAccuracy: highAccuracy);
     }
+
+    // 1. Primary: ip-api.com
     try {
-      final response = await _dio.get(
-        'http://ip-api.com/json/?lang=zh-CN',
-      );
+      final response = await _dio.get('http://ip-api.com/json/?lang=zh-CN');
       if (response.statusCode == 200 && response.data is Map) {
         final data = response.data as Map<String, dynamic>;
         if (data['status'] == 'success') {
           final lat = (data['lat'] as num?)?.toDouble();
           final lon = (data['lon'] as num?)?.toDouble();
           if (lat != null && lon != null) {
+            final country = data['country']?.toString() ?? '中国';
+            final countryCode = data['countryCode']?.toString() ?? 'CN';
+            final province = data['regionName']?.toString() ?? '';
+            final city = data['city']?.toString() ?? '';
+            final zip = data['zip']?.toString();
+
+            final parts = [country, province, city].where((s) => s.isNotEmpty).toList();
+            final formatted = parts.isNotEmpty ? parts.join(' ') : '经纬度 ($lat, $lon) 位置';
+
+            _cachedAddress = GeoAddress(
+              formattedAddress: formatted,
+              country: country.isNotEmpty ? country : '中国',
+              province: province.isNotEmpty ? province : (city.isNotEmpty ? city : '未知省份'),
+              city: city.isNotEmpty ? city : (province.isNotEmpty ? province : '未知城市'),
+              district: city,
+              street: '当前网络接入点',
+              postalCode: (zip != null && zip.isNotEmpty) ? zip : null,
+              countryCode: countryCode,
+              latitude: lat,
+              longitude: lon,
+            );
+
             final coords = GeoCoordinates(
               latitude: lat,
               longitude: lon,
               altitude: 0.0,
-              accuracy: 1000.0, // IP accuracy estimate ~ 1km
+              accuracy: 1000.0,
               timestamp: DateTime.now(),
             );
+            _cachedCoordinates = coords;
             super.setCurrentCoordinates(coords);
             return coords;
           }
@@ -61,7 +90,7 @@ class RealLocationService extends InMemoryLocationService {
       developer.log('ip-api.com lookup failed: $e', name: 'RealLocationService');
     }
 
-    // 2. Backup: try freeipapi.com
+    // 2. Secondary: freeipapi.com
     try {
       final response = await _dio.get('https://freeipapi.com/api/json');
       if (response.statusCode == 200 && response.data is Map) {
@@ -69,6 +98,28 @@ class RealLocationService extends InMemoryLocationService {
         final lat = (data['latitude'] as num?)?.toDouble();
         final lon = (data['longitude'] as num?)?.toDouble();
         if (lat != null && lon != null) {
+          final country = data['countryName']?.toString() ?? '中国';
+          final countryCode = data['countryCode']?.toString() ?? 'CN';
+          final province = data['regionName']?.toString() ?? '';
+          final city = data['cityName']?.toString() ?? '';
+          final zip = data['zipCode']?.toString();
+
+          final parts = [country, province, city].where((s) => s.isNotEmpty).toList();
+          final formatted = parts.isNotEmpty ? parts.join(' ') : '经纬度 ($lat, $lon) 位置';
+
+          _cachedAddress = GeoAddress(
+            formattedAddress: formatted,
+            country: country.isNotEmpty ? country : '中国',
+            province: province.isNotEmpty ? province : (city.isNotEmpty ? city : '未知省份'),
+            city: city.isNotEmpty ? city : (province.isNotEmpty ? province : '未知城市'),
+            district: city,
+            street: '当前网络接入点',
+            postalCode: (zip != null && zip.isNotEmpty) ? zip : null,
+            countryCode: countryCode,
+            latitude: lat,
+            longitude: lon,
+          );
+
           final coords = GeoCoordinates(
             latitude: lat,
             longitude: lon,
@@ -76,6 +127,7 @@ class RealLocationService extends InMemoryLocationService {
             accuracy: 1500.0,
             timestamp: DateTime.now(),
           );
+          _cachedCoordinates = coords;
           super.setCurrentCoordinates(coords);
           return coords;
         }
@@ -93,6 +145,15 @@ class RealLocationService extends InMemoryLocationService {
     required double latitude,
     required double longitude,
   }) async {
+    // 0. Check cached address from real IP location if close (~5km)
+    if (_cachedAddress != null && _cachedCoordinates != null) {
+      final dLat = (latitude - _cachedCoordinates!.latitude).abs();
+      final dLon = (longitude - _cachedCoordinates!.longitude).abs();
+      if (dLat < 0.05 && dLon < 0.05) {
+        return _cachedAddress!;
+      }
+    }
+
     // 1. Try BigDataCloud reverse geocode client API (Free, fast, no API key needed)
     try {
       final url =
@@ -171,8 +232,26 @@ class RealLocationService extends InMemoryLocationService {
       developer.log('Nominatim reverse geocode failed: $e', name: 'RealLocationService');
     }
 
-    // 3. Fallback to local known/heuristic database
-    return super.reverseGeocode(latitude: latitude, longitude: longitude);
+    // 3. Fallback to local known/heuristic database or cached IP location
+    final fallback = await super.reverseGeocode(latitude: latitude, longitude: longitude);
+    if (fallback.formattedAddress.contains('坐标位置') && _cachedAddress != null) {
+      final country = _cachedAddress!.country;
+      final province = _cachedAddress!.province;
+      final city = _cachedAddress!.city;
+      return GeoAddress(
+        formattedAddress: '$country $province $city (经纬度: ${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)})',
+        country: country,
+        province: province,
+        city: city,
+        district: _cachedAddress!.district,
+        street: '位置坐标点',
+        postalCode: _cachedAddress!.postalCode,
+        countryCode: _cachedAddress!.countryCode,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+    return fallback;
   }
 
   @override

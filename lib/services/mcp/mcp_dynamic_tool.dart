@@ -177,9 +177,9 @@ class McpDynamicTool extends Tool {
   /// 校验传入实参
   @override
   String? validateArguments(Map<String, dynamic> arguments) {
-    // 过滤内部以 __ 开头的上下文变量
+    // 过滤内部以 __ 开头的上下文变量与 cancelToken
     final filteredArgs = Map<String, dynamic>.fromEntries(
-      arguments.entries.where((e) => !e.key.startsWith('__')),
+      arguments.entries.where((e) => !e.key.startsWith('__') && e.key != 'cancelToken'),
     );
 
     for (final param in parameters) {
@@ -197,12 +197,20 @@ class McpDynamicTool extends Tool {
   Future<ToolExecutionResult> execute(Map<String, dynamic> arguments) async {
     final stopwatch = Stopwatch()..start();
 
-    // 剔除内部注入的上下文参数（以 __ 开头）
+    // 剔除内部注入的上下文参数（以 __ 开头，或内部框架 context 键，或 CancelToken 等非 JSON 编码对象）
     final cleanArgs = <String, dynamic>{};
     for (final entry in arguments.entries) {
-      if (!entry.key.startsWith('__')) {
-        cleanArgs[entry.key] = entry.value;
+      final key = entry.key;
+      if (key.startsWith('__')) continue;
+      if (key == 'cancelToken' || entry.value.runtimeType.toString().contains('CancelToken')) continue;
+      if (key == 'searxngUrl' || key == 'searchBackend' || key == 'googleApiKey' ||
+          key == 'googleBaseUrl' || key == 'googleSearchModel' || key == 'bingCookie' ||
+          key == 'enableSandbox' || key == 'allowExternal' || key == 'maxCharacters' ||
+          key == 'workspacePath') {
+        continue;
       }
+      if (!_isJsonEncodable(entry.value)) continue;
+      cleanArgs[key] = entry.value;
     }
 
     try {
@@ -254,6 +262,19 @@ class McpDynamicTool extends Tool {
         },
       );
     }
+  }
+
+  static bool _isJsonEncodable(dynamic value) {
+    if (value == null || value is num || value is String || value is bool) {
+      return true;
+    }
+    if (value is List) {
+      return value.every(_isJsonEncodable);
+    }
+    if (value is Map) {
+      return value.entries.every((e) => e.key is String && _isJsonEncodable(e.value));
+    }
+    return false;
   }
 
   @override

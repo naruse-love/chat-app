@@ -1,5 +1,6 @@
 import '../../../models/tool/tool.dart';
 import '../../native/location_service.dart';
+import '../../native/real_location_service.dart';
 
 /// Reverse geocoding tool [Level 1 ReadOnly / Safe].
 ///
@@ -9,7 +10,7 @@ class ReverseGeocodeTool extends Tool {
 
   ReverseGeocodeTool({
     ILocationService? locationService,
-  }) : locationService = locationService ?? InMemoryLocationService();
+  }) : locationService = locationService ?? RealLocationService();
 
   @override
   String get name => 'reverse_geocode';
