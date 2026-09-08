@@ -120,51 +120,19 @@ class HttpMcpTransport implements McpTransport {
       }
 
       final data = response.data;
-      if (data == null || data.toString().trim().isEmpty) {
-        return;
-      }
-
-      final bodyStr = data.toString().trim();
-
-      // 1. 尝试直接作为 JSON-RPC 响应解析
-      if (bodyStr.startsWith('{') || bodyStr.startsWith('[')) {
-        try {
-          final decoded = jsonDecode(bodyStr);
-          if (decoded is Map<String, dynamic>) {
-            _messageController.add(decoded);
-            return;
-          } else if (decoded is List) {
-            for (final item in decoded) {
-              if (item is Map<String, dynamic>) {
-                _messageController.add(item);
-              }
-            }
-            return;
+      if (data != null) {
+        if (data is Map<String, dynamic>) {
+          if (_isJsonRpcMessage(data)) {
+            _messageController.add(data);
           }
-        } catch (_) {}
-      }
-
-      // 2. 如果返回的是 SSE 格式 (event: ... / data: ...)
-      if (bodyStr.contains('data:')) {
-        for (final line in bodyStr.split('\n')) {
-          final trimmed = line.trim();
-          if (trimmed.startsWith('data:')) {
-            final jsonStr = trimmed.substring(5).trim();
-            if (jsonStr.isNotEmpty && (jsonStr.startsWith('{') || jsonStr.startsWith('['))) {
-              try {
-                final decoded = jsonDecode(jsonStr);
-                if (decoded is Map<String, dynamic>) {
-                  _messageController.add(decoded);
-                } else if (decoded is List) {
-                  for (final item in decoded) {
-                    if (item is Map<String, dynamic>) {
-                      _messageController.add(item);
-                    }
-                  }
-                }
-              } catch (_) {}
+        } else if (data is List) {
+          for (final item in data) {
+            if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
+              _messageController.add(item);
             }
           }
+        } else {
+          _dispatchMessagePayload(data.toString(), _messageController);
         }
       }
     } on DioException catch (e) {
@@ -187,6 +155,100 @@ class HttpMcpTransport implements McpTransport {
     _cancelToken?.cancel('Transport closed');
     await _statusController.close();
     await _messageController.close();
+  }
+
+  /// 验证是否为合法的 JSON-RPC 2.0 消息（过滤仅表示 HTTP 状态确认的 {'ok': true} 等非 RPC 响应）
+  static bool _isJsonRpcMessage(Map<String, dynamic> map) {
+    return map.containsKey('jsonrpc') ||
+        (map.containsKey('id') && (map.containsKey('result') || map.containsKey('error') || map.containsKey('method')));
+  }
+
+  /// 通用 JSON-RPC 及标准 SSE 消息分发解析器 (支持直接 JSON 对象/数组，以及以空行分隔的标准 SSE 事件块)
+  static void _dispatchMessagePayload(
+    String rawBody,
+    StreamController<Map<String, dynamic>> controller,
+  ) {
+    final body = rawBody.trim();
+    if (body.isEmpty) return;
+
+    // 1. 直接作为 JSON-RPC 对象或数组解析
+    if (body.startsWith('{') || body.startsWith('[')) {
+      try {
+        final decoded = jsonDecode(body);
+        if (decoded is Map<String, dynamic>) {
+          if (_isJsonRpcMessage(decoded)) {
+            controller.add(decoded);
+          }
+          return;
+        } else if (decoded is List) {
+          for (final item in decoded) {
+            if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
+              controller.add(item);
+            }
+          }
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // 2. 标准 SSE 格式块解析 (事件块以双换行 \n\n 或 \r\n\r\n 分隔，支持多行 data:)
+    final blocks = body.split(RegExp(r'\r?\n\r?\n'));
+    for (final block in blocks) {
+      final trimmedBlock = block.trim();
+      if (trimmedBlock.isEmpty) continue;
+
+      final dataLines = <String>[];
+      for (final line in trimmedBlock.split(RegExp(r'\r?\n'))) {
+        final trimmedLine = line.trim();
+        if (trimmedLine.startsWith('data:')) {
+          dataLines.add(trimmedLine.substring(5).trimLeft());
+        }
+      }
+
+      if (dataLines.isNotEmpty) {
+        final joined = dataLines.join('\n').trim();
+        bool decodedSuccess = false;
+        if (joined.isNotEmpty && (joined.startsWith('{') || joined.startsWith('['))) {
+          try {
+            final decoded = jsonDecode(joined);
+            if (decoded is Map<String, dynamic>) {
+              if (_isJsonRpcMessage(decoded)) {
+                controller.add(decoded);
+              }
+              decodedSuccess = true;
+            } else if (decoded is List) {
+              for (final item in decoded) {
+                if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
+                  controller.add(item);
+                }
+              }
+              decodedSuccess = true;
+            }
+          } catch (_) {}
+        }
+
+        // 容错：若合并多行解析失败，可能是非标服务端按单换行分隔了多个独立 JSON 消息
+        if (!decodedSuccess && dataLines.length > 1) {
+          for (final singleLine in dataLines) {
+            final lineTrimmed = singleLine.trim();
+            if (lineTrimmed.startsWith('{') || lineTrimmed.startsWith('[')) {
+              try {
+                final decoded = jsonDecode(lineTrimmed);
+                if (decoded is Map<String, dynamic> && _isJsonRpcMessage(decoded)) {
+                  controller.add(decoded);
+                } else if (decoded is List) {
+                  for (final item in decoded) {
+                    if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
+                      controller.add(item);
+                    }
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    }
   }
 
   static dynamic _deepSanitizeForJson(dynamic val) {

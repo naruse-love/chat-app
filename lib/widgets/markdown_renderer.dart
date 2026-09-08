@@ -19,7 +19,9 @@ class MarkdownRenderer extends StatefulWidget {
   });
 
   static String preprocessMath(String raw) {
-    if (!raw.contains(r'$$') && !raw.contains(r'\[')) {
+    if (!raw.contains(r'$$') &&
+        !raw.contains(r'\[') &&
+        !raw.contains(r'\begin{')) {
       return raw;
     }
     final segments = raw.split('```');
@@ -38,6 +40,10 @@ class MarkdownRenderer extends StatefulWidget {
         seg = seg.replaceAllMapped(
           RegExp(r'\\\[([\s\S]*?)\\\]'),
           (m) => '\n```math\n${m[1]!.trim()}\n```\n',
+        );
+        seg = seg.replaceAllMapped(
+          RegExp(r'\\begin\{(equation|align|aligned|gather|matrix|pmatrix|bmatrix|vmatrix|cases)\*?\}([\s\S]*?)\\end\{\1\*?\}'),
+          (m) => '\n```math\n${m[0]!.trim()}\n```\n',
         );
         buffer.write(seg);
       }
@@ -142,16 +148,20 @@ class _MarkdownRendererState extends State<MarkdownRenderer> {
 
 class InlineMathSyntax extends md.InlineSyntax {
   InlineMathSyntax()
-      : super(r'''(?<=^|[\s\(\[\{<:;,"'])\$([^\s\$](?:[^\$\n]*?[^\s\$])?)\$(?=[\s\)\]\}>:;,"'.?!]|$)''');
+      : super(r'(?<![a-zA-Z0-9\\])\$([^\s\$](?:[^\$\n]*?[^\s\$])?)\$(?![a-zA-Z0-9])');
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
     final raw = match[1];
     if (raw == null || raw.trim().isEmpty) return false;
-    if (RegExp(r'^\d+(\.\d+)?$').hasMatch(raw.trim())) {
+    final trimmed = raw.trim();
+
+    // Prevent matching standalone currency amounts (e.g. $100, $15.50, $1,000, $100 USD)
+    if (RegExp(r'^\d+([.,]\d+)?\s*(usd|cny|rmb|eur|gbp|dollars?|yuan)?$', caseSensitive: false).hasMatch(trimmed)) {
       return false;
     }
-    parser.addNode(md.Element('math', [md.Text(raw.trim())]));
+
+    parser.addNode(md.Element('math', [md.Text(trimmed)]));
     return true;
   }
 }
@@ -530,7 +540,11 @@ class _MathBlockWidgetState extends State<MathBlockWidget> {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Math.tex(
-                widget.tex,
+                widget.tex
+                    .replaceAll(r'\begin{align}', r'\begin{aligned}')
+                    .replaceAll(r'\end{align}', r'\end{aligned}')
+                    .replaceAll(r'\begin{align*}', r'\begin{aligned}')
+                    .replaceAll(r'\end{align*}', r'\end{aligned}'),
                 mathStyle: MathStyle.display,
                 textStyle: TextStyle(
                   fontSize: 15.0,

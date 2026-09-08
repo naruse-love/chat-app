@@ -13,6 +13,7 @@ import 'package:chat/providers/model_provider.dart';
 import 'package:chat/widgets/markdown_renderer.dart';
 import 'package:chat/widgets/chat_bubble.dart';
 import 'package:chat/services/mcp/transports/sse_mcp_transport.dart';
+import 'package:chat/services/mcp/transports/http_mcp_transport.dart';
 import 'package:chat/data/database_helper.dart';
 import 'package:chat/services/secure_storage_service.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -20,6 +21,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 class MockChatService extends ChatService {
   int getModelsCallCount = 0;
   List<ModelInfo> mockModels = [];
+  bool throwOnNextCall = false;
 
   @override
   Future<List<ModelInfo>> getModels({
@@ -28,6 +30,9 @@ class MockChatService extends ChatService {
     CancelToken? cancelToken,
   }) async {
     getModelsCallCount++;
+    if (throwOnNextCall) {
+      throw Exception('Network connection timeout');
+    }
     return mockModels;
   }
 }
@@ -135,6 +140,36 @@ x = "\$\$not math\$\$"
 
       expect(find.byType(Math), findsNothing);
       expect(find.textContaining('\$100'), findsOneWidget);
+    });
+
+    testWidgets('Renders Chinese inline math formula adjacent to CJK characters and punctuation', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: MarkdownRenderer(
+              markdownData: '根据公式\$E = mc^2\$可以推导，且已知\$a+b=c\$。',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Math), findsNWidgets(2));
+    });
+
+    test('preprocessMath converts LaTeX environments like equation and matrix', () {
+      const input = '''
+\\begin{equation}
+E = mc^2
+\\end{equation}
+\\begin{matrix}
+1 & 2 \\\\
+3 & 4
+\\end{matrix}
+''';
+      final processed = MarkdownRenderer.preprocessMath(input);
+      expect(processed, contains('```math\n\\begin{equation}\nE = mc^2\n\\end{equation}\n```'));
+      expect(processed, contains('```math\n\\begin{matrix}\n1 & 2 \\\\\n3 & 4\n\\end{matrix}\n```'));
     });
   });
 
@@ -246,6 +281,44 @@ x = "\$\$not math\$\$"
       notifier.dispose();
       notifier2.dispose();
     });
+
+    test('Preserves existing cached models on forceRefresh network failure and records error', () async {
+      final config = ApiConfig(
+        id: 'custom_provider_err',
+        name: 'Custom Provider Error',
+        baseUrl: 'https://api.custom.com/v1',
+        apiKeyRef: 'key_err',
+        isDefault: false,
+        createdAt: DateTime.now(),
+      );
+
+      mockChatService.mockModels = [
+        ModelInfo(
+          id: 'model-x',
+          provider: 'custom',
+          modelName: 'Model X',
+          supportsVision: false,
+          supportsTools: true,
+        ),
+      ];
+
+      final notifier = ModelNotifier(mockChatService, apiConfigDao, config);
+      await Future.delayed(const Duration(milliseconds: 50));
+      expect(notifier.state.models.length, 1);
+      expect(notifier.state.selectedModel?.id, 'model-x');
+
+      // Simulate network error on refresh
+      mockChatService.throwOnNextCall = true;
+      await notifier.fetchModels(forceRefresh: true);
+
+      // Models must NOT be wiped out!
+      expect(notifier.state.models.length, 1);
+      expect(notifier.state.selectedModel?.id, 'model-x');
+      expect(notifier.state.error, isNotNull);
+      expect(notifier.state.error, contains('获取模型列表失败'));
+
+      notifier.dispose();
+    });
   });
 
   group('MCP Auto-load & Transport Resilience Tests', () {
@@ -257,6 +330,111 @@ x = "\$\$not math\$\$"
       expect(transport.transportType, McpTransportType.sse);
       expect(transport.sessionId, isNull);
 
+      await transport.close();
+    });
+
+    test('SseMcpTransport immediately connects in HTTP fallback mode for /mcp URIs', () async {
+      final transport = SseMcpTransport(
+        uri: Uri.parse('https://mcp.273722.xyz/mcp'),
+      );
+
+      await transport.connect();
+      expect(transport.isConnected, isTrue);
+      expect(transport.isHttpFallback, isTrue);
+      expect(transport.postUri, equals(Uri.parse('https://mcp.273722.xyz/mcp')));
+
+      await transport.close();
+    });
+
+    test('SseMcpTransport dispatches direct Map payload and single-line SSE lines from POST', () async {
+      final dio = Dio();
+      dynamic nextResponseData = {'jsonrpc': '2.0', 'id': 1, 'result': {'test': true}};
+
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            return handler.resolve(
+              Response(
+                requestOptions: options,
+                data: nextResponseData,
+                statusCode: 200,
+              ),
+            );
+          },
+        ),
+      );
+
+      final transport = SseMcpTransport(
+        uri: Uri.parse('https://mcp.273722.xyz/mcp'),
+        dio: dio,
+      );
+
+      final received = <Map<String, dynamic>>[];
+      final sub = transport.messageStream.listen(received.add);
+
+      await transport.connect();
+      expect(transport.isConnected, isTrue);
+
+      // 1. Direct Map payload from Dio
+      await transport.send({'jsonrpc': '2.0', 'method': 'test'});
+      await Future.delayed(const Duration(milliseconds: 10));
+      expect(received.length, 1);
+      expect(received.first['id'], 1);
+
+      // 2. Non-standard single newline separated SSE data
+      nextResponseData = 'data: {"jsonrpc":"2.0","id":2,"result":"line1"}\ndata: {"jsonrpc":"2.0","id":3,"result":"line2"}';
+      await transport.send({'jsonrpc': '2.0', 'method': 'test2'});
+      await Future.delayed(const Duration(milliseconds: 10));
+      expect(received.length, 3);
+      expect(received[1]['id'], 2);
+      expect(received[2]['id'], 3);
+
+      await sub.cancel();
+      await transport.close();
+    });
+
+    test('HttpMcpTransport dispatches direct Map payload and SSE blocks', () async {
+      final dio = Dio();
+      dynamic nextResponseData = {'jsonrpc': '2.0', 'id': 42, 'result': {'success': true}};
+
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            return handler.resolve(
+              Response(
+                requestOptions: options,
+                data: nextResponseData,
+                statusCode: 200,
+              ),
+            );
+          },
+        ),
+      );
+
+      final transport = HttpMcpTransport(
+        uri: Uri.parse('https://mcp.273722.xyz/mcp'),
+        dio: dio,
+      );
+
+      final received = <Map<String, dynamic>>[];
+      final sub = transport.messageStream.listen(received.add);
+
+      await transport.connect();
+      expect(transport.isConnected, isTrue);
+
+      await transport.send({'jsonrpc': '2.0', 'method': 'initialize'});
+      await Future.delayed(const Duration(milliseconds: 10));
+      expect(received.length, 1);
+      expect(received.first['id'], 42);
+
+      // SSE block
+      nextResponseData = 'event: message\ndata: {"jsonrpc":"2.0","id":43,"result":{"sse":true}}\n\n';
+      await transport.send({'jsonrpc': '2.0', 'method': 'call'});
+      await Future.delayed(const Duration(milliseconds: 10));
+      expect(received.length, 2);
+      expect(received[1]['id'], 43);
+
+      await sub.cancel();
       await transport.close();
     });
   });

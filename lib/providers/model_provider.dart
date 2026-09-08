@@ -143,6 +143,13 @@ class ModelNotifier extends StateNotifier<ModelState> {
       state = ModelState(models: models, selectedModel: selected, isLoading: false);
     } catch (e) {
       if (!mounted) return;
+      if (state.models.isNotEmpty) {
+        state = state.copyWith(
+          isLoading: false,
+          error: '获取模型列表失败: $e',
+        );
+        return;
+      }
       var fallbackModels = ModelInfo.defaultOpenCodeFallbackModels;
       if (_activeConfig.id == 'opencode_free') {
         fallbackModels = fallbackModels.where((m) => m.id.toLowerCase().contains('free')).toList();
@@ -155,6 +162,7 @@ class ModelNotifier extends StateNotifier<ModelState> {
         models: fallbackModels,
         selectedModel: selected,
         isLoading: false,
+        error: '获取模型列表失败: $e',
       );
     }
   }

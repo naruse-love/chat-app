@@ -90,10 +90,11 @@ class _ModelSelectorScreenState extends ConsumerState<ModelSelectorScreen> {
             onPressed: () async {
               await ref.read(modelProvider.notifier).fetchModels(forceRefresh: true);
               if (context.mounted) {
+                final error = ref.read(modelProvider).error;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('已刷新模型列表'),
-                    duration: Duration(seconds: 1),
+                  SnackBar(
+                    content: Text(error ?? '已刷新模型列表'),
+                    duration: const Duration(seconds: 2),
                   ),
                 );
               }

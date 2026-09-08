@@ -1,3 +1,32 @@
+## 2026-09-08 Fix & Enhancement: LaTeX CJK Parsing, LaTeX Environments, Model Cache Failure Resilience, MCP Streamable /mcp Fast-path & Multi-line SSE Handling (v1.24.0+25)
+
+### 变更文件
+- `lib/widgets/markdown_renderer.dart`:
+  - 修复中日韩（CJK）汉字与标点紧邻公式时（如 `公式$E=mc^2$可以推导`、`$x$，`）行内公式无法解析的正则边界缺陷，升级为基于负向前瞻/后顾的智能字符判定；
+  - 增强 `preprocessMath`，支持标准 LaTeX 环境（`equation`, `align`, `aligned`, `gather`, `matrix`, `pmatrix`, `bmatrix`, `vmatrix`, `cases`）；
+  - 在 `MathBlockWidget` 中自动将 `align/align*` 环境平滑转写为 `aligned`，避免渲染器抛出语法错误；
+  - 强化货币过滤规则，防止 `$100 USD`、`$50 to $100` 等非公式文本被误识别。
+- `lib/providers/model_provider.dart`, `lib/screens/home_screen.dart`, `lib/screens/model_selector_screen.dart`:
+  - 修复强制刷新模型列表（`forceRefresh: true`）遇到网络异常时直接清空用户已有模型并覆盖为 OpenCode Fallback 的缺陷，保留已有缓存并设置明确错误信息；
+  - 刷新按钮提供真实的成功/失败 SnackBar 反馈。
+- `lib/services/mcp/transports/sse_mcp_transport.dart`, `lib/services/mcp/transports/http_mcp_transport.dart`:
+  - 针对 `/mcp` Streamable HTTP 端点（如 `https://mcp.273722.xyz/mcp`）消除无效的无 Session GET 请求探测（避免因服务端保持连接而挂起 11 秒），自动直连 HTTP POST 模式；
+  - 规范遵循 W3C SSE 标准，实现以空行分隔的 SSE 事件块及跨行 `data:` 拼接解析（`_dispatchMessagePayload`）；
+  - 规范处理 401/403/500 等真实 HTTP 鉴权与服务端异常，确保与现有网络错误处理策略一致。
+- `lib/services/mcp/json_rpc_engine.dart` & `lib/services/mcp/mcp_client.dart`:
+  - 将 `JsonRpcEngine.sendRequest` 默认超时增加至 60s；`McpClient.callTool` 增加显式 `DioException` 网络通信异常类型捕获。
+- `lib/screens/mcp_server_management_screen.dart`:
+  - 在添加 MCP 服务器对话框中，当用户输入以 `/mcp` 结尾的服务端 URL 时自动推荐切换为 `http` 传输通道。
+- `test/services/new_features_comprehensive_test.dart`:
+  - 扩充针对汉字紧邻公式、LaTeX 多行矩阵环境、模型离线刷新容错保持、`/mcp` 快速降级直连的自动化测试套件。
+
+### 核心技术指标与决策
+- **全量测试基线**：700 个测试套件，800+ 测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.24.0+25`
+
+---
+
 ## 2026-09-08 Feature & Fix: Native Tools Pruning, LaTeX Math Rendering, Markdown Thinking, Model Caching & MCP Auto-load/Timeout Resilience (v1.23.0+24)
 
 ### 变更文件

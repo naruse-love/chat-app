@@ -106,7 +106,7 @@ class JsonRpcEngine {
   Future<dynamic> sendRequest(
     String method, [
     dynamic params,
-    Duration timeout = const Duration(seconds: 10),
+    Duration timeout = const Duration(seconds: 60),
   ]) async {
     if (_isClosed) {
       throw StateError('JsonRpcEngine is closed');

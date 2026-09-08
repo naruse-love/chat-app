@@ -80,6 +80,15 @@ class SseMcpTransport implements McpTransport {
     _setStatus(McpConnectionStatus.connecting);
     _cancelToken = CancelToken();
 
+    // 智能自愈：如果 URI 路径为 /mcp 端点（Streamable HTTP 规范），
+    // 避免未携带 Mcp-Session-Id 发送可能挂起 10+ 秒的 GET 请求，直接降级为 HTTP POST 模式
+    if (uri.path.endsWith('/mcp') || uri.path.endsWith('/mcp/') || _isHttpFallback) {
+      _isHttpFallback = true;
+      _postUri = uri;
+      _setStatus(McpConnectionStatus.connected);
+      return;
+    }
+
     try {
       final requestHeaders = <String, dynamic>{
         'Accept': 'text/event-stream',
@@ -175,9 +184,9 @@ class SseMcpTransport implements McpTransport {
         }
       });
     } on DioException catch (dioErr) {
-      // 智能自愈：若 GET 请求返回 400/404/405，说明目标端点为 Streamable HTTP POST /mcp 服务端
+      // 智能自愈：若 GET 请求返回 400/405（常见于 Streamable HTTP POST 端点），进入 HTTP 降级模式
       final statusCode = dioErr.response?.statusCode;
-      if (statusCode == 400 || statusCode == 404 || statusCode == 405) {
+      if (statusCode == 400 || statusCode == 405) {
         _isHttpFallback = true;
         _postUri = uri;
         _setStatus(McpConnectionStatus.connected);
@@ -231,46 +240,109 @@ class SseMcpTransport implements McpTransport {
     // 无论是否为 Streamable HTTP 降级模式，只要 POST 响应体包含数据，立即解析分发（直接 JSON 或 SSE 格式）
     final data = response.data;
     if (data != null) {
-      final bodyStr = data.toString().trim();
-      if (bodyStr.isNotEmpty) {
-        // 1. 直接作为 JSON-RPC 对象或数组解析
-        if (bodyStr.startsWith('{') || bodyStr.startsWith('[')) {
+      if (data is Map<String, dynamic>) {
+        if (_isJsonRpcMessage(data)) {
+          _messageController.add(data);
+        }
+      } else if (data is List) {
+        for (final item in data) {
+          if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
+            _messageController.add(item);
+          }
+        }
+      } else {
+        _dispatchMessagePayload(data.toString(), _messageController);
+      }
+    }
+  }
+
+  /// 验证是否为合法的 JSON-RPC 2.0 消息（过滤仅表示 HTTP 状态确认的 {'ok': true} 等非 RPC 响应）
+  static bool _isJsonRpcMessage(Map<String, dynamic> map) {
+    return map.containsKey('jsonrpc') ||
+        (map.containsKey('id') && (map.containsKey('result') || map.containsKey('error') || map.containsKey('method')));
+  }
+
+  /// 通用 JSON-RPC 及标准 SSE 消息分发解析器 (支持直接 JSON 对象/数组，以及以空行分隔的标准 SSE 事件块)
+  static void _dispatchMessagePayload(
+    String rawBody,
+    StreamController<Map<String, dynamic>> controller,
+  ) {
+    final body = rawBody.trim();
+    if (body.isEmpty) return;
+
+    // 1. 直接作为 JSON-RPC 对象或数组解析
+    if (body.startsWith('{') || body.startsWith('[')) {
+      try {
+        final decoded = jsonDecode(body);
+        if (decoded is Map<String, dynamic>) {
+          if (_isJsonRpcMessage(decoded)) {
+            controller.add(decoded);
+          }
+          return;
+        } else if (decoded is List) {
+          for (final item in decoded) {
+            if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
+              controller.add(item);
+            }
+          }
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // 2. 标准 SSE 格式块解析 (事件块以双换行 \n\n 或 \r\n\r\n 分隔，支持多行 data:)
+    final blocks = body.split(RegExp(r'\r?\n\r?\n'));
+    for (final block in blocks) {
+      final trimmedBlock = block.trim();
+      if (trimmedBlock.isEmpty) continue;
+
+      final dataLines = <String>[];
+      for (final line in trimmedBlock.split(RegExp(r'\r?\n'))) {
+        final trimmedLine = line.trim();
+        if (trimmedLine.startsWith('data:')) {
+          dataLines.add(trimmedLine.substring(5).trimLeft());
+        }
+      }
+
+      if (dataLines.isNotEmpty) {
+        final joined = dataLines.join('\n').trim();
+        bool decodedSuccess = false;
+        if (joined.isNotEmpty && (joined.startsWith('{') || joined.startsWith('['))) {
           try {
-            final decoded = jsonDecode(bodyStr);
+            final decoded = jsonDecode(joined);
             if (decoded is Map<String, dynamic>) {
-              _messageController.add(decoded);
-              return;
+              if (_isJsonRpcMessage(decoded)) {
+                controller.add(decoded);
+              }
+              decodedSuccess = true;
             } else if (decoded is List) {
               for (final item in decoded) {
-                if (item is Map<String, dynamic>) {
-                  _messageController.add(item);
+                if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
+                  controller.add(item);
                 }
               }
-              return;
+              decodedSuccess = true;
             }
           } catch (_) {}
         }
 
-        // 2. 如果 POST 返回的是 SSE 流式行格式 (例如 event: message\ndata: {...})
-        if (bodyStr.contains('data:')) {
-          for (final line in bodyStr.split('\n')) {
-            final trimmed = line.trim();
-            if (trimmed.startsWith('data:')) {
-              final jsonStr = trimmed.substring(5).trim();
-              if (jsonStr.isNotEmpty && (jsonStr.startsWith('{') || jsonStr.startsWith('['))) {
-                try {
-                  final decoded = jsonDecode(jsonStr);
-                  if (decoded is Map<String, dynamic>) {
-                    _messageController.add(decoded);
-                  } else if (decoded is List) {
-                    for (final item in decoded) {
-                      if (item is Map<String, dynamic>) {
-                        _messageController.add(item);
-                      }
+        // 容错：若合并多行解析失败，可能是非标服务端按单换行分隔了多个独立 JSON 消息
+        if (!decodedSuccess && dataLines.length > 1) {
+          for (final singleLine in dataLines) {
+            final lineTrimmed = singleLine.trim();
+            if (lineTrimmed.startsWith('{') || lineTrimmed.startsWith('[')) {
+              try {
+                final decoded = jsonDecode(lineTrimmed);
+                if (decoded is Map<String, dynamic> && _isJsonRpcMessage(decoded)) {
+                  controller.add(decoded);
+                } else if (decoded is List) {
+                  for (final item in decoded) {
+                    if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
+                      controller.add(item);
                     }
                   }
-                } catch (_) {}
-              }
+                }
+              } catch (_) {}
             }
           }
         }

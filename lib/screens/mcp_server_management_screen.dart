@@ -602,10 +602,24 @@ class _McpServerEditDialogState extends ConsumerState<McpServerEditDialog> {
           : '',
     );
 
-    _transportType = config?.transportType ?? McpTransportType.sse;
+    _transportType = config?.transportType ??
+        ((config?.url?.contains('/mcp') == true) ? McpTransportType.http : McpTransportType.sse);
     _defaultSecurityLevel = config?.defaultSecurityLevel ?? ToolSecurityLevel.readOnly;
     _autoConnect = config?.autoConnect ?? true;
     _isEnabled = config?.isEnabled ?? true;
+
+    if (config == null) {
+      _urlController.addListener(() {
+        final url = _urlController.text.trim().toLowerCase();
+        if ((url.endsWith('/mcp') || url.endsWith('/mcp/')) && _transportType != McpTransportType.http) {
+          if (mounted) {
+            setState(() {
+              _transportType = McpTransportType.http;
+            });
+          }
+        }
+      });
+    }
   }
 
   @override

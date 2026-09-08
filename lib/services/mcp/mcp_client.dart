@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart' show DioException;
 import '../../models/mcp/mcp_json_rpc.dart';
 import '../../models/mcp/mcp_tool_info.dart';
 import '../../models/mcp/mcp_transport_type.dart';
@@ -219,6 +220,8 @@ class McpClient {
       return McpToolCallResult.error('MCP JSON-RPC 调用失败 (${e.code}): ${e.message}');
     } on TimeoutException catch (e) {
       return McpToolCallResult.error('MCP 工具调用超时 (${e.duration?.inSeconds ?? 0}s)');
+    } on DioException catch (e) {
+      return McpToolCallResult.error('MCP 网络通信异常: ${e.message ?? e.type.name}');
     } catch (e) {
       return McpToolCallResult.error('MCP 工具调用异常: $e');
     }
