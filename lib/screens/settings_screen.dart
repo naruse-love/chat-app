@@ -343,31 +343,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     color: theme.colorScheme.outline,
                   ),
                 ),
-                const SizedBox(height: 8),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                      value: 'none',
-                      label: Text('关闭', style: TextStyle(fontSize: 11)),
-                    ),
-                    ButtonSegment(
-                      value: 'low',
-                      label: Text('低', style: TextStyle(fontSize: 11)),
-                    ),
-                    ButtonSegment(
-                      value: 'medium',
-                      label: Text('中', style: TextStyle(fontSize: 11)),
-                    ),
-                    ButtonSegment(
-                      value: 'high',
-                      label: Text('高', style: TextStyle(fontSize: 11)),
-                    ),
-                  ],
-                  selected: {settings.reasoningEffort},
-                  onSelectionChanged: (selection) {
-                    notifier.updateReasoningEffort(selection.first);
-                  },
-                  showSelectedIcon: false,
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'none',
+                        label: Text('None', style: TextStyle(fontSize: 11)),
+                      ),
+                      ButtonSegment(
+                        value: 'minimal',
+                        label: Text('Minimal', style: TextStyle(fontSize: 11)),
+                      ),
+                      ButtonSegment(
+                        value: 'low',
+                        label: Text('Low', style: TextStyle(fontSize: 11)),
+                      ),
+                      ButtonSegment(
+                        value: 'medium',
+                        label: Text('Medium', style: TextStyle(fontSize: 11)),
+                      ),
+                      ButtonSegment(
+                        value: 'high',
+                        label: Text('High', style: TextStyle(fontSize: 11)),
+                      ),
+                      ButtonSegment(
+                        value: 'max',
+                        label: Text('Max', style: TextStyle(fontSize: 11)),
+                      ),
+                    ],
+                    selected: {
+                      ['none', 'minimal', 'low', 'medium', 'high', 'max'].contains(settings.reasoningEffort)
+                          ? settings.reasoningEffort
+                          : 'medium'
+                    },
+                    onSelectionChanged: (selection) {
+                      notifier.updateReasoningEffort(selection.first);
+                    },
+                    showSelectedIcon: false,
+                  ),
                 ),
               ],
             ),

@@ -22,7 +22,7 @@ class McpClient {
     required McpTransport transport,
     JsonRpcEngine? engine,
     Map<String, dynamic>? clientInfo,
-    this.defaultTimeout = const Duration(seconds: 15),
+    this.defaultTimeout = const Duration(seconds: 60),
   })  : _transport = transport,
         _engine = engine ?? JsonRpcEngine(transport: transport),
         _clientInfo = clientInfo ??

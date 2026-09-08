@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:highlight/highlight.dart' show highlight, Node;
 
@@ -17,6 +18,33 @@ class MarkdownRenderer extends StatefulWidget {
     this.textColor,
   });
 
+  static String preprocessMath(String raw) {
+    if (!raw.contains(r'$$') && !raw.contains(r'\[')) {
+      return raw;
+    }
+    final segments = raw.split('```');
+    final buffer = StringBuffer();
+    for (int i = 0; i < segments.length; i++) {
+      if (i % 2 == 1) {
+        buffer.write('```');
+        buffer.write(segments[i]);
+        buffer.write('```');
+      } else {
+        var seg = segments[i];
+        seg = seg.replaceAllMapped(
+          RegExp(r'\$\$([\s\S]*?)\$\$'),
+          (m) => '\n```math\n${m[1]!.trim()}\n```\n',
+        );
+        seg = seg.replaceAllMapped(
+          RegExp(r'\\\[([\s\S]*?)\\\]'),
+          (m) => '\n```math\n${m[1]!.trim()}\n```\n',
+        );
+        buffer.write(seg);
+      }
+    }
+    return buffer.toString();
+  }
+
   @override
   State<MarkdownRenderer> createState() => _MarkdownRendererState();
 }
@@ -30,22 +58,23 @@ class _MarkdownRendererState extends State<MarkdownRenderer> {
   @override
   void initState() {
     super.initState();
-    _displayData = widget.markdownData;
+    _displayData = MarkdownRenderer.preprocessMath(widget.markdownData);
   }
 
   @override
   void didUpdateWidget(covariant MarkdownRenderer oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final processed = MarkdownRenderer.preprocessMath(widget.markdownData);
     if (!widget.isStreaming) {
       _throttleTimer?.cancel();
       _throttleTimer = null;
       _isThrottleActive = false;
       _pendingData = null;
       setState(() {
-        _displayData = widget.markdownData;
+        _displayData = processed;
       });
     } else {
-      _pendingData = widget.markdownData;
+      _pendingData = processed;
       if (!_isThrottleActive) {
         _applyThrottle();
       }
@@ -98,7 +127,71 @@ class _MarkdownRendererState extends State<MarkdownRenderer> {
           context: context,
           isStreaming: widget.isStreaming,
         ),
+        'math': MathInlineElementBuilder(
+          context: context,
+          textColor: widget.textColor,
+        ),
       },
+      inlineSyntaxes: [
+        InlineMathSyntax(),
+        LatexInlineParenSyntax(),
+      ],
+    );
+  }
+}
+
+class InlineMathSyntax extends md.InlineSyntax {
+  InlineMathSyntax()
+      : super(r'''(?<=^|[\s\(\[\{<:;,"'])\$([^\s\$](?:[^\$\n]*?[^\s\$])?)\$(?=[\s\)\]\}>:;,"'.?!]|$)''');
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    final raw = match[1];
+    if (raw == null || raw.trim().isEmpty) return false;
+    if (RegExp(r'^\d+(\.\d+)?$').hasMatch(raw.trim())) {
+      return false;
+    }
+    parser.addNode(md.Element('math', [md.Text(raw.trim())]));
+    return true;
+  }
+}
+
+class LatexInlineParenSyntax extends md.InlineSyntax {
+  LatexInlineParenSyntax() : super(r'\\\(([\s\S]+?)\\\)');
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    final raw = match[1];
+    if (raw == null || raw.trim().isEmpty) return false;
+    parser.addNode(md.Element('math', [md.Text(raw.trim())]));
+    return true;
+  }
+}
+
+class MathInlineElementBuilder extends MarkdownElementBuilder {
+  final BuildContext context;
+  final TextStyle? textColor;
+
+  MathInlineElementBuilder({required this.context, this.textColor});
+
+  @override
+  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
+    final rawTex = element.textContent.trim();
+    if (rawTex.isEmpty) return null;
+    final theme = Theme.of(context);
+    final style = preferredStyle ?? textColor ?? theme.textTheme.bodyMedium;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+      child: Math.tex(
+        rawTex,
+        mathStyle: MathStyle.text,
+        textStyle: style,
+        onErrorFallback: (err) => Text(
+          '\$$rawTex\$',
+          style: style,
+        ),
+      ),
     );
   }
 }
@@ -139,7 +232,11 @@ class CodeElementBuilder extends MarkdownElementBuilder {
       );
     }
 
-    final language = hasLanguage ? classAttr.substring(9) : 'code';
+    final language = hasLanguage ? classAttr.substring(9).toLowerCase() : 'code';
+    if (language == 'math' || language == 'latex' || language == 'tex' || language == 'katex') {
+      return MathBlockWidget(tex: codeContent);
+    }
+
     return CodeBlockWidget(
       code: codeContent,
       language: language,
@@ -336,6 +433,122 @@ const Map<String, TextStyle> _lightHighlightTheme = {
   'function': TextStyle(color: Color(0xFF795E26)),
   'variable': TextStyle(color: Color(0xFF001080)),
   'built_in': TextStyle(color: Color(0xFF008080)),
-  'title': TextStyle(color: Color(0xFF795E26)),
   'params': TextStyle(color: Color(0xFF000000)),
 };
+
+class MathBlockWidget extends StatefulWidget {
+  final String tex;
+  const MathBlockWidget({super.key, required this.tex});
+
+  @override
+  State<MathBlockWidget> createState() => _MathBlockWidgetState();
+}
+
+class _MathBlockWidgetState extends State<MathBlockWidget> {
+  bool _isCopied = false;
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.tex));
+    setState(() => _isCopied = true);
+    Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _isCopied = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[900] : Colors.grey[100],
+        borderRadius: BorderRadius.circular(8.0),
+        border: Border.all(
+          color: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey[850] : Colors.grey[200],
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(7.0),
+                topRight: Radius.circular(7.0),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.functions,
+                      size: 14,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'MATH',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+                GestureDetector(
+                  onTap: _copy,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isCopied ? Icons.check : Icons.copy,
+                        size: 14.0,
+                        color: _isCopied ? Colors.green : theme.colorScheme.outline,
+                      ),
+                      const SizedBox(width: 4.0),
+                      Text(
+                        _isCopied ? '已复制' : '复制公式',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: _isCopied ? Colors.green : theme.colorScheme.outline,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Math.tex(
+                widget.tex,
+                mathStyle: MathStyle.display,
+                textStyle: TextStyle(
+                  fontSize: 15.0,
+                  color: isDark ? Colors.grey[100] : Colors.grey[900],
+                ),
+                onErrorFallback: (err) => SelectableText(
+                  widget.tex,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    color: isDark ? Colors.red[300] : Colors.red[700],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

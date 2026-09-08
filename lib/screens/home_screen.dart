@@ -7,6 +7,7 @@ import '../providers/model_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/agent_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/mcp_provider.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/chat_input.dart';
 import '../widgets/tool_confirmation_card.dart';
@@ -57,6 +58,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final apiState = ref.watch(apiConfigProvider);
     final modelState = ref.watch(modelProvider);
     final convState = ref.watch(conversationProvider);
+    ref.watch(mcpProvider);
     final theme = Theme.of(context);
 
     // Set up auto scroll listener and error display
@@ -417,41 +419,70 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 },
               ),
             const SizedBox(height: 2),
-            InkWell(
-              onTap: () => Navigator.pushNamed(context, '/model_selector'),
-              borderRadius: BorderRadius.circular(16),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: isLargeScreen ? MainAxisAlignment.center : MainAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.auto_awesome,
-                      size: 14,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        modelState.selectedModel?.modelName ?? '选择模型...',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: isLargeScreen ? MainAxisAlignment.center : MainAxisAlignment.start,
+              children: [
+                Flexible(
+                  child: InkWell(
+                    onTap: () => Navigator.pushNamed(context, '/model_selector'),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.auto_awesome,
+                            size: 14,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              modelState.selectedModel?.modelName ?? '选择模型...',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_drop_down,
+                            size: 16,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_drop_down,
-                      size: 16,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                InkWell(
+                  onTap: () async {
+                    await ref.read(modelProvider.notifier).fetchModels(forceRefresh: true);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('已刷新模型列表'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4.0),
+                    child: Icon(
+                      Icons.refresh,
+                      size: 14,
+                      color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

@@ -397,7 +397,7 @@ void main() {
   });
 
   group('Riverpod Provider Tests', () {
-    test('toolRegistryProvider initializes default registry with 21 built-in tools', () {
+    test('toolRegistryProvider initializes default registry with 14 built-in tools', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
@@ -416,14 +416,17 @@ void main() {
       expect(registry.hasTool('code_eval'), isTrue);
       expect(registry.hasTool('clipboard_read'), isTrue);
       expect(registry.hasTool('clipboard_write'), isTrue);
-      expect(registry.hasTool('calendar_query_events'), isTrue);
-      expect(registry.hasTool('calendar_create_event'), isTrue);
-      expect(registry.hasTool('notification_schedule'), isTrue);
-      expect(registry.hasTool('notification_cancel'), isTrue);
-      expect(registry.hasTool('contacts_search'), isTrue);
-      expect(registry.hasTool('geolocation_get'), isTrue);
-      expect(registry.hasTool('reverse_geocode'), isTrue);
-      expect(registry.getAllTools().length, equals(21));
+      expect(registry.hasTool('calendar_query_events'), isFalse);
+      expect(registry.hasTool('calendar_create_event'), isFalse);
+      expect(registry.hasTool('notification_schedule'), isFalse);
+      expect(registry.hasTool('notification_cancel'), isFalse);
+      expect(registry.hasTool('contacts_search'), isFalse);
+      expect(registry.hasTool('geolocation_get'), isFalse);
+      expect(registry.hasTool('reverse_geocode'), isFalse);
+      expect(registry.getAllTools().length, equals(14));
+
+      final nativeRegistry = ToolRegistry.defaultRegistry(includeNativeTools: true);
+      expect(nativeRegistry.getAllTools().length, equals(21));
     });
   });
 }

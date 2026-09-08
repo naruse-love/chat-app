@@ -29,6 +29,7 @@ void main() {
       locationService: locationService,
       contactsSanitizer: contactsSanitizer,
       permissionManagerService: permissionService,
+      includeNativeTools: true,
     );
   });
 

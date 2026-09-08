@@ -15,6 +15,7 @@ void main() {
       registry = ToolRegistry.defaultRegistry(
         calendarService: calendarService,
         notificationService: notificationService,
+        includeNativeTools: true,
       );
     });
 

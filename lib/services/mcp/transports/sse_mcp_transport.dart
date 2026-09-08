@@ -19,6 +19,7 @@ class SseMcpTransport implements McpTransport {
   CancelToken? _cancelToken;
   StreamSubscription? _streamSubscription;
   Uri? _postUri;
+  String? _sessionId;
   bool _isHttpFallback = false;
   bool _isClosed = false;
 
@@ -26,7 +27,14 @@ class SseMcpTransport implements McpTransport {
     required this.uri,
     this.headers,
     Dio? dio,
-  }) : _dio = dio ?? Dio();
+  }) : _dio = dio ??
+            Dio(
+              BaseOptions(
+                connectTimeout: const Duration(seconds: 30),
+                receiveTimeout: const Duration(seconds: 60),
+                sendTimeout: const Duration(seconds: 30),
+              ),
+            );
 
   @override
   McpTransportType get transportType => McpTransportType.sse;
@@ -43,8 +51,14 @@ class SseMcpTransport implements McpTransport {
   @override
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
 
+  /// 获取当前维护的 Session ID (如果有)
+  String? get sessionId => _sessionId;
+
   /// POST 请求的目标 URI（通过 SSE endpoint 事件动态获得，或默认使用基准 URI）
   Uri? get postUri => _postUri;
+
+  /// 是否处于 Streamable HTTP POST 降级模式
+  bool get isHttpFallback => _isHttpFallback;
 
   void _setStatus(McpConnectionStatus newStatus) {
     if (_status != newStatus && !_isClosed) {
@@ -190,6 +204,7 @@ class SseMcpTransport implements McpTransport {
       'Content-Type': 'application/json',
       'Accept': 'application/json, text/event-stream',
       'MCP-Protocol-Version': '2024-11-05',
+      if (_sessionId != null) 'Mcp-Session-Id': _sessionId!,
       if (headers != null) ...headers!,
     };
 
@@ -206,11 +221,19 @@ class SseMcpTransport implements McpTransport {
       ),
     );
 
-    // 如果处于 Streamable HTTP 降级模式，直接从 POST 响应体中解析消息
-    if (_isHttpFallback) {
-      final data = response.data;
-      if (data != null) {
-        final bodyStr = data.toString().trim();
+    // 捕获并维护服务端可能返回的 Session ID
+    final sessionHeader = response.headers.value('mcp-session-id') ??
+        response.headers.value('Mcp-Session-Id');
+    if (sessionHeader != null && sessionHeader.isNotEmpty) {
+      _sessionId = sessionHeader;
+    }
+
+    // 无论是否为 Streamable HTTP 降级模式，只要 POST 响应体包含数据，立即解析分发（直接 JSON 或 SSE 格式）
+    final data = response.data;
+    if (data != null) {
+      final bodyStr = data.toString().trim();
+      if (bodyStr.isNotEmpty) {
+        // 1. 直接作为 JSON-RPC 对象或数组解析
         if (bodyStr.startsWith('{') || bodyStr.startsWith('[')) {
           try {
             final decoded = jsonDecode(bodyStr);
@@ -226,6 +249,30 @@ class SseMcpTransport implements McpTransport {
               return;
             }
           } catch (_) {}
+        }
+
+        // 2. 如果 POST 返回的是 SSE 流式行格式 (例如 event: message\ndata: {...})
+        if (bodyStr.contains('data:')) {
+          for (final line in bodyStr.split('\n')) {
+            final trimmed = line.trim();
+            if (trimmed.startsWith('data:')) {
+              final jsonStr = trimmed.substring(5).trim();
+              if (jsonStr.isNotEmpty && (jsonStr.startsWith('{') || jsonStr.startsWith('['))) {
+                try {
+                  final decoded = jsonDecode(jsonStr);
+                  if (decoded is Map<String, dynamic>) {
+                    _messageController.add(decoded);
+                  } else if (decoded is List) {
+                    for (final item in decoded) {
+                      if (item is Map<String, dynamic>) {
+                        _messageController.add(item);
+                      }
+                    }
+                  }
+                } catch (_) {}
+              }
+            }
+          }
         }
       }
     }

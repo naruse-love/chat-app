@@ -701,9 +701,10 @@ class _ChatBubbleState extends State<ChatBubble> {
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
               padding: const EdgeInsets.fromLTRB(8.0, 0.0, 8.0, 8.0),
-              child: SelectableText(
-                widget.message.reasoningContent!,
-                style: theme.textTheme.bodyMedium?.copyWith(
+              child: MarkdownRenderer(
+                markdownData: widget.message.reasoningContent!,
+                isStreaming: widget.isStreaming,
+                textColor: theme.textTheme.bodyMedium?.copyWith(
                   fontStyle: FontStyle.italic,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
@@ -848,9 +849,10 @@ class _ChatBubbleState extends State<ChatBubble> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     width: double.infinity,
-                    child: SelectableText(
-                      widget.message.reasoningContent!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                    child: MarkdownRenderer(
+                      markdownData: widget.message.reasoningContent!,
+                      isStreaming: widget.isStreaming,
+                      textColor: theme.textTheme.bodyMedium?.copyWith(
                         fontStyle: FontStyle.italic,
                       ),
                     ),

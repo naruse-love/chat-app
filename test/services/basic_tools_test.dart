@@ -604,9 +604,9 @@ void main() {
   });
 
   group('ToolRegistry Integration Tests for Safe Basic Tools', () {
-    test('Default registry contains all 21 registered tools', () {
+    test('Default registry contains all 14 registered tools', () {
       final registry = ToolRegistry.defaultRegistry();
-      expect(registry.getAllTools().length, equals(21));
+      expect(registry.getAllTools().length, equals(14));
       expect(
         registry.getRegisteredNames(),
         containsAll([
@@ -624,13 +624,6 @@ void main() {
           'code_eval',
           'clipboard_read',
           'clipboard_write',
-          'calendar_query_events',
-          'calendar_create_event',
-          'notification_schedule',
-          'notification_cancel',
-          'contacts_search',
-          'geolocation_get',
-          'reverse_geocode',
         ]),
       );
     });
@@ -661,9 +654,9 @@ void main() {
       expect(safeNames, isNot(contains('web_search')));
       expect(safeNames, isNot(contains('weather_query')));
 
-      // ReadOnly tools (Level 1) -> 11 tools (Level 0 + Level 1, including reverse_geocode)
+      // ReadOnly tools (Level 0 + Level 1) -> 10 tools without reverse_geocode
       final readOnlySchemas = registry.exportOpenAiSchemas(maxSecurityLevel: ToolSecurityLevel.readOnly);
-      expect(readOnlySchemas.length, equals(11));
+      expect(readOnlySchemas.length, equals(10));
     });
   });
 }

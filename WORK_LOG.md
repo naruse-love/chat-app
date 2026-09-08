@@ -1,3 +1,37 @@
+## 2026-09-08 Feature & Fix: Native Tools Pruning, LaTeX Math Rendering, Markdown Thinking, Model Caching & MCP Auto-load/Timeout Resilience (v1.23.0+24)
+
+### 变更文件
+- `lib/services/tool_registry.dart` & `test/services/*`:
+  - 默认关闭“四、移动端原生特权与位置服务工具”（包含 `calendar_query_events`, `calendar_create_event`, `notification_schedule`, `notification_cancel`, `contacts_search`, `geolocation_get`, `reverse_geocode` 共 7 个工具），将核心内置静态工具收敛精简至 14 个，降低上下文噪音；
+  - 同步更新相关测试用例断言。
+- `lib/widgets/chat_bubble.dart`:
+  - 思考过程（`reasoningContent`）及中间推理面板支持 Markdown 富文本渲染（代码块、列表、表格、格式高亮等）。
+- `lib/widgets/markdown_renderer.dart`:
+  - 引入 `flutter_math_fork` 支持数学公式与 LaTeX 解析渲染；
+  - 预处理转换块级公式 `$$...$$` 和 `\[...\]` 为 ````math```` 语法块；
+  - 注册 `InlineMathSyntax`（精准过滤常规货币金额 `$100` 等，防止误匹配）与 `LatexInlineParenSyntax` 解析行内公式 `$...$` 和 `\(...\)`；
+  - 实现公式代码块 `MathBlockWidget`（支持公式横向滚动防溢出、TeX 徽标与一键复制原始公式 LaTeX 代码）与行内 `MathInlineElementBuilder`。
+- `lib/providers/model_provider.dart`, `lib/screens/model_selector_screen.dart`, `lib/screens/home_screen.dart`:
+  - 模型提供商模型持久化缓存：首次获取后写入 `SharedPreferences`，重启 App 无需再次请求网络模型列表；
+  - 记录并恢复上次使用的模型（`last_selected_model_$configId`）；
+  - 主页顶栏模型选择器增加刷新按钮，模型管理页增加强制刷新网络模型选项并提供 Toast 反馈。
+- `lib/services/mcp/transports/sse_mcp_transport.dart`, `lib/services/mcp/transports/http_mcp_transport.dart`, `lib/services/mcp/mcp_client.dart`:
+  - 解决 `https://mcp.273722.xyz/mcp` 在 POST 响应内即时返回 `event: message\ndata: {...}` 报文但 SSE 客户端因未挂载流而导致 15s 假死超时的缺陷；
+  - 在 POST 响应拦截中通用解析 JSON-RPC 结果与 SSE 数据行，正确提取并传递 `mcp-session-id`；
+  - 配置 Dio `connectTimeout` (30s) / `receiveTimeout` (60s) / `sendTimeout` (30s)，将 `McpClient.defaultTimeout` 提升至 60s；
+  - 在 `HomeScreen` 中主动监听 `mcpProvider`，启动 App 时自动加载并连接已启用的 MCP 服务，无需手动进入 MCP 设置页面。
+- `lib/screens/settings_screen.dart`:
+  - 思考等级扩展为 6 档：`None`, `Minimal`, `Low`, `Medium`, `High`, `Max`，全部采用全英文标注，并适配横向滑动。
+- `test/services/new_features_comprehensive_test.dart`:
+  - 新增数学公式解析、货币防误触、思考过程 Markdown 渲染、模型持久化缓存恢复、MCP 响应解析与超时自愈全覆盖测试用例。
+
+### 核心技术指标与决策
+- **全量测试基线**：全量测试 100% 全部通过（0 failures, 696 个测试套件，800+ 测试用例全部通过）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **健壮性与自愈**：消除 MCP 虚假超时与懒加载失效，提供商模型离线秒开，LaTeX 数学公式与货币符号共存安全。
+
+---
+
 ## 2026-09-05 Fix: MCP CancelToken Serialization Exception & Native Agent Tools Hardcoding Healing (v1.22.0+23)
 
 ### 变更文件

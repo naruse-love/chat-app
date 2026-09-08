@@ -86,7 +86,18 @@ class _ModelSelectorScreenState extends ConsumerState<ModelSelectorScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.read(modelProvider.notifier).fetchModels(),
+            tooltip: '刷新模型列表',
+            onPressed: () async {
+              await ref.read(modelProvider.notifier).fetchModels(forceRefresh: true);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('已刷新模型列表'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              }
+            },
           ),
         ],
       ),

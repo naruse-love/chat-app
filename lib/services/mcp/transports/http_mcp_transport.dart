@@ -25,7 +25,14 @@ class HttpMcpTransport implements McpTransport {
     required this.uri,
     this.headers,
     Dio? dio,
-  }) : _dio = dio ?? Dio();
+  }) : _dio = dio ??
+            Dio(
+              BaseOptions(
+                connectTimeout: const Duration(seconds: 30),
+                receiveTimeout: const Duration(seconds: 60),
+                sendTimeout: const Duration(seconds: 30),
+              ),
+            );
 
   @override
   McpTransportType get transportType => McpTransportType.http;

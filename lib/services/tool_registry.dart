@@ -40,6 +40,7 @@ class ToolRegistry {
     ILocationService? locationService,
     ContactsSanitizer? contactsSanitizer,
     PermissionManagerService? permissionManagerService,
+    bool includeNativeTools = false,
   }) {
     final effectiveCalendar = calendarService ?? InMemoryCalendarService(seedDefaults: false);
     final effectiveNotification = notificationService ?? InMemoryNotificationService();
@@ -69,35 +70,37 @@ class ToolRegistry {
       CodeEvalTool(codeExecutionService: codeExecutionService),
       const ClipboardReadTool(),
       const ClipboardWriteTool(),
-      // Native Privileged Tools (Milestone 25)
-      CalendarQueryEventsTool(
-        calendarService: effectiveCalendar,
-        permissionService: effectivePermission,
-      ),
-      CalendarCreateEventTool(
-        calendarService: effectiveCalendar,
-        permissionService: effectivePermission,
-      ),
-      NotificationScheduleTool(
-        notificationService: effectiveNotification,
-        permissionService: effectivePermission,
-      ),
-      NotificationCancelTool(
-        notificationService: effectiveNotification,
-        permissionService: effectivePermission,
-      ),
-      ContactsSearchTool(
-        contactsService: effectiveContacts,
-        contactsSanitizer: effectiveSanitizer,
-        permissionService: effectivePermission,
-      ),
-      GeolocationGetTool(
-        locationService: effectiveLocation,
-        permissionService: effectivePermission,
-      ),
-      ReverseGeocodeTool(
-        locationService: effectiveLocation,
-      ),
+      // Native Privileged Tools (Only if explicitly enabled, deleted by default)
+      if (includeNativeTools) ...[
+        CalendarQueryEventsTool(
+          calendarService: effectiveCalendar,
+          permissionService: effectivePermission,
+        ),
+        CalendarCreateEventTool(
+          calendarService: effectiveCalendar,
+          permissionService: effectivePermission,
+        ),
+        NotificationScheduleTool(
+          notificationService: effectiveNotification,
+          permissionService: effectivePermission,
+        ),
+        NotificationCancelTool(
+          notificationService: effectiveNotification,
+          permissionService: effectivePermission,
+        ),
+        ContactsSearchTool(
+          contactsService: effectiveContacts,
+          contactsSanitizer: effectiveSanitizer,
+          permissionService: effectivePermission,
+        ),
+        GeolocationGetTool(
+          locationService: effectiveLocation,
+          permissionService: effectivePermission,
+        ),
+        ReverseGeocodeTool(
+          locationService: effectiveLocation,
+        ),
+      ],
     ]);
     return registry;
   }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/model_info.dart';
 import '../models/api_config.dart';
@@ -40,16 +42,68 @@ class ModelNotifier extends StateNotifier<ModelState> {
   final ApiConfigDao _apiConfigDao;
   final ApiConfig? _activeConfig;
 
+  static String _cacheKey(String configId) => 'cached_models_$configId';
+  static String _lastSelectedKey(String configId) => 'last_selected_model_$configId';
+
   ModelNotifier(this._chatService, this._apiConfigDao, this._activeConfig) : super(ModelState()) {
     fetchModels();
   }
 
-  Future<void> fetchModels() async {
+  ModelInfo? _pickDefaultModel(List<ModelInfo> list) {
+    if (list.isEmpty) return null;
+    if (_activeConfig?.id == 'opencode_free') {
+      final idx = list.indexWhere((m) => m.id == 'deepseek-v4-flash-free');
+      if (idx != -1) return list[idx];
+    }
+    return list.first;
+  }
+
+  Future<void> fetchModels({bool forceRefresh = false}) async {
     if (_activeConfig == null) {
       state = ModelState();
       return;
     }
 
+    final configId = _activeConfig.id;
+    final cacheKey = _cacheKey(configId);
+    final lastSelectedKey = _lastSelectedKey(configId);
+
+    // 1. 若非强制刷新，优先从本地缓存快速加载模型与上次选中的模型，退出重进无需再次网络加载
+    if (!forceRefresh) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final cachedJson = prefs.getString(cacheKey);
+        if (cachedJson != null && cachedJson.isNotEmpty) {
+          final List<dynamic> decoded = jsonDecode(cachedJson);
+          final cachedModels = decoded
+              .whereType<Map<String, dynamic>>()
+              .map((m) => ModelInfo.fromJson(m))
+              .toList();
+
+          if (cachedModels.isNotEmpty) {
+            final savedModelId = prefs.getString(lastSelectedKey);
+            ModelInfo? selected;
+            if (savedModelId != null) {
+              final matchIdx = cachedModels.indexWhere((m) => m.id == savedModelId);
+              if (matchIdx != -1) {
+                selected = cachedModels[matchIdx];
+              }
+            }
+            selected ??= _pickDefaultModel(cachedModels);
+
+            if (!mounted) return;
+            state = ModelState(
+              models: cachedModels,
+              selectedModel: selected,
+              isLoading: false,
+            );
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. 从网络拉取最新模型列表
     state = state.copyWith(isLoading: true, error: null);
     try {
       final apiKey = await _apiConfigDao.getApiKey(_activeConfig.apiKeyRef) ?? '';
@@ -64,20 +118,28 @@ class ModelNotifier extends StateNotifier<ModelState> {
         models = models.where((m) => m.id.toLowerCase().contains('free')).toList();
       }
 
-      ModelInfo? selected = state.selectedModel;
-      if (selected == null || !models.any((m) => m.id == selected!.id)) {
-        if (_activeConfig.id == 'opencode_free') {
-          final defaultIdx = models.indexWhere((m) => m.id == 'deepseek-v4-flash-free');
-          if (defaultIdx != -1) {
-            selected = models[defaultIdx];
-          } else {
-            selected = models.isNotEmpty ? models.first : null;
-          }
-        } else {
-          selected = models.isNotEmpty ? models.first : null;
+      // 持久化缓存最新拉取的模型列表
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final encoded = jsonEncode(models.map((m) => m.toJson()).toList());
+        await prefs.setString(cacheKey, encoded);
+      } catch (_) {}
+
+      final prefs = await SharedPreferences.getInstance();
+      final savedModelId = prefs.getString(lastSelectedKey);
+      ModelInfo? selected;
+      if (savedModelId != null) {
+        final matchIdx = models.indexWhere((m) => m.id == savedModelId);
+        if (matchIdx != -1) {
+          selected = models[matchIdx];
         }
       }
+      selected ??= state.selectedModel;
+      if (selected == null || !models.any((m) => m.id == selected!.id)) {
+        selected = _pickDefaultModel(models);
+      }
 
+      if (!mounted) return;
       state = ModelState(models: models, selectedModel: selected, isLoading: false);
     } catch (e) {
       if (!mounted) return;
@@ -87,16 +149,7 @@ class ModelNotifier extends StateNotifier<ModelState> {
       }
       ModelInfo? selected = state.selectedModel;
       if (selected == null || !fallbackModels.any((m) => m.id == selected!.id)) {
-        if (_activeConfig.id == 'opencode_free') {
-          final defaultIdx = fallbackModels.indexWhere((m) => m.id == 'deepseek-v4-flash-free');
-          if (defaultIdx != -1) {
-            selected = fallbackModels[defaultIdx];
-          } else {
-            selected = fallbackModels.isNotEmpty ? fallbackModels.first : null;
-          }
-        } else {
-          selected = fallbackModels.isNotEmpty ? fallbackModels.first : null;
-        }
+        selected = _pickDefaultModel(fallbackModels);
       }
       state = ModelState(
         models: fallbackModels,
@@ -108,6 +161,11 @@ class ModelNotifier extends StateNotifier<ModelState> {
 
   void selectModel(ModelInfo model) {
     state = state.copyWith(selectedModel: model);
+    if (_activeConfig != null) {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString(_lastSelectedKey(_activeConfig.id), model.id);
+      }).catchError((_) {});
+    }
   }
 
   void addCustomModel(String modelId) {
@@ -128,6 +186,16 @@ class ModelNotifier extends StateNotifier<ModelState> {
       updatedList.add(customModel);
     }
     state = state.copyWith(models: updatedList, selectedModel: customModel);
+
+    // 持久化自定义模型与当前选择
+    if (_activeConfig != null) {
+      SharedPreferences.getInstance().then((prefs) {
+        final cacheKey = _cacheKey(_activeConfig.id);
+        final encoded = jsonEncode(updatedList.map((m) => m.toJson()).toList());
+        prefs.setString(cacheKey, encoded);
+        prefs.setString(_lastSelectedKey(_activeConfig.id), customModel.id);
+      }).catchError((_) {});
+    }
   }
 }
 
