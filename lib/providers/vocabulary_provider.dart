@@ -93,10 +93,19 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
 
   /// 删除指定单词
   Future<void> deleteEntry(int id) async {
-    await vocabularyDao.delete(id);
-    if (!mounted) return;
-
+    // 立即从当前内存列表中剔除，保证 Dismissible 动画完成后同步树状态
+    final updatedList = state.entries.where((e) => e.id != id).toList();
     final shouldClear = state.currentResult?.id == id;
+    state = state.copyWith(
+      entries: updatedList,
+      clearCurrentResult: shouldClear,
+    );
+
+    try {
+      await vocabularyDao.delete(id);
+    } catch (_) {}
+
+    if (!mounted) return;
     final freshList = await vocabularyDao.getAll(searchQuery: state.searchQuery);
     if (!mounted) return;
 

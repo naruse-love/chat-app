@@ -1,3 +1,35 @@
+## 2026-09-10 Fix & Hardening: Weblio Scraper Calibration, Ruby Furigana Anki Compliance, SQLite Deduplication, Trace-to-Root Recursion & AI Fallback Healing (v1.26.0+27)
+
+### 变更文件
+- `lib/services/weblio_service.dart`:
+  - 新增词典语法活用与重定向条目自动递归“查到底”（Trace-to-Root）：当遇到类似「講じる」（小学馆《大辞泉》仅标注「『講ずる』の上一段化」）的活用引证条目时，自动提取目标词（支持 `こう（講）ずる`、`こう・ずる【講ずる】`、`講ずる（こうずる）` 等全角/半角括号及词典词头规范格式），递归抓取根词的完整实质多义项释义与例句；
+  - 修复中黑点词头被误截断缺陷：重构 `_addCandidatesFromRaw`，杜绝 `こう・ずる` 因中黑点被粗暴截断为 `こう`（错误查询至单字「甲/乞う」）的缺陷，正确提取假名候选词 `こうずる` 与汉字根词 `講ずる`；
+  - 扩展重定向识别与候选词抽取范围：精准覆盖箭头引用（`⇒ 講ずる`、`→ 講ずる`、`➡ 講ずる`）、带编号引用（`１ 「講ずる」に同じ`）、无引号引用（`講ずるの上一段活用`、`講ずるに同じ`）以及 `の項を見よ`/`を参照`/`のこと`；
+  - 修复多义项词条误判纯重定向缺陷：在 `isRedirectDefinition` 与 `hasSubstantiveDefinition` 中支持多行多义项独立判断，保证包含真实释义的多义项条目不被误杀；
+  - 修复例句破折号 okurigana 重复拼接缺陷：当破折号后直接紧随送假名（如 `「適切な処置を―じる」`）时替换为词干 `stem`，彻底根除产出 `講じるじる` 等叠字畸形；
+  - 释义合并去重：`mergeRedirectResult` 内部增加子串包含检查，避免多层穿透重复拼接定义。
+- `lib/services/vocabulary_service.dart`:
+  - 缺陷缓存自动穿透自愈：`lookupWord` 本地缓存命中检查增加实质释义校验；若历史缓存条目仅存无实质词义的语法重定向残留，自动穿透执行网络“查到底”并原子更新数据库，用户无需手动清除缓存即可直接恢复正常；
+  - 中文释义元语言语法废话清洗：新增 `sanitizeDefinitionSc` 过滤清洗器，并在 LLM Prompt 中施加严格约束，坚决剥离“是…的上一段活用/化”等套话，确保中文释义直达词汇实质含义；
+  - 缺陷条目 AI 补全能力强化：当词典释义缺陷时，允许 AI 在撰写 `definitionJa` 的同时补全规范词性标注与假名读音；
+  - 词典未收录或网络故障时触发全量 AI 智能兜底（`_generateWithLlmFallback`），生成读音、词性、日文释义、中文释义与 Anki Ruby 例句并入库持久化；
+  - 升级 LLM 翻译 JSON 解析器：增加 Markdown 代码块正则提取及首尾大括号子串容错，解决前后解释说明文字干扰问题。
+- `lib/data/vocabulary_dao.dart`:
+  - 修复 `insert` 缺少 id 时重复插入同形词的缺陷：自动基于 `vocabKanji` 检查已有条目并复用 ID 进行原子替换更新，防止多次查询或刷新产生重复历史记录。
+- `lib/providers/vocabulary_provider.dart`:
+  - 修复 `deleteEntry` 异步时序缺陷：在执行异步数据库操作前同步更新内存列表，彻底杜绝 Flutter `Dismissible` 在动画重建过程中因数据树未及时脱落引发的断言崩溃。
+- `lib/screens/vocabulary_screen.dart`:
+  - 当前生词卡片新增「重新抓取与翻译」刷新按钮，便于在初次查词未配模型或需要重翻时一键强制刷新。
+- `test/services/weblio_service_test.dart` & `test/services/vocabulary_service_test.dart`:
+  - 新增针对中黑点送假名不截断、带编号重定向、箭头引用、破折号例句防叠字、中文语法套话清洗、缺陷缓存自动穿透自愈及 AI 补全全流程的自动化回归与对抗性测试用例。
+
+### 核心技术指标与决策
+- **全量测试基线**：751 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：保持 `1.26.0+27`（按指令合并至当前版本，不额外递增）
+
+---
+
 ## 2026-09-10 Feature: Japanese Vocabulary Learning Module (Weblio Scraping + LLM Translation + SQLite Storage) (v1.25.0+26)
 
 ### 变更文件

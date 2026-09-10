@@ -10,16 +10,29 @@ class VocabularyDao {
   VocabularyDao({DatabaseHelper? dbHelper})
       : _dbHelper = dbHelper ?? DatabaseHelper.instance;
 
-  /// 插入或替换新单词，返回生成的自增 ID
+  /// 插入或替换新单词，返回生成的自增 ID（当单词已存在时更新并返回已有 ID，防止冗余重复行）
   Future<int> insert(VocabularyEntry entry) async {
     final db = await _dbHelper.database;
     if (!db.isOpen) return -1;
-    final map = entry.toMap();
-    return await db.insert(
+
+    int? effectiveId = entry.id;
+    if (effectiveId == null) {
+      final existing = await findByKanji(entry.vocabKanji);
+      if (existing != null) {
+        effectiveId = existing.id;
+      }
+    }
+
+    final entryToSave = effectiveId != null ? entry.copyWith(id: effectiveId) : entry;
+    final map = entryToSave.toMap();
+
+    final resultId = await db.insert(
       'vocabulary',
       map,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+
+    return effectiveId ?? resultId;
   }
 
   /// 按汉字/单词精准查找（去重与缓存命中用）

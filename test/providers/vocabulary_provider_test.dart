@@ -26,7 +26,11 @@ class MockFlutterSecureStorage implements FlutterSecureStorage {
 
 class FakeWeblioService extends WeblioService {
   @override
-  Future<WeblioResult> lookupWord(String rawWord) async {
+  Future<WeblioResult> lookupWord(
+    String rawWord, {
+    int maxDepth = 2,
+    Set<String>? visited,
+  }) async {
     if (rawWord == '美しい') {
       return const WeblioResult(
         word: '美しい',

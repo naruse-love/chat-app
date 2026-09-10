@@ -449,6 +449,17 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                     onPressed: () => _launchWeblioUrl(entry.sourceUrl),
                   ),
                 IconButton(
+                  tooltip: '重新抓取与翻译',
+                  icon: const Icon(Icons.refresh, size: 20),
+                  onPressed: () {
+                    _lookupController.text = entry.vocabKanji;
+                    ref.read(vocabularyProvider.notifier).lookupWord(
+                          entry.vocabKanji,
+                          forceRefresh: true,
+                        );
+                  },
+                ),
+                IconButton(
                   tooltip: '关闭当前卡片',
                   icon: const Icon(Icons.close, size: 20),
                   onPressed: () {

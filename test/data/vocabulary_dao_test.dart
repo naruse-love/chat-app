@@ -82,6 +82,30 @@ void main() {
       expect(retrieved.sourceDict, 'デジタル大辞泉');
     });
 
+    test('insert with existing vocabKanji updates the record instead of duplicating', () async {
+      final id1 = await dao.insert(VocabularyEntry(
+        vocabKanji: '食べる',
+        vocabFurigana: 'たべる',
+        vocabDefJa: '释义1',
+        createdAt: DateTime.now(),
+      ));
+      expect(await dao.count(), 1);
+
+      // Insert same word with updated definition, without id
+      final id2 = await dao.insert(VocabularyEntry(
+        vocabKanji: '食べる',
+        vocabFurigana: 'たべる',
+        vocabDefJa: '释义2 - 已更新',
+        createdAt: DateTime.now(),
+      ));
+
+      expect(id2, id1); // Reused the same ID
+      expect(await dao.count(), 1); // Total row count remains 1
+
+      final updated = await dao.getById(id1);
+      expect(updated!.vocabDefJa, '释义2 - 已更新');
+    });
+
     test('findByKanji successfully finds cached word and trims whitespace', () async {
       final now = DateTime.now();
       final entry = VocabularyEntry(
