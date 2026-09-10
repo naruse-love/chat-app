@@ -75,6 +75,63 @@ class ChatService {
     yield* SseParser.parse(responseBody.stream.transform(const SseDecoder()));
   }
 
+  /// Requests a non-streaming chat completion from the /v1/chat/completions endpoint.
+  Future<String> getCompletion({
+    required String baseUrl,
+    required String apiKey,
+    required String model,
+    required List<ChatMessage> messages,
+    CancelToken? cancelToken,
+  }) async {
+    final List<Map<String, dynamic>> apiMessages = [];
+    for (final message in messages) {
+      apiMessages.add(await _convertMessageToApiFormat(message));
+    }
+
+    final body = {
+      'model': model,
+      'messages': apiMessages,
+      'stream': false,
+    };
+
+    final cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final url = '$cleanBaseUrl/chat/completions';
+
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+    if (apiKey.isNotEmpty && apiKey != 'opencode-free-key') {
+      headers['Authorization'] = 'Bearer $apiKey';
+    }
+    final options = Options(headers: headers);
+
+    final response = await _dio.post(
+      url,
+      data: body,
+      options: options,
+      cancelToken: cancelToken,
+    );
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> data = response.data is String
+          ? json.decode(response.data as String) as Map<String, dynamic>
+          : response.data as Map<String, dynamic>;
+
+      final choices = data['choices'] as List<dynamic>?;
+      if (choices != null && choices.isNotEmpty) {
+        final message = choices.first['message'] as Map<String, dynamic>?;
+        return (message?['content'] as String? ?? '').trim();
+      }
+      return '';
+    } else {
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        type: DioExceptionType.badResponse,
+      );
+    }
+  }
+
   /// Fetches the list of available models from the /v1/models endpoint,
   /// parses each to a list of [ModelInfo] objects.
   Future<List<ModelInfo>> getModels({

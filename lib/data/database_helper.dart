@@ -26,7 +26,7 @@ class DatabaseHelper {
     try {
       return await openDatabase(
         path,
-        version: 4,
+        version: 5,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -41,7 +41,7 @@ class DatabaseHelper {
       } catch (_) {}
       return await openDatabase(
         path,
-        version: 4,
+        version: 5,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -108,6 +108,7 @@ class DatabaseHelper {
     ''');
 
     await _createMcpServersTable(db);
+    await _createVocabularyTable(db);
 
     await db.execute('''
       CREATE INDEX idx_messages_conversation_id ON messages (conversationId);
@@ -147,6 +148,36 @@ class DatabaseHelper {
     ''');
   }
 
+  Future<void> _createVocabularyTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS vocabulary (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        vocabKanji TEXT NOT NULL,
+        vocabFurigana TEXT NOT NULL DEFAULT '',
+        vocabDefJa TEXT NOT NULL DEFAULT '',
+        vocabDefSc TEXT NOT NULL DEFAULT '',
+        vocabPoS TEXT NOT NULL DEFAULT '',
+        sentKanji1 TEXT,
+        sentFurigana1 TEXT,
+        sentDefSc1 TEXT,
+        sentKanji2 TEXT,
+        sentFurigana2 TEXT,
+        sentDefSc2 TEXT,
+        sourceDict TEXT NOT NULL DEFAULT '',
+        sourceUrl TEXT NOT NULL DEFAULT '',
+        createdAt TEXT NOT NULL
+      );
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_vocabulary_kanji ON vocabulary (vocabKanji);
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_vocabulary_created_at ON vocabulary (createdAt DESC);
+    ''');
+  }
+
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE conversations ADD COLUMN isPinned INTEGER NOT NULL DEFAULT 0');
@@ -161,6 +192,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 4) {
       await _createMcpServersTable(db);
+    }
+    if (oldVersion < 5) {
+      await _createVocabularyTable(db);
     }
   }
 

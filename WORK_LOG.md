@@ -1,3 +1,43 @@
+## 2026-09-10 Feature: Japanese Vocabulary Learning Module (Weblio Scraping + LLM Translation + SQLite Storage) (v1.25.0+26)
+
+### 变更文件
+- `lib/models/vocabulary_entry.dart` & `lib/models/vocabulary_entry.g.dart`:
+  - 新增 `VocabularyEntry` 单词数据模型，严格对齐 Anki 卡组正面/背面模板字段（`vocabKanji`, `vocabFurigana`, `vocabDefJa`, `vocabDefSc`, `vocabPoS`, `sentKanji1/2`, `sentFurigana1/2`, `sentDefSc1/2`, `sourceDict`, `sourceUrl`, `createdAt`）；
+  - 支持 `json_serializable` 与 SQLite `toMap()` / `fromMap()` 映射，以及 `copyWith`。
+- `lib/data/database_helper.dart`:
+  - 数据库版本从 v4 升级至 v5；
+  - `_onCreate` 与 `_onUpgrade` 中新增 `vocabulary` 表结构及索引 `idx_vocabulary_kanji`（去重加速）和 `idx_vocabulary_created_at`（排序加速）。
+- `lib/data/vocabulary_dao.dart`:
+  - 实现 `VocabularyDao`，提供单词插入（`insert`）、查重查询（`findByKanji`）、主键查询（`getById`）、列表与关键字检索（`getAll`）、单条删除（`delete`）、清空（`deleteAll`）及总数统计（`count`）；
+  - 增加数据库打开状态守护检查（`db.isOpen`）。
+- `lib/services/chat_service.dart`:
+  - 新增标准非流式请求接口 `getCompletion`，供 LLM 结构化翻译服务直接调用。
+- `lib/services/weblio_service.dart`:
+  - 实现 Weblio (https://www.weblio.jp) 日语释义与例句抓取解析器；
+  - 优先精准定位小学馆《デジタル大辞泉》（SGKDJ），缺失时自动回退至首个可用词典（`.kiji`）；
+  - 假名读音提取与词干自动还原（支持根据 `midashigo` 中的 `・` 分界与词性规则，将例句中的 `―・` / `―` 还原为原词/词干，生成假名 ruby 标注与纯汉字句）；
+  - 例句不足 2 条时自动从 Weblio 例文用例辞书（WNRYJ）补齐。
+- `lib/services/vocabulary_service.dart`:
+  - 协调查词完整流程：本地 SQLite 优先去重缓存命中 -> Weblio 抓取 -> LLM 提示词翻译（JSON 输出结构化释义与例句）-> SQLite 存盘返回；
+  - 完备的无配置/网络异常容错：未配置 API 端点时优雅降级仅展示日语释义。
+- `lib/providers/vocabulary_provider.dart`:
+  - 实现 `VocabularyNotifier`（Riverpod `StateNotifierProvider`），支持查词、列表加载、关键词过滤、条目删除与当前结果切换；
+  - 异步加载与微任务竞态防崩溃保护。
+- `lib/screens/vocabulary_screen.dart`:
+  - 全新设计并实现「📚 单词本」界面，包含顶部日语查词输入框、进度条、当前结果卡片（汉字、假名、词性徽章、来源词典与外部链接跳转、中日双语释义、例句展示）及滑动删除历史列表与本地搜索过滤。
+- `lib/screens/home_screen.dart` & `lib/app.dart`:
+  - 侧边栏 Drawer 与宽屏 Sidebar 新增「📚 单词本」入口导航；
+  - `AppRouter` 注册 `/vocabulary` 路由；优化 Drawer 容器材质类型以消除 Flutter ListTile 背景墨水绘制断言。
+- `test/models/vocabulary_entry_test.dart`, `test/data/vocabulary_dao_test.dart`, `test/services/weblio_service_test.dart`, `test/services/vocabulary_service_test.dart`, `test/providers/vocabulary_provider_test.dart`, `test/screens/vocabulary_screen_test.dart`, `test/screens/vocabulary_navigation_test.dart`:
+  - 全套单元与组件测试覆盖 Model、DAO、Weblio 解析（基于本地 HTML Fixture）、Service 缓存与翻译容错、Provider 状态机以及 Widget UI 交互与路由导航。
+
+### 核心技术指标与决策
+- **全量测试基线**：730 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.25.0+26`
+
+---
+
 ## 2026-09-08 Fix & Enhancement: LaTeX CJK Parsing, LaTeX Environments, Model Cache Failure Resilience, MCP Streamable /mcp Fast-path & Multi-line SSE Handling (v1.24.0+25)
 
 ### 变更文件

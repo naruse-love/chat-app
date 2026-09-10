@@ -98,7 +98,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final archivedConvs = convState.conversations.where((c) => c.isArchived).toList();
 
     Widget buildDrawerContent() {
-      return Container(
+      return Material(
         color: theme.colorScheme.surface,
         child: Column(
           children: [
@@ -142,6 +142,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
             ),
+            // Vocabulary Button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 2.0),
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  if (!isLargeScreen) {
+                    Navigator.pop(context);
+                  }
+                  Navigator.pushNamed(context, '/vocabulary');
+                },
+                icon: const Icon(Icons.menu_book_outlined),
+                label: const Text('📚 单词本'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const Divider(),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,

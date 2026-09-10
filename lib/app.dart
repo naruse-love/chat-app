@@ -9,12 +9,15 @@ import 'screens/system_prompt_screen.dart';
 import 'screens/mcp_server_management_screen.dart';
 import 'screens/sandbox_management_screen.dart';
 import 'screens/model_selector_screen.dart';
+import 'screens/vocabulary_screen.dart';
 
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
       case '/':
         return MaterialPageRoute(builder: (_) => const HomeScreen());
+      case '/vocabulary':
+        return _slideRoute(const VocabularyScreen());
       case '/settings':
         return _slideRoute(const SettingsScreen());
       case '/settings/api_config':
