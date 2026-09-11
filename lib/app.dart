@@ -17,26 +17,35 @@ class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
       case '/':
-        return MaterialPageRoute(builder: (_) => const HomeScreen());
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const HomeScreen(),
+        );
       case '/vocabulary':
-        return _slideRoute(const VocabularyScreen());
+        final autoFocus = settings.arguments == true;
+        return _slideRoute(
+          VocabularyScreen(autoFocusLookup: autoFocus),
+          settings,
+        );
       case '/settings':
-        return _slideRoute(const SettingsScreen());
+        return _slideRoute(const SettingsScreen(), settings);
       case '/settings/api_config':
-        return _slideRoute(const ApiConfigScreen());
+        return _slideRoute(const ApiConfigScreen(), settings);
       case '/settings/system_prompts':
-        return _slideRoute(const SystemPromptScreen());
+        return _slideRoute(const SystemPromptScreen(), settings);
       case '/settings/mcp_servers':
-        return _slideRoute(const McpServerManagementScreen());
+        return _slideRoute(const McpServerManagementScreen(), settings);
       case '/settings/sandbox':
-        return _slideRoute(const SandboxManagementScreen());
+        return _slideRoute(const SandboxManagementScreen(), settings);
       case '/model_selector':
         return MaterialPageRoute(
+          settings: settings,
           fullscreenDialog: true,
           builder: (_) => const ModelSelectorScreen(),
         );
       default:
         return MaterialPageRoute(
+          settings: settings,
           builder: (_) => Scaffold(
             body: Center(child: Text('No route defined for ${settings.name}')),
           ),
@@ -44,8 +53,9 @@ class AppRouter {
     }
   }
 
-  static PageRouteBuilder _slideRoute(Widget page) {
+  static PageRouteBuilder _slideRoute(Widget page, [RouteSettings? settings]) {
     return PageRouteBuilder(
+      settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         const begin = Offset(1.0, 0.0);
@@ -96,17 +106,21 @@ class _AppState extends ConsumerState<App> {
     if (payload == '/vocabulary') {
       final navState = appNavigatorKey.currentState;
       if (navState != null) {
-        // 如果当前不在单词本页面，则推入该页面
+        // 如果当前不在单词本页面，则推入该页面并请求聚焦；若已在则回到该页面
         bool isAlreadyOnVocab = false;
         navState.popUntil((route) {
           if (route.settings.name == '/vocabulary') {
             isAlreadyOnVocab = true;
+            return true;
           }
-          return true;
+          if (route.isFirst) {
+            return true;
+          }
+          return false;
         });
 
         if (!isAlreadyOnVocab) {
-          navState.pushNamed('/vocabulary');
+          navState.pushNamed('/vocabulary', arguments: true);
         }
       }
     }

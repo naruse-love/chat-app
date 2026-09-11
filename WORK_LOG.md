@@ -1,3 +1,36 @@
+## 2026-09-11 Fix & Hardening: Route Name Preservation, Auto-Focus on Notification Tap, Error Card Dismissal, Kana Validation & Bracket Middle Dot Splitting (v1.28.0+29)
+
+### 变更文件
+- `lib/app.dart`:
+  - `AppRouter` 补齐 `RouteSettings` 透传（传递 `settings: settings` 至 `MaterialPageRoute` 与 `_slideRoute`），根除 `route.settings.name` 为空导致的路由识别失效；
+  - 完善 `_navigateForPayload`：通过 `route.isFirst` 确保弹回时能够正确判定并避免在当前页面堆叠重复的 `/vocabulary` 路由；
+  - 为 `/vocabulary` 支持 `arguments: true` 唤起自动聚焦。
+- `lib/screens/vocabulary_screen.dart`:
+  - 支持 `autoFocusLookup` 参数并监听 `onNotificationTapped` 事件，通知栏点击时自动聚焦查词输入框；
+  - 修复错误卡片关闭按钮缺陷：将原本错误的 `clearCurrentResult()` 改为调用 `clearError()`，使用户可正常关闭错误提示；
+  - 优化候选词选择卡片高度约束：`maxHeight` 由 `150` 扩至 `280`，避免多条候选展示时的局促滚动。
+- `lib/providers/vocabulary_provider.dart`:
+  - 新增 `clearError()` 方法，支持单向重置错误状态。
+- `lib/services/vocabulary_service.dart`:
+  - 修复 `isPureKana` 边界缺陷：要求输入不仅符合假名字符集，且必须至少包含一个真实假名（平假名/片假名），避免仅含 `・・・` 或 `ーーー` 等纯符号串被误判为有效假名；
+  - 优化 `getPureKanaCandidates` 大模型提示词：明确允许无歧义标准词或错误生造词返回空数组，杜绝强求生成 2-6 个候选项导致的无谓消歧与误幻觉；
+  - 增强 `parseCandidatesJson` 容错：去除代码块中首尾可能夹带的额外说明文本，稳定提取 JSON 数组。
+- `lib/services/weblio_service.dart`:
+  - 优化 `extractCandidatesFromHtml`：在括号汉字解析中将中黑点 `・` 纳入分隔正则 `[/／、・\s]`，正确将 `【暑い・熱い】` 等并列多汉字拆解为独立候选词。
+- `android/app/src/main/kotlin/com/example/chat/MainActivity.kt`:
+  - 适配 Android 13+（API 33+）动态权限检查与 `POST_NOTIFICATIONS` 申请；根据通知 ID 哈希生成专属通知 ID，避免冲突。
+- `pubspec.yaml`, `WORK_LOG.md`, `.agents/context.md`:
+  - 版本号由 `1.27.0+28` 递增至 `1.28.0+29`。
+- 测试套件更新：
+  - `test/services/vocabulary_disambiguation_test.dart`、`test/services/weblio_candidates_test.dart`、`test/screens/vocabulary_screen_test.dart`、`test/screens/vocabulary_navigation_test.dart` 补充相关断言与覆盖。
+
+### 核心技术指标与决策
+- **全量测试基线**：780+ 测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.28.0+29`
+
+---
+
 ## 2026-09-11 Feature: System Notification Bar Persistent Shortcut & Japanese Word Disambiguation / AI Typo Inference (v1.27.0+28)
 
 ### 变更文件

@@ -67,4 +67,20 @@ void main() {
     // Drain sqflite lock timer (10s timeout)
     await tester.pump(const Duration(seconds: 11));
   });
+
+  test('AppRouter preserves RouteSettings name on generated routes', () {
+    const settings = RouteSettings(name: '/vocabulary', arguments: true);
+    final route = AppRouter.generateRoute(settings);
+
+    expect(route.settings.name, '/vocabulary');
+    expect(route.settings.arguments, true);
+
+    const homeSettings = RouteSettings(name: '/');
+    final homeRoute = AppRouter.generateRoute(homeSettings);
+    expect(homeRoute.settings.name, '/');
+
+    const settingsSettings = RouteSettings(name: '/settings');
+    final settingsRoute = AppRouter.generateRoute(settingsSettings);
+    expect(settingsRoute.settings.name, '/settings');
+  });
 }

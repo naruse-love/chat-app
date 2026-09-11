@@ -451,7 +451,7 @@ class WeblioService {
         reading = bracketMatch.group(1)!.replaceAll('・', '').replaceAll(RegExp(r'〔[^〕]*〕'), '').trim();
         final kanjiRaw = bracketMatch.group(2)!.trim();
         final splitKanji = kanjiRaw
-            .split(RegExp(r'[/／、\s]'))
+            .split(RegExp(r'[/／、・\s]'))
             .map((s) => s.trim())
             .where((s) => s.isNotEmpty);
         kanjiList.addAll(splitKanji);

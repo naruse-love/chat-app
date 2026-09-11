@@ -58,6 +58,13 @@ class MainActivity : FlutterActivity() {
                     val body = call.argument<String>("body") ?: "点击快速打开单词查询"
                     val payload = call.argument<String>("payload") ?: "/vocabulary"
 
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+                            android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001)
+                        }
+                    }
+
                     try {
                         showNotification(id, title, body, payload)
                         result.success(true)
@@ -105,6 +112,10 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun getNotificationIntId(id: String): Int {
+        return NOTIFICATION_ID_BASE + (id.hashCode() and 0x0FFF)
+    }
+
     private fun showNotification(id: String, title: String, body: String, payload: String) {
         createNotificationChannel()
 
@@ -122,7 +133,7 @@ class MainActivity : FlutterActivity() {
 
         val pendingIntent = PendingIntent.getActivity(
             this,
-            NOTIFICATION_ID_BASE,
+            getNotificationIntId(id),
             intent,
             pendingIntentFlags
         )
@@ -138,14 +149,14 @@ class MainActivity : FlutterActivity() {
 
         val notificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(NOTIFICATION_ID_BASE, builder.build())
+        notificationManager.notify(getNotificationIntId(id), builder.build())
         activeNotifications.add(id)
     }
 
     private fun cancelNotification(id: String) {
         val notificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(NOTIFICATION_ID_BASE)
+        notificationManager.cancel(getNotificationIntId(id))
         activeNotifications.remove(id)
     }
 }

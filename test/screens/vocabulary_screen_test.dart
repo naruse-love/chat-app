@@ -131,6 +131,11 @@ class MockVocabularyNotifier extends StateNotifier<VocabularyState>
   void clearCurrentResult() {
     state = state.copyWith(clearCurrentResult: true);
   }
+
+  @override
+  void clearError() {
+    state = state.copyWith(clearError: true);
+  }
 }
 
 void main() {
@@ -307,5 +312,52 @@ void main() {
 
     expect(find.text('已开启通知栏快捷常驻入口'), findsOneWidget);
     expect(await fakeNotifService.isNotificationActive('chat_persistent_vocab'), isTrue);
+  });
+
+  testWidgets('VocabularyScreen error card close button clears error via clearError', (tester) async {
+    final mockNotifier = MockVocabularyNotifier(const VocabularyState(
+      error: '查询失败：网络不可用',
+    ));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+
+    expect(find.text('查询失败：网络不可用'), findsOneWidget);
+
+    // Find and tap close button on error card
+    final closeIcon = find.byIcon(Icons.close);
+    expect(closeIcon, findsOneWidget);
+    await tester.tap(closeIcon);
+    await tester.pumpAndSettle();
+
+    expect(mockNotifier.state.error, isNull);
+    expect(find.text('查询失败：网络不可用'), findsNothing);
+  });
+
+  testWidgets('VocabularyScreen autoFocusLookup requests focus on text field', (tester) async {
+    final mockNotifier = MockVocabularyNotifier(const VocabularyState());
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(autoFocusLookup: true),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final textField = tester.widget<TextField>(find.byType(TextField).first);
+    expect(textField.focusNode?.hasFocus, isTrue);
   });
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -5,11 +6,14 @@ import '../models/vocabulary_entry.dart';
 import '../models/word_candidate.dart';
 import '../providers/vocabulary_provider.dart';
 import '../providers/persistent_notification_provider.dart';
+import '../services/native/native_services.dart';
 
 /// 单词本界面
 /// 提供日语生词查询、Weblio 抓取展示、LLM 中文释义以及本地单词库管理
 class VocabularyScreen extends ConsumerStatefulWidget {
-  const VocabularyScreen({super.key});
+  final bool autoFocusLookup;
+
+  const VocabularyScreen({super.key, this.autoFocusLookup = false});
 
   @override
   ConsumerState<VocabularyScreen> createState() => _VocabularyScreenState();
@@ -19,10 +23,33 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
   final TextEditingController _lookupController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _lookupFocusNode = FocusNode();
+  StreamSubscription<String>? _notificationSub;
   bool _isSearchingHistory = false;
 
   @override
+  void initState() {
+    super.initState();
+    final notificationService =
+        ref.read(persistentNotificationServiceProvider);
+    _notificationSub =
+        notificationService.onNotificationTapped.listen((payload) {
+      if (payload == '/vocabulary' && mounted) {
+        _lookupFocusNode.requestFocus();
+      }
+    });
+
+    if (widget.autoFocusLookup) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _lookupFocusNode.requestFocus();
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
+    _notificationSub?.cancel();
     _lookupController.dispose();
     _searchController.dispose();
     _lookupFocusNode.dispose();
@@ -247,7 +274,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                     icon: const Icon(Icons.close, size: 18),
                     color: colorScheme.onErrorContainer,
                     onPressed: () {
-                      ref.read(vocabularyProvider.notifier).clearCurrentResult();
+                      ref.read(vocabularyProvider.notifier).clearError();
                     },
                   ),
                 ],
@@ -735,7 +762,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
           ),
           const SizedBox(height: 6),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 150),
+            constraints: const BoxConstraints(maxHeight: 280),
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: candidates.length,

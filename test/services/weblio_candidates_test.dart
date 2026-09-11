@@ -68,6 +68,26 @@ void main() {
       expect(candidates[1].kanji, '喙');
     });
 
+    test('extractCandidatesFromHtml handles middle dot separated kanji like 暑い・熱い', () {
+      const dotHtml = '''
+        <!DOCTYPE html>
+        <html>
+        <body>
+          <div class="kiji">
+            <h2 class="midashigo">あつい【暑い・熱い】</h2>
+            <span class="hinshi">［形］</span>
+            <p>気温が高い。また、温度が高い。</p>
+          </div>
+        </body>
+        </html>
+      ''';
+
+      final candidates = WeblioService.extractCandidatesFromHtml(dotHtml, 'あつい');
+      expect(candidates.length, 2);
+      expect(candidates[0].kanji, '暑い');
+      expect(candidates[1].kanji, '熱い');
+    });
+
     test('extractCandidatesFromHtml parses single entry from real taberu fixture', () {
       final file = File('test/fixtures/weblio_taberu.html');
       expect(file.existsSync(), isTrue);

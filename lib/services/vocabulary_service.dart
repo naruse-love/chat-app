@@ -40,11 +40,15 @@ class VocabularyService {
     return activeConfig != null && selectedModel != null;
   }
 
-  /// 判断输入文本是否为纯假名（平假名/片假名/长音符/中黑点）
+  /// 判断输入文本是否为纯假名（平假名/片假名/长音符/中黑点，且至少包含一个真实假名字符）
   static bool isPureKana(String text) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return false;
-    return RegExp(r'^[\u3040-\u309f\u30a0-\u30ffー・]+$').hasMatch(trimmed);
+    final isAllKanaChars =
+        RegExp(r'^[\u3040-\u309f\u30a0-\u30ffー・]+$').hasMatch(trimmed);
+    final hasActualKanaLetter =
+        RegExp(r'[\u3041-\u3096\u30a1-\u30fa]').hasMatch(trimmed);
+    return isAllKanaChars && hasActualKanaLetter;
   }
 
   /// 获取纯假名对应的多汉字/多义项候选列表
@@ -65,8 +69,11 @@ class VocabularyService {
 
         final prompt = '''
 你是一位资深日语语言学专家与词典编纂者。
-用户输入了纯日语假名「$trimmed」。在日语中，纯假名通常对应多个不同的日文汉字词汇或具有多种截然不同的常用含义（例如：はし 对应 箸、橋、端）。
-请列出该假名最常用、最主要的 2 至 6 个汉字候选词项及其对应简明中文释义，供用户确认选择。
+用户输入了纯日语假名「$trimmed」。
+在日语中，部分纯假名对应多个不同汉字或截然不同的词义（例如：はし 对应 箸、橋、端；あめ 对应 雨、飴；こうじる 对应 高じる、講じる、興じる）。
+请评估该假名：
+- 如果该假名在标准日语中通常只对应单一汉字/单一常用词义（如：たべる 对应 食べる；ねこ 对应 猫），或者该假名本身并非有效词汇（如拼写笔误），请返回空数组 [] 或仅包含 1 个词项。
+- 如果该假名确实对应多个常用的不同汉字或截然不同的词义，请列出其最常用、最主要的 2 至 6 个汉字候选词项及其对应简明中文释义，供用户消歧确认。
 要求：
 1. kanji：对应汉字词（若为无汉字的常用纯假名词则写假名原形）。
 2. reading：标准假名读音（即「$trimmed」）。
@@ -198,12 +205,13 @@ class VocabularyService {
         RegExp(r'```(?:json)?\s*([\s\S]*?)\s*```').firstMatch(raw);
     if (codeBlockMatch != null) {
       raw = codeBlockMatch.group(1)!.trim();
-    } else {
-      final start = raw.indexOf('[');
-      final end = raw.lastIndexOf(']');
-      if (start != -1 && end != -1 && end > start) {
-        raw = raw.substring(start, end + 1).trim();
-      }
+    }
+
+    // 无论是否位于代码块中，均提取最外层的 JSON 数组 [...]
+    final start = raw.indexOf('[');
+    final end = raw.lastIndexOf(']');
+    if (start != -1 && end != -1 && end > start) {
+      raw = raw.substring(start, end + 1).trim();
     }
 
     try {

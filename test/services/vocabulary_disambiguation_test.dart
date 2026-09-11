@@ -221,6 +221,11 @@ void main() {
       expect(VocabularyService.isPureKana('English'), isFalse);
       expect(VocabularyService.isPureKana('123'), isFalse);
       expect(VocabularyService.isPureKana(''), isFalse);
+
+      // Edge case: strings with only punctuation marks without actual kana characters
+      expect(VocabularyService.isPureKana('・・・'), isFalse);
+      expect(VocabularyService.isPureKana('ーーー'), isFalse);
+      expect(VocabularyService.isPureKana('・ー・'), isFalse);
     });
   });
 
@@ -373,6 +378,50 @@ void main() {
       notifier.dismissCandidates();
       expect(notifier.state.candidates, isNull);
       expect(notifier.state.pendingCandidateWord, isNull);
+    });
+
+    test('clearError resets state.error cleanly', () async {
+      final notifier = VocabularyNotifier(vocabService, vocabDao);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      notifier.state = notifier.state.copyWith(error: '测试错误信息');
+      expect(notifier.state.error, '测试错误信息');
+
+      notifier.clearError();
+      expect(notifier.state.error, isNull);
+    });
+  });
+
+  group('parseCandidatesJson Resilience Tests', () {
+    test('parses JSON with markdown preamble and trailing text inside code block', () {
+      const responseWithPreamble = '''
+Here are the candidates:
+```json
+// Preamble commentary
+[
+  {
+    "kanji": "箸",
+    "reading": "はし",
+    "partOfSpeech": "［名］",
+    "definition": "筷子"
+  }
+]
+// End of candidates
+```
+Hope this helps!
+''';
+
+      final candidates = vocabService.parseCandidatesJson(
+        responseWithPreamble,
+        'はし',
+        CandidateSource.aiInference,
+      );
+
+      expect(candidates.length, 1);
+      expect(candidates[0].kanji, '箸');
+      expect(candidates[0].reading, 'はし');
+      expect(candidates[0].definition, '筷子');
+      expect(candidates[0].source, CandidateSource.aiInference);
     });
   });
 }

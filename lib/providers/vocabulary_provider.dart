@@ -264,6 +264,11 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
   void clearCurrentResult() {
     state = state.copyWith(clearCurrentResult: true);
   }
+
+  /// 清除当前错误提示
+  void clearError() {
+    state = state.copyWith(clearError: true);
+  }
 }
 
 // === Riverpod Providers ===
