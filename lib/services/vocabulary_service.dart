@@ -4,6 +4,7 @@ import '../data/api_config_dao.dart';
 import '../data/vocabulary_dao.dart';
 import '../models/chat_message.dart';
 import '../models/vocabulary_entry.dart';
+import '../models/word_candidate.dart';
 import '../providers/api_config_provider.dart';
 import '../providers/model_provider.dart';
 import 'chat_service.dart';
@@ -39,13 +40,214 @@ class VocabularyService {
     return activeConfig != null && selectedModel != null;
   }
 
+  /// 判断输入文本是否为纯假名（平假名/片假名/长音符/中黑点）
+  static bool isPureKana(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+    return RegExp(r'^[\u3040-\u309f\u30a0-\u30ffー・]+$').hasMatch(trimmed);
+  }
+
+  /// 获取纯假名对应的多汉字/多义项候选列表
+  Future<List<WordCandidate>> getPureKanaCandidates(String kana) async {
+    final trimmed = kana.trim();
+    if (trimmed.isEmpty) return [];
+
+    // 1. 若配置了 LLM，优先使用 AI 获取具备清晰中文释义的高质量同音汉字候选项
+    if (hasLlmConfigured) {
+      try {
+        final currentRef = ref!;
+        final activeConfig = currentRef.read(apiConfigProvider).activeConfig!;
+        final modelState = currentRef.read(modelProvider);
+        final selectedModel =
+            modelState.selectedModel ?? modelState.models.first;
+        final apiKey =
+            await apiConfigDao.getApiKey(activeConfig.apiKeyRef) ?? '';
+
+        final prompt = '''
+你是一位资深日语语言学专家与词典编纂者。
+用户输入了纯日语假名「$trimmed」。在日语中，纯假名通常对应多个不同的日文汉字词汇或具有多种截然不同的常用含义（例如：はし 对应 箸、橋、端）。
+请列出该假名最常用、最主要的 2 至 6 个汉字候选词项及其对应简明中文释义，供用户确认选择。
+要求：
+1. kanji：对应汉字词（若为无汉字的常用纯假名词则写假名原形）。
+2. reading：标准假名读音（即「$trimmed」）。
+3. partOfSpeech：词性标记（如［名］、［動上一］、［副］等）。
+4. definition：简明地道的简体中文释义（例如：筷子。用餐时夹取食物的双根餐具）。
+5. 请严格输出以下 JSON 数组格式，不要包含任何 markdown 代码块或解释说明：
+[
+  {
+    "kanji": "汉字词",
+    "reading": "$trimmed",
+    "partOfSpeech": "词性标记",
+    "definition": "简明中文释义"
+  }
+]
+''';
+
+        final messages = [
+          ChatMessage(
+            id: 'vocab_kana_candidates',
+            conversationId: 'vocab_kana',
+            role: 'user',
+            content: prompt,
+            timestamp: DateTime.now(),
+          ),
+        ];
+
+        final response = await chatService.getCompletion(
+          baseUrl: activeConfig.baseUrl,
+          apiKey: apiKey,
+          model: selectedModel.id,
+          messages: messages,
+        );
+
+        final aiCandidates = parseCandidatesJson(
+          response,
+          trimmed,
+          CandidateSource.aiInference,
+        );
+        if (aiCandidates.isNotEmpty) {
+          return aiCandidates;
+        }
+      } catch (_) {
+        // AI 异常时平滑降级至词典提取
+      }
+    }
+
+    // 2. 词典兜底提取
+    try {
+      final weblioCandidates = await weblioService.fetchCandidates(trimmed);
+      if (weblioCandidates.isNotEmpty) {
+        return weblioCandidates;
+      }
+    } catch (_) {}
+
+    return [];
+  }
+
+  /// 词典未收录或拼写笔误时，调用 AI 智能推测用户可能想查询的词汇候选项
+  Future<List<WordCandidate>> inferTypoCandidates(String word) async {
+    final trimmed = word.trim();
+    if (trimmed.isEmpty || !hasLlmConfigured) return [];
+
+    try {
+      final currentRef = ref!;
+      final activeConfig = currentRef.read(apiConfigProvider).activeConfig!;
+      final modelState = currentRef.read(modelProvider);
+      final selectedModel =
+          modelState.selectedModel ?? modelState.models.first;
+      final apiKey =
+          await apiConfigDao.getApiKey(activeConfig.apiKeyRef) ?? '';
+
+      final prompt = '''
+你是一位资深日语教师与专业智能纠错助手。
+用户在日语词典中查询「$trimmed」，但在标准词典中未收录该词。这极可能是由于拼写笔误、假名脱落/冗余、送假名错误或活用形式错误（例如：たべまる 可能是 食べる 的笔误）。
+请根据日语构词法、发音相近度、键盘输入偏差与常见学习者笔误规律，推测用户最可能想查询的 2 至 5 个正确日语单词候选项。
+要求：
+1. kanji：推测的正确单词汉字或标准原形（如：食べる）。
+2. reading：标准假名读音（如：たべる）。
+3. partOfSpeech：规范词性标记（如：［動バ下一］）。
+4. definition：简明中文释义并附简短推测理由（例如：进食、吃。推测为食べる的笔误）。
+5. 请严格输出以下 JSON 数组格式，不要包含任何 markdown 代码块或解释说明：
+[
+  {
+    "kanji": "推测候选词",
+    "reading": "假名读音",
+    "partOfSpeech": "词性标记",
+    "definition": "简要中文释义与推测说明"
+  }
+]
+''';
+
+      final messages = [
+        ChatMessage(
+          id: 'vocab_typo_candidates',
+          conversationId: 'vocab_typo',
+          role: 'user',
+          content: prompt,
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final response = await chatService.getCompletion(
+        baseUrl: activeConfig.baseUrl,
+        apiKey: apiKey,
+        model: selectedModel.id,
+        messages: messages,
+      );
+
+      return parseCandidatesJson(
+        response,
+        trimmed,
+        CandidateSource.aiInference,
+      );
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// 解析候选词列表 JSON
+  List<WordCandidate> parseCandidatesJson(
+    String content,
+    String originalQuery,
+    CandidateSource source,
+  ) {
+    var raw = content.trim();
+
+    // 优先提取 Markdown 代码块
+    final codeBlockMatch =
+        RegExp(r'```(?:json)?\s*([\s\S]*?)\s*```').firstMatch(raw);
+    if (codeBlockMatch != null) {
+      raw = codeBlockMatch.group(1)!.trim();
+    } else {
+      final start = raw.indexOf('[');
+      final end = raw.lastIndexOf(']');
+      if (start != -1 && end != -1 && end > start) {
+        raw = raw.substring(start, end + 1).trim();
+      }
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        final list = <WordCandidate>[];
+        for (final item in decoded) {
+          if (item is Map) {
+            final kanji = item['kanji']?.toString().trim() ?? '';
+            final reading = item['reading']?.toString().trim() ?? originalQuery;
+            final definition = item['definition']?.toString().trim() ?? '';
+            final pos = item['partOfSpeech']?.toString().trim() ?? '';
+
+            if (kanji.isNotEmpty && !list.any((c) => c.kanji == kanji)) {
+              list.add(
+                WordCandidate(
+                  kanji: kanji,
+                  reading: reading.isNotEmpty ? reading : originalQuery,
+                  definition: definition,
+                  partOfSpeech: pos,
+                  source: source,
+                ),
+              );
+            }
+          }
+        }
+        return list;
+      }
+    } catch (_) {}
+
+    return [];
+  }
+
   /// 查词主流程：
   /// 1. 优先检索本地数据库，若已存在直接返回（缓存命中去重）
   /// 2. 调用 Weblio 抓取日语释义、词性与例句（支持递归“查到底”）
   /// 3. 若词典未收录或异常，通过 LLM 智能兜底生成权威词条
   /// 4. 释义完好则严格保持词典原文；若释义存在缺陷或死胡同重定向，则由 AI 自行撰写释义
   /// 5. 存入 SQLite 并返回
-  Future<VocabularyEntry> lookupWord(String rawWord, {bool forceRefresh = false}) async {
+  Future<VocabularyEntry> lookupWord(
+    String rawWord, {
+    bool forceRefresh = false,
+    bool allowLlmFallback = true,
+  }) async {
     final word = rawWord.trim();
     if (word.isEmpty) {
       throw WeblioException('查询单词不能为空');
@@ -71,9 +273,9 @@ class VocabularyService {
       weblioError = WeblioException('Weblio 网络请求异常: $e');
     }
 
-    // 3. 词典查询失败时，触发 AI 兜底（如果配置了 LLM）
+    // 3. 词典查询失败时，根据 allowLlmFallback 决定是否触发 AI 兜底
     if (weblioResult == null) {
-      if (hasLlmConfigured) {
+      if (allowLlmFallback && hasLlmConfigured) {
         try {
           final aiEntry = await _generateWithLlmFallback(word);
           final insertedId = await vocabularyDao.insert(aiEntry);

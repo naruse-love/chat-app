@@ -1,3 +1,52 @@
+## 2026-09-11 Feature: System Notification Bar Persistent Shortcut & Japanese Word Disambiguation / AI Typo Inference (v1.27.0+28)
+
+### 变更文件
+- `lib/models/word_candidate.dart`:
+  - 新增 `WordCandidate` 单词候选模型、`CandidateSource`（weblio / aiInference）与 `CandidateReason`（pureKana / typoOrNotFound），支持 JSON 序列化与相等性比较。
+- `lib/services/native/persistent_notification_service.dart`:
+  - 定义 `IPersistentNotificationService` 抽象接口；
+  - 实现 `InMemoryPersistentNotificationService`（用于纯 Dart/Flutter 自动化单元测试与 Headless 命令行环境，支持模拟点击流与冷启动载荷注入）；
+  - 实现 `MethodChannelPersistentNotificationService`（基于 `com.example.chat/persistent_notification` 平台通道与真实系统通知中心交互，具备 `MissingPluginException` 与无 Binding 保护降级）。
+- `lib/services/native/native_services.dart` & `lib/services/native/native_service_providers.dart`:
+  - 导出 `persistent_notification_service.dart`，注册 `persistentNotificationServiceProvider`。
+- `android/app/src/main/AndroidManifest.xml`:
+  - 声明 `android.permission.POST_NOTIFICATIONS` 权限。
+- `android/app/src/main/kotlin/com/example/chat/MainActivity.kt`:
+  - 实现 `MethodChannel("com.example.chat/persistent_notification")` 原生处理通道；
+  - 注册 `NotificationChannel`（`IMPORTANCE_LOW`，无声无打扰），构建 `ongoing: true`（常驻非自动消除）系统通知栏常驻卡片，配置 `PendingIntent` 传递 `/vocabulary` payload；
+  - 覆盖 `onNewIntent` 与 `onCreate`，支持应用在冷启动或后台运行状态下一键调起单词本界面。
+- `lib/providers/persistent_notification_provider.dart`:
+  - 实现 `PersistentNotificationNotifier`（`StateNotifierProvider`），基于 `SharedPreferences` 记住常驻通知开启/关闭配置，并在应用启动时自动恢复常驻通知。
+- `lib/app.dart`:
+  - 注册全局 `appNavigatorKey`（`GlobalKey<NavigatorState>`）；
+  - `App` 升级为 `ConsumerStatefulWidget`，监听 `onNotificationTapped` 事件流与冷启动 payload，实现点击系统通知栏后平滑跳转至 `/vocabulary`。
+- `lib/services/weblio_service.dart`:
+  - 新增 `extractCandidatesFromHtml`：从 Weblio HTML 的多个 `.kiji` 或词典条目中提取同音多汉字候选（解析 `【...】`、读音、词性及实质释义，过滤文语古义注解）；
+  - 新增 `fetchCandidates(query)` 候选词网络抓取接口。
+- `lib/services/vocabulary_service.dart`:
+  - 新增 `isPureKana`：精准判定纯平假名/片假名/长音符输入；
+  - 新增 `getPureKanaCandidates(kana)`：纯假名输入时优先调用 LLM 生成带地道简体中文释义的 2-6 个常用汉字候选项，并在 LLM 未配置时平滑降级至 Weblio 候选；
+  - 新增 `inferTypoCandidates(word)`：词典未收录或拼写笔误时调用 LLM 智能推测用户可能想查询的 2-5 个正确日语单词候选；
+  - `lookupWord` 引入 `allowLlmFallback` 控制标志，支持在候选词确认流程中精准拦截非收录词并触发推测。
+- `lib/providers/vocabulary_provider.dart`:
+  - `VocabularyState` 新增 `candidates`、`pendingCandidateWord` 与 `candidateReason` 字段；
+  - `VocabularyNotifier` 支持 `lookupWord` 智能判定纯假名与词典未收录，进入候选确认状态；
+  - 新增 `selectCandidate`（选中候选入库）、`confirmOriginalWord`（坚持原输入强制查询）与 `dismissCandidates`（取消选择）。
+- `lib/screens/vocabulary_screen.dart`:
+  - AppBar 新增「常驻通知栏快捷入口」一键切换按钮（状态联动与中文 SnackBar 提示）；
+  - 新增 `_buildCandidateConfirmationCard` 交互卡片，直观展示候选汉字、假名、词性、中文释义与 AI 推测标签，支持快速点选目标词或强制查原词。
+- `lib/screens/settings_screen.dart`:
+  - 新增「通知与快捷入口」设置分组与「通知栏常驻查词快捷入口」开关。
+- `test/models/word_candidate_test.dart`, `test/services/persistent_notification_service_test.dart`, `test/services/weblio_candidates_test.dart`, `test/services/vocabulary_disambiguation_test.dart`, `test/screens/vocabulary_screen_test.dart`:
+  - 编写全面的自动化测试用例，覆盖候选词模型序列化、常驻通知内存/平台通道/偏好设置持久化、Weblio 候选词提取与语法过滤、纯假名消歧与 AI 笔误推测状态机以及 Widget UI 交互。
+
+### 核心技术指标与决策
+- **全量测试基线**：776 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.27.0+28`
+
+---
+
 ## 2026-09-10 Fix & Hardening: Weblio Scraper Calibration, Ruby Furigana Anki Compliance, SQLite Deduplication, Trace-to-Root Recursion & AI Fallback Healing (v1.26.0+27)
 
 ### 变更文件

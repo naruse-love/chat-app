@@ -7,6 +7,7 @@ import 'contacts_sanitizer.dart';
 import 'permission_manager_service.dart';
 
 import 'real_location_service.dart';
+import 'persistent_notification_service.dart';
 
 /// Provider for calendar operations.
 final calendarServiceProvider = Provider<ICalendarService>((ref) {
@@ -36,4 +37,12 @@ final contactsSanitizerProvider = Provider<ContactsSanitizer>((ref) {
 /// Provider for unified permission management.
 final permissionManagerServiceProvider = Provider<PermissionManagerService>((ref) {
   return PermissionManagerService();
+});
+
+/// Provider for system notification bar persistent shortcut entry.
+final persistentNotificationServiceProvider =
+    Provider<IPersistentNotificationService>((ref) {
+  final service = MethodChannelPersistentNotificationService();
+  ref.onDispose(() => service.dispose());
+  return service;
 });

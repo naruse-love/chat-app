@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/persistent_notification_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -501,6 +502,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.pushNamed(context, '/settings/sandbox');
+            },
+          ),
+          const Divider(),
+
+          // Persistent Notification Section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Text(
+              '快捷入口与通知设置',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Consumer(
+            builder: (context, ref, _) {
+              final notifState = ref.watch(persistentNotificationProvider);
+              return SwitchListTile(
+                secondary: const Icon(Icons.notifications_active_outlined),
+                title: const Text('通知栏常驻查词快捷入口'),
+                subtitle: const Text('在系统通知栏保持常驻快捷入口，随时一键调出生词查询与 Anki 词卡'),
+                value: notifState.isEnabled,
+                onChanged: (value) {
+                  ref
+                      .read(persistentNotificationProvider.notifier)
+                      .togglePersistentNotification(value);
+                },
+              );
             },
           ),
         ],

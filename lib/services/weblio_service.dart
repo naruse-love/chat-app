@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
+import '../models/word_candidate.dart';
 
 /// Weblio 抓取异常
 class WeblioException implements Exception {
@@ -61,6 +62,28 @@ class WeblioService {
                 },
               ),
             );
+
+  /// 查询 Weblio 并抓取所有同音/同形词条候选列表（用于假名多汉字消歧）
+  Future<List<WordCandidate>> fetchCandidates(String rawQuery) async {
+    final query = rawQuery.trim();
+    if (query.isEmpty) return [];
+
+    final encoded = Uri.encodeComponent(query);
+    final url = 'https://www.weblio.jp/content/$encoded';
+
+    try {
+      final response = await _dio.get<String>(
+        url,
+        options: Options(responseType: ResponseType.plain),
+      );
+      if (response.statusCode == 200 && response.data != null) {
+        return extractCandidatesFromHtml(response.data!, query);
+      }
+    } catch (_) {
+      // 网络异常或无匹配时优雅返回空列表
+    }
+    return [];
+  }
 
   /// 查词主入口（支持递归“查到底”，解析重定向与语法活用参照）
   Future<WeblioResult> lookupWord(
@@ -398,6 +421,114 @@ class WeblioService {
       sourceDict: original.sourceDict,
       sourceUrl: original.sourceUrl,
     );
+  }
+
+  /// 从 Weblio HTML 中提取所有候选词项（用于假名多汉字消歧）
+  static List<WordCandidate> extractCandidatesFromHtml(String html, String query) {
+    final doc = html_parser.parse(html);
+    final candidates = <WordCandidate>[];
+    final seenKanji = <String>{};
+
+    // 检查是否有未收录提示
+    final bodyText = doc.body?.text ?? '';
+    if (bodyText.contains('一致する見出し語は見つかりませんでした') ||
+        bodyText.contains('に一致する項目は見つかりませんでした')) {
+      return candidates;
+    }
+
+    final kijiElements = doc.querySelectorAll('.kiji');
+    for (final kiji in kijiElements) {
+      final midashigoElem = kiji.querySelector('.midashigo');
+      final midashigoText = midashigoElem?.text.trim() ?? '';
+      if (midashigoText.isEmpty) continue;
+
+      // 提取假名读音与汉字
+      String reading = '';
+      final kanjiList = <String>[];
+
+      final bracketMatch = RegExp(r'^(.*?)【([^】]+)】').firstMatch(midashigoText);
+      if (bracketMatch != null) {
+        reading = bracketMatch.group(1)!.replaceAll('・', '').replaceAll(RegExp(r'〔[^〕]*〕'), '').trim();
+        final kanjiRaw = bracketMatch.group(2)!.trim();
+        final splitKanji = kanjiRaw
+            .split(RegExp(r'[/／、\s]'))
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty);
+        kanjiList.addAll(splitKanji);
+      } else {
+        kanjiList.add(midashigoText.replaceAll('・', '').trim());
+        reading = query;
+      }
+
+      if (reading.isEmpty) {
+        reading = query;
+      }
+
+      // 提取词性
+      String pos = '';
+      final hinshiElem = kiji.querySelector('.hinshi');
+      if (hinshiElem != null) {
+        pos = hinshiElem.text.trim().replaceAll(RegExp(r'[\s]'), '');
+      } else {
+        final posMatch = RegExp(r'［([^］]+)］').firstMatch(kiji.text);
+        if (posMatch != null) {
+          pos = '［${posMatch.group(1)!.trim()}］';
+        }
+      }
+
+      // 提取第一条实质释义
+      String def = '';
+      String fallbackDef = '';
+      for (final p in kiji.querySelectorAll('p')) {
+        final text = p.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+        if (text.isEmpty ||
+            text.startsWith('読み方：') ||
+            text.startsWith('[補説]') ||
+            text.startsWith('[派生]') ||
+            text.startsWith('[用法]')) {
+          continue;
+        }
+        var clean = text
+            .replaceAll(RegExp(r'［[^］]+］'), '')
+            .replaceAll(RegExp(r'「[^」]+」'), '')
+            .trim();
+        if (text.contains('《') ||
+            text.contains('［文］') ||
+            text.contains('［古］') ||
+            clean.startsWith('《') ||
+            clean.startsWith('【') ||
+            clean.startsWith('〔')) {
+          if (fallbackDef.isEmpty) fallbackDef = clean;
+          continue;
+        }
+
+        if (clean.length > 80) {
+          clean = '${clean.substring(0, 80)}...';
+        }
+        def = clean;
+        break;
+      }
+      if (def.isEmpty && fallbackDef.isNotEmpty) {
+        def = fallbackDef.length > 80 ? '${fallbackDef.substring(0, 80)}...' : fallbackDef;
+      }
+
+      for (final kanji in kanjiList) {
+        final cleanKanji = kanji.replaceAll(RegExp(r'[\s\[\]［］]'), '');
+        if (cleanKanji.isEmpty || seenKanji.contains(cleanKanji)) continue;
+        seenKanji.add(cleanKanji);
+        candidates.add(
+          WordCandidate(
+            kanji: cleanKanji,
+            reading: reading,
+            definition: def,
+            partOfSpeech: pos,
+            source: CandidateSource.weblio,
+          ),
+        );
+      }
+    }
+
+    return candidates;
   }
 
   /// 纯 HTML 解析逻辑（支持无网络单元测试）

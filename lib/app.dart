@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'services/native/native_services.dart';
 import 'theme/app_theme.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
@@ -56,15 +58,73 @@ class AppRouter {
   }
 }
 
-class App extends ConsumerWidget {
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
+class App extends ConsumerStatefulWidget {
   const App({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<App> createState() => _AppState();
+}
+
+class _AppState extends ConsumerState<App> {
+  StreamSubscription<String>? _notificationSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupNotificationListener();
+  }
+
+  void _setupNotificationListener() {
+    // 监听通知栏常驻快捷入口点击事件
+    final notificationService = ref.read(persistentNotificationServiceProvider);
+    _notificationSub = notificationService.onNotificationTapped.listen((payload) {
+      _navigateForPayload(payload);
+    });
+
+    // 检查冷启动是否携带通知点击载荷
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final launchPayload = await notificationService.getLaunchPayload();
+      if (launchPayload != null && mounted) {
+        _navigateForPayload(launchPayload);
+      }
+    });
+  }
+
+  void _navigateForPayload(String payload) {
+    if (payload == '/vocabulary') {
+      final navState = appNavigatorKey.currentState;
+      if (navState != null) {
+        // 如果当前不在单词本页面，则推入该页面
+        bool isAlreadyOnVocab = false;
+        navState.popUntil((route) {
+          if (route.settings.name == '/vocabulary') {
+            isAlreadyOnVocab = true;
+          }
+          return true;
+        });
+
+        if (!isAlreadyOnVocab) {
+          navState.pushNamed('/vocabulary');
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _notificationSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeMode = ref.watch(themeProvider);
 
     return MaterialApp(
       title: 'AI Agent Chat',
+      navigatorKey: appNavigatorKey,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,

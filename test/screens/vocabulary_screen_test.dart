@@ -7,6 +7,10 @@ import 'package:chat/models/vocabulary_entry.dart';
 import 'package:chat/services/vocabulary_service.dart';
 import 'package:chat/data/vocabulary_dao.dart';
 
+import 'package:chat/models/word_candidate.dart';
+import 'package:chat/services/native/native_services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 class MockVocabularyNotifier extends StateNotifier<VocabularyState>
     implements VocabularyNotifier {
   MockVocabularyNotifier(super.state);
@@ -14,6 +18,9 @@ class MockVocabularyNotifier extends StateNotifier<VocabularyState>
   String? lastLookedUpWord;
   int? lastDeletedId;
   bool? lastForceRefresh;
+  WordCandidate? lastSelectedCandidate;
+  bool lastConfirmedOriginal = false;
+  bool lastDismissedCandidates = false;
 
   @override
   VocabularyService get vocabularyService => throw UnimplementedError();
@@ -25,10 +32,18 @@ class MockVocabularyNotifier extends StateNotifier<VocabularyState>
   Future<void> loadEntries() async {}
 
   @override
-  Future<void> lookupWord(String rawWord, {bool forceRefresh = false}) async {
+  Future<void> lookupWord(
+    String rawWord, {
+    bool forceRefresh = false,
+    bool checkConfirmation = false,
+    bool forceDirect = false,
+  }) async {
     lastLookedUpWord = rawWord;
     lastForceRefresh = forceRefresh;
     state = state.copyWith(
+      clearCandidates: true,
+      clearPendingCandidateWord: true,
+      clearCandidateReason: true,
       currentResult: VocabularyEntry(
         id: 1,
         vocabKanji: rawWord,
@@ -55,6 +70,41 @@ class MockVocabularyNotifier extends StateNotifier<VocabularyState>
           createdAt: DateTime.now(),
         ),
       ],
+    );
+  }
+
+  @override
+  Future<void> selectCandidate(WordCandidate candidate) async {
+    lastSelectedCandidate = candidate;
+    state = state.copyWith(
+      clearCandidates: true,
+      clearPendingCandidateWord: true,
+      clearCandidateReason: true,
+    );
+    await lookupWord(candidate.kanji, forceDirect: true);
+  }
+
+  @override
+  Future<void> confirmOriginalWord() async {
+    lastConfirmedOriginal = true;
+    final orig = state.pendingCandidateWord;
+    state = state.copyWith(
+      clearCandidates: true,
+      clearPendingCandidateWord: true,
+      clearCandidateReason: true,
+    );
+    if (orig != null) {
+      await lookupWord(orig, forceDirect: true);
+    }
+  }
+
+  @override
+  void dismissCandidates() {
+    lastDismissedCandidates = true;
+    state = state.copyWith(
+      clearCandidates: true,
+      clearPendingCandidateWord: true,
+      clearCandidateReason: true,
     );
   }
 
@@ -186,5 +236,76 @@ void main() {
 
     expect(mockNotifier.lastDeletedId, 42);
     expect(find.text('已删除「走る」'), findsOneWidget);
+  });
+
+  testWidgets('VocabularyScreen renders candidate confirmation card and selects candidate', (tester) async {
+    final mockNotifier = MockVocabularyNotifier(const VocabularyState(
+      pendingCandidateWord: 'はし',
+      candidateReason: CandidateReason.pureKana,
+      candidates: [
+        WordCandidate(
+          kanji: '箸',
+          reading: 'はし',
+          definition: '筷子。用餐工具',
+          partOfSpeech: '名',
+        ),
+        WordCandidate(
+          kanji: '橋',
+          reading: 'はし',
+          definition: '桥梁。过河建筑',
+          partOfSpeech: '名',
+        ),
+      ],
+    ));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+
+    expect(find.text('假名同音多义词确认'), findsOneWidget);
+    expect(find.text('您输入的是纯假名「はし」，可能对应以下汉字与含义，请选择您的目标词：'), findsOneWidget);
+    expect(find.text('箸'), findsOneWidget);
+    expect(find.text('筷子。用餐工具'), findsOneWidget);
+    expect(find.text('橋'), findsOneWidget);
+
+    // Tap candidate '箸'
+    await tester.tap(find.text('箸'));
+    await tester.pumpAndSettle();
+
+    expect(mockNotifier.lastSelectedCandidate?.kanji, '箸');
+  });
+
+  testWidgets('VocabularyScreen persistent notification toggle button toggles state and shows SnackBar', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final mockNotifier = MockVocabularyNotifier(const VocabularyState());
+    final fakeNotifService = InMemoryPersistentNotificationService();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+          persistentNotificationServiceProvider.overrideWithValue(fakeNotifService),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+
+    final notifBtn = find.byTooltip('开启通知栏常驻查词快捷入口');
+    expect(notifBtn, findsOneWidget);
+
+    await tester.tap(notifBtn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('已开启通知栏快捷常驻入口'), findsOneWidget);
+    expect(await fakeNotifService.isNotificationActive('chat_persistent_vocab'), isTrue);
   });
 }

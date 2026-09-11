@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/vocabulary_entry.dart';
+import '../models/word_candidate.dart';
 import '../providers/vocabulary_provider.dart';
+import '../providers/persistent_notification_provider.dart';
 
 /// 单词本界面
 /// 提供日语生词查询、Weblio 抓取展示、LLM 中文释义以及本地单词库管理
@@ -35,6 +37,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
     ref.read(vocabularyProvider.notifier).lookupWord(
           text,
           forceRefresh: forceRefresh,
+          checkConfirmation: !forceRefresh,
         );
   }
 
@@ -55,6 +58,36 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
       appBar: AppBar(
         title: const Text('📚 单词本'),
         actions: [
+          Consumer(
+            builder: (context, ref, _) {
+              final notifState = ref.watch(persistentNotificationProvider);
+              final isEnabled = notifState.isEnabled;
+              return IconButton(
+                tooltip: isEnabled ? '关闭通知栏常驻查词' : '开启通知栏常驻查词快捷入口',
+                icon: Icon(
+                  isEnabled
+                      ? Icons.notifications_active
+                      : Icons.notifications_none,
+                  color: isEnabled ? colorScheme.primary : null,
+                ),
+                onPressed: () async {
+                  await ref
+                      .read(persistentNotificationProvider.notifier)
+                      .togglePersistentNotification(!isEnabled);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          !isEnabled ? '已开启通知栏快捷常驻入口' : '已关闭通知栏常驻入口',
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
+              );
+            },
+          ),
           IconButton(
             tooltip: _isSearchingHistory ? '关闭搜索' : '搜索本地单词',
             icon: Icon(_isSearchingHistory ? Icons.search_off : Icons.search),
@@ -160,6 +193,10 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
               ),
             ),
 
+          // 候选词消歧与确认卡片
+          if (state.candidates != null && state.candidates!.isNotEmpty)
+            _buildCandidateConfirmationCard(context, state),
+
           // 加载进度指示器
           if (state.isLoading) ...[
             const LinearProgressIndicator(),
@@ -218,7 +255,9 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
             ),
 
           // 当前查词结果卡片
-          if (state.currentResult != null && !state.isLoading)
+          if (state.currentResult != null &&
+              !state.isLoading &&
+              (state.candidates == null || state.candidates!.isEmpty))
             _buildCurrentResultCard(context, state.currentResult!),
 
           // 单词列表标题
@@ -625,6 +664,207 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
     final h = date.hour.toString().padLeft(2, '0');
     final min = date.minute.toString().padLeft(2, '0');
     return '$m-$d $h:$min';
+  }
+
+  Widget _buildCandidateConfirmationCard(
+      BuildContext context, VocabularyState state) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isPureKana = state.candidateReason == CandidateReason.pureKana;
+    final candidates = state.candidates ?? [];
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isPureKana
+              ? colorScheme.primary.withAlpha(128)
+              : colorScheme.secondary.withAlpha(128),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(15),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isPureKana ? Icons.alt_route : Icons.auto_fix_high,
+                color: isPureKana ? colorScheme.primary : colorScheme.secondary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isPureKana ? '假名同音多义词确认' : '词典未收录 · AI 智能推测',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: isPureKana
+                        ? colorScheme.primary
+                        : colorScheme.secondary,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                tooltip: '取消选择',
+                onPressed: () {
+                  ref.read(vocabularyProvider.notifier).dismissCandidates();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            isPureKana
+                ? '您输入的是纯假名「${state.pendingCandidateWord}」，可能对应以下汉字与含义，请选择您的目标词：'
+                : '未在词典中检索到「${state.pendingCandidateWord}」，AI 为您智能推测了以下可能的目标词：',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 150),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: candidates.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final candidate = candidates[index];
+                return InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () {
+                    _lookupController.text = candidate.kanji;
+                    ref
+                        .read(vocabularyProvider.notifier)
+                        .selectCandidate(candidate);
+                  },
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 80,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                candidate.kanji,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                              Text(
+                                candidate.reading,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 4,
+                                runSpacing: 2,
+                                children: [
+                                  if (candidate.partOfSpeech.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.secondaryContainer,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        candidate.partOfSpeech,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color:
+                                              colorScheme.onSecondaryContainer,
+                                        ),
+                                      ),
+                                    ),
+                                  if (candidate.source ==
+                                      CandidateSource.aiInference)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.tertiaryContainer,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'AI推测',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color:
+                                              colorScheme.onTertiaryContainer,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                candidate.definition,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 14,
+                          color: colorScheme.outline,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () {
+                  ref.read(vocabularyProvider.notifier).confirmOriginalWord();
+                },
+                child: Text('仍按原输入「${state.pendingCandidateWord}」查询'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   void _showHelpDialog(BuildContext context) {
