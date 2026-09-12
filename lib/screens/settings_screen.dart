@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/persistent_notification_provider.dart';
+import '../providers/vocabulary_config_provider.dart';
+import '../widgets/vocabulary_model_selector_dialog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -529,6 +531,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ref
                       .read(persistentNotificationProvider.notifier)
                       .togglePersistentNotification(value);
+                },
+              );
+            },
+          ),
+          const Divider(),
+
+          // Vocabulary Settings Section
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Text(
+              '生词本设置',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Consumer(
+            builder: (context, ref, _) {
+              final vocabCfg = ref.watch(vocabularyConfigProvider);
+              final providerName = vocabCfg.config?.name ?? '默认供应商';
+              final modelName = vocabCfg.model?.modelName ??
+                  vocabCfg.model?.id ??
+                  '自动选择';
+              return ListTile(
+                leading:
+                    const Icon(Icons.psychology_outlined, color: Colors.indigo),
+                title: const Text('生词本专属翻译模型'),
+                subtitle: Text(
+                  '当前：$providerName · $modelName\n独立于聊天模型，用于生词抓取、消歧与中文翻译',
+                  style: theme.textTheme.bodySmall,
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  showVocabularyModelSelectorDialog(context);
                 },
               );
             },

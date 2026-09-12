@@ -1,14 +1,30 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../data/api_config_dao.dart';
 import '../data/vocabulary_dao.dart';
+import '../models/api_config.dart';
 import '../models/chat_message.dart';
 import '../models/vocabulary_entry.dart';
 import '../models/word_candidate.dart';
 import '../providers/api_config_provider.dart';
 import '../providers/model_provider.dart';
+import '../providers/vocabulary_config_provider.dart';
 import 'chat_service.dart';
 import 'weblio_service.dart';
+
+/// 解析出的有效生词本 LLM 供应商与模型配置
+class ResolvedVocabLlm {
+  final ApiConfig config;
+  final String modelId;
+  final String apiKey;
+
+  ResolvedVocabLlm({
+    required this.config,
+    required this.modelId,
+    required this.apiKey,
+  });
+}
 
 /// 单词管理服务
 /// 整合本地 SQLite 缓存去重、Weblio 释义抓取与 LLM 智能翻译
@@ -27,17 +43,137 @@ class VocabularyService {
     this.ref,
   });
 
+  /// 解析用于生词本翻译与推理的有效 LLM 配置（包含 ApiConfig、ModelId 与 API Key）
+  /// 优先级：
+  /// 1. 生词本专属配置（vocabularyConfigProvider / SharedPreferences）
+  /// 2. 聊天主界面当前选中的 activeConfig 与 selectedModel
+  /// 3. 数据库默认配置（getDefault / getAll.first）与默认模型
+  Future<ResolvedVocabLlm?> resolveVocabLlm() async {
+    final currentRef = ref;
+
+    // 1. 若有 Ref，优先读取生词本专属配置提供者
+    if (currentRef != null) {
+      try {
+        final vocabNotifier =
+            currentRef.read(vocabularyConfigProvider.notifier);
+        await vocabNotifier.initialization;
+      } catch (_) {}
+
+      try {
+        final vocabCfg = currentRef.read(vocabularyConfigProvider);
+        if (vocabCfg.config != null && vocabCfg.model != null) {
+          final apiKey =
+              await apiConfigDao.getApiKey(vocabCfg.config!.apiKeyRef) ?? '';
+          return ResolvedVocabLlm(
+            config: vocabCfg.config!,
+            modelId: vocabCfg.model!.id,
+            apiKey: apiKey,
+          );
+        }
+      } catch (_) {}
+
+      // 2. 尝试读取 Chat 聊天界面的 activeConfig 与 selectedModel
+      try {
+        final activeConfig = currentRef.read(apiConfigProvider).activeConfig;
+        final modelState = currentRef.read(modelProvider);
+        final selectedModel = modelState.selectedModel ??
+            (modelState.models.isNotEmpty ? modelState.models.first : null);
+
+        if (activeConfig != null && selectedModel != null) {
+          final apiKey =
+              await apiConfigDao.getApiKey(activeConfig.apiKeyRef) ?? '';
+          return ResolvedVocabLlm(
+            config: activeConfig,
+            modelId: selectedModel.id,
+            apiKey: apiKey,
+          );
+        }
+      } catch (_) {}
+    }
+
+    // 若 ref 为 null（例如纯单元测试环境下），直接返回 null 保持测试隔离与降级行为
+    if (currentRef == null) {
+      return null;
+    }
+
+    // 3. 读取本地 SharedPreferences 中持久化的生词本配置
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedConfigId =
+          prefs.getString(VocabularyConfigNotifier.keyVocabApiConfigId);
+      final savedModelId =
+          prefs.getString(VocabularyConfigNotifier.keyVocabModelId);
+      if (savedConfigId != null && savedConfigId.isNotEmpty) {
+        final config = await apiConfigDao.getById(savedConfigId);
+        if (config != null) {
+          final apiKey =
+              await apiConfigDao.getApiKey(config.apiKeyRef) ?? '';
+          final modelId = (savedModelId != null && savedModelId.isNotEmpty)
+              ? savedModelId
+              : (config.id == 'opencode_free'
+                  ? 'deepseek-v4-flash-free'
+                  : 'default');
+          return ResolvedVocabLlm(
+            config: config,
+            modelId: modelId,
+            apiKey: apiKey,
+          );
+        }
+      }
+    } catch (_) {}
+
+    // 4. 智能兜底：从 apiConfigDao 中获取默认配置（或第一项配置）并选用默认模型
+    try {
+      var defaultCfg = await apiConfigDao.getDefault();
+      if (defaultCfg == null) {
+        final all = await apiConfigDao.getAll();
+        if (all.isNotEmpty) {
+          defaultCfg = all.first;
+        }
+      }
+      if (defaultCfg != null) {
+        final apiKey =
+            await apiConfigDao.getApiKey(defaultCfg.apiKeyRef) ?? '';
+        final modelId = defaultCfg.id == 'opencode_free'
+            ? 'deepseek-v4-flash-free'
+            : 'gpt-4o';
+        return ResolvedVocabLlm(
+          config: defaultCfg,
+          modelId: modelId,
+          apiKey: apiKey,
+        );
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   /// 是否已配置可用的 LLM
   bool get hasLlmConfigured {
     final currentRef = ref;
     if (currentRef == null) return false;
 
-    final activeConfig = currentRef.read(apiConfigProvider).activeConfig;
-    final modelState = currentRef.read(modelProvider);
-    final selectedModel = modelState.selectedModel ??
-        (modelState.models.isNotEmpty ? modelState.models.first : null);
+    // 1. 检查生词本专属配置
+    try {
+      final vocabCfg = currentRef.read(vocabularyConfigProvider);
+      if (vocabCfg.config != null && vocabCfg.model != null) {
+        return true;
+      }
+    } catch (_) {}
 
-    return activeConfig != null && selectedModel != null;
+    // 2. 检查 Chat 主界面的 activeConfig 与 selectedModel
+    try {
+      final activeConfig = currentRef.read(apiConfigProvider).activeConfig;
+      final modelState = currentRef.read(modelProvider);
+      final selectedModel = modelState.selectedModel ??
+          (modelState.models.isNotEmpty ? modelState.models.first : null);
+      if (activeConfig != null && selectedModel != null) {
+        return true;
+      }
+    } catch (_) {}
+
+    // 3. 当存在 ref 时，无论处于异步加载阶段还是后台通知，均可通过 resolveVocabLlm 自愈获取模型
+    return true;
   }
 
   /// 判断输入文本是否为纯假名（平假名/片假名/长音符/中黑点，且至少包含一个真实假名字符）
@@ -57,16 +193,9 @@ class VocabularyService {
     if (trimmed.isEmpty) return [];
 
     // 1. 若配置了 LLM，优先使用 AI 获取具备清晰中文释义的高质量同音汉字候选项
-    if (hasLlmConfigured) {
+    final llm = await resolveVocabLlm();
+    if (llm != null) {
       try {
-        final currentRef = ref!;
-        final activeConfig = currentRef.read(apiConfigProvider).activeConfig!;
-        final modelState = currentRef.read(modelProvider);
-        final selectedModel =
-            modelState.selectedModel ?? modelState.models.first;
-        final apiKey =
-            await apiConfigDao.getApiKey(activeConfig.apiKeyRef) ?? '';
-
         final prompt = '''
 你是一位资深日语语言学专家与词典编纂者。
 用户输入了纯日语假名「$trimmed」。
@@ -101,9 +230,9 @@ class VocabularyService {
         ];
 
         final response = await chatService.getCompletion(
-          baseUrl: activeConfig.baseUrl,
-          apiKey: apiKey,
-          model: selectedModel.id,
+          baseUrl: llm.config.baseUrl,
+          apiKey: llm.apiKey,
+          model: llm.modelId,
           messages: messages,
         );
 
@@ -134,17 +263,12 @@ class VocabularyService {
   /// 词典未收录或拼写笔误时，调用 AI 智能推测用户可能想查询的词汇候选项
   Future<List<WordCandidate>> inferTypoCandidates(String word) async {
     final trimmed = word.trim();
-    if (trimmed.isEmpty || !hasLlmConfigured) return [];
+    if (trimmed.isEmpty) return [];
+
+    final llm = await resolveVocabLlm();
+    if (llm == null) return [];
 
     try {
-      final currentRef = ref!;
-      final activeConfig = currentRef.read(apiConfigProvider).activeConfig!;
-      final modelState = currentRef.read(modelProvider);
-      final selectedModel =
-          modelState.selectedModel ?? modelState.models.first;
-      final apiKey =
-          await apiConfigDao.getApiKey(activeConfig.apiKeyRef) ?? '';
-
       final prompt = '''
 你是一位资深日语教师与专业智能纠错助手。
 用户在日语词典中查询「$trimmed」，但在标准词典中未收录该词。这极可能是由于拼写笔误、假名脱落/冗余、送假名错误或活用形式错误（例如：たべまる 可能是 食べる 的笔误）。
@@ -176,9 +300,9 @@ class VocabularyService {
       ];
 
       final response = await chatService.getCompletion(
-        baseUrl: activeConfig.baseUrl,
-        apiKey: apiKey,
-        model: selectedModel.id,
+        baseUrl: llm.config.baseUrl,
+        apiKey: llm.apiKey,
+        model: llm.modelId,
         messages: messages,
       );
 
@@ -264,7 +388,20 @@ class VocabularyService {
     // 1. 本地缓存命中检查（若缓存中仅有无实质释义的重定向残留，则自动穿透重查以自愈）
     if (!forceRefresh) {
       final cached = await vocabularyDao.findByKanji(word);
-      if (cached != null && WeblioService.hasSubstantiveDefinition(cached.vocabDefJa)) {
+      if (cached != null &&
+          WeblioService.hasSubstantiveDefinition(cached.vocabDefJa)) {
+        // 若缓存已有但缺失中文释义，尝试通过 LLM 进行自愈补全翻译
+        if (cached.vocabDefSc.isEmpty) {
+          final llm = await resolveVocabLlm();
+          if (llm != null) {
+            try {
+              final translated = await retranslateEntry(cached);
+              return translated;
+            } catch (_) {
+              return cached;
+            }
+          }
+        }
         return cached;
       }
     }
@@ -283,13 +420,16 @@ class VocabularyService {
 
     // 3. 词典查询失败时，根据 allowLlmFallback 决定是否触发 AI 兜底
     if (weblioResult == null) {
-      if (allowLlmFallback && hasLlmConfigured) {
-        try {
-          final aiEntry = await _generateWithLlmFallback(word);
-          final insertedId = await vocabularyDao.insert(aiEntry);
-          return aiEntry.copyWith(id: insertedId);
-        } catch (aiError) {
-          throw weblioError ?? WeblioException('AI 兜底生成失败: $aiError');
+      if (allowLlmFallback) {
+        final llm = await resolveVocabLlm();
+        if (llm != null) {
+          try {
+            final aiEntry = await _generateWithLlmFallback(word);
+            final insertedId = await vocabularyDao.insert(aiEntry);
+            return aiEntry.copyWith(id: insertedId);
+          } catch (aiError) {
+            throw weblioError ?? WeblioException('AI 兜底生成失败: $aiError');
+          }
         }
       }
       throw weblioError ?? WeblioException('未在 Weblio 找到「$word」的相关释义');
@@ -378,21 +518,10 @@ class VocabularyService {
 
   /// 词典未收录或网络故障时的 AI 智能兜底生成
   Future<VocabularyEntry> _generateWithLlmFallback(String word) async {
-    final currentRef = ref;
-    if (currentRef == null) {
+    final llm = await resolveVocabLlm();
+    if (llm == null) {
       throw WeblioException('未在 Weblio 找到「$word」的相关释义，且未配置 AI 模型');
     }
-
-    final activeConfig = currentRef.read(apiConfigProvider).activeConfig;
-    final modelState = currentRef.read(modelProvider);
-    final selectedModel = modelState.selectedModel ??
-        (modelState.models.isNotEmpty ? modelState.models.first : null);
-
-    if (activeConfig == null || selectedModel == null) {
-      throw WeblioException('未在 Weblio 找到「$word」的相关释义，且未配置 AI 模型');
-    }
-
-    final apiKey = await apiConfigDao.getApiKey(activeConfig.apiKeyRef) ?? '';
 
     final prompt = '''
 你是一位资深日语词典编纂专家与专业翻译助手。
@@ -436,9 +565,9 @@ class VocabularyService {
     ];
 
     final response = await chatService.getCompletion(
-      baseUrl: activeConfig.baseUrl,
-      apiKey: apiKey,
-      model: selectedModel.id,
+      baseUrl: llm.config.baseUrl,
+      apiKey: llm.apiKey,
+      model: llm.modelId,
       messages: messages,
     );
 
@@ -511,19 +640,12 @@ class VocabularyService {
     WeblioResult result, {
     bool isProblematic = false,
   }) async {
-    final currentRef = ref;
-    if (currentRef == null) return {};
+    final llm = await resolveVocabLlm();
+    if (llm == null) return {};
 
-    final activeConfig = currentRef.read(apiConfigProvider).activeConfig;
-    final modelState = currentRef.read(modelProvider);
-    final selectedModel = modelState.selectedModel ??
-        (modelState.models.isNotEmpty ? modelState.models.first : null);
-
-    if (activeConfig == null || selectedModel == null) {
-      return {};
-    }
-
-    final apiKey = await apiConfigDao.getApiKey(activeConfig.apiKeyRef) ?? '';
+    final apiKey = llm.apiKey;
+    final activeConfig = llm.config;
+    final selectedModelId = llm.modelId;
 
     final ex1 = result.examples.isNotEmpty ? result.examples[0].kanji : '';
     final ex2 = result.examples.length > 1 ? result.examples[1].kanji : '';
@@ -597,11 +719,82 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
     final response = await chatService.getCompletion(
       baseUrl: activeConfig.baseUrl,
       apiKey: apiKey,
-      model: selectedModel.id,
+      model: selectedModelId,
       messages: messages,
     );
 
     return parseTranslationJson(response);
+  }
+
+  /// 对已存入生词本但缺少中文释义的单词重新调用 LLM 进行翻译与例句补全
+  Future<VocabularyEntry> retranslateEntry(VocabularyEntry entry) async {
+    final isProblematic = entry.vocabDefJa.trim().isEmpty ||
+        !WeblioService.hasSubstantiveDefinition(entry.vocabDefJa);
+
+    final weblioResult = WeblioResult(
+      word: entry.vocabKanji,
+      reading: entry.vocabFurigana,
+      partOfSpeech: entry.vocabPoS,
+      definition: entry.vocabDefJa,
+      examples: [
+        if (entry.sentKanji1 != null && entry.sentKanji1!.isNotEmpty)
+          WeblioExample(
+            kanji: entry.sentKanji1!,
+            furigana: entry.sentFurigana1 ?? entry.sentKanji1!,
+          ),
+        if (entry.sentKanji2 != null && entry.sentKanji2!.isNotEmpty)
+          WeblioExample(
+            kanji: entry.sentKanji2!,
+            furigana: entry.sentFurigana2 ?? entry.sentKanji2!,
+          ),
+      ],
+      sourceDict: entry.sourceDict,
+      sourceUrl: entry.sourceUrl,
+    );
+
+    final translation = await _translateWithLlm(
+      weblioResult,
+      isProblematic: isProblematic,
+    );
+
+    if (translation.isEmpty) {
+      throw WeblioException('未配置可用 AI 模型或翻译失败，请在设置中检查生词本模型配置');
+    }
+
+    final definitionSc = translation['definitionSc'] ?? '';
+    final exampleSc1 = translation['exampleSc1'] ?? '';
+    final exampleSc2 = translation['exampleSc2'] ?? '';
+    var finalDefJa = entry.vocabDefJa;
+    var finalReading = entry.vocabFurigana;
+    var finalPos = entry.vocabPoS;
+
+    final aiDefJa = translation['definitionJa'] ?? '';
+    if (isProblematic && aiDefJa.isNotEmpty) {
+      finalDefJa = aiDefJa;
+    }
+    final aiPos = translation['partOfSpeech'] ?? '';
+    if (finalPos.isEmpty && aiPos.isNotEmpty) {
+      finalPos = aiPos;
+    }
+    final aiReading = translation['furigana'] ?? '';
+    if ((finalReading.isEmpty || finalReading == entry.vocabKanji) &&
+        aiReading.isNotEmpty) {
+      finalReading = aiReading;
+    }
+
+    final updated = entry.copyWith(
+      vocabFurigana: finalReading,
+      vocabDefJa: finalDefJa,
+      vocabDefSc: definitionSc.isNotEmpty ? definitionSc : entry.vocabDefSc,
+      vocabPoS: finalPos,
+      sentDefSc1: exampleSc1.isNotEmpty ? exampleSc1 : entry.sentDefSc1,
+      sentDefSc2: exampleSc2.isNotEmpty ? exampleSc2 : entry.sentDefSc2,
+    );
+
+    if (updated.id != null) {
+      await vocabularyDao.update(updated);
+    }
+    return updated;
   }
 
   /// 清洗中文释义：剥离可能残留的前置元语言语法说明（如“是講ずる的上一段活用。1. ...”）

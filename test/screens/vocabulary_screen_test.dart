@@ -133,6 +133,13 @@ class MockVocabularyNotifier extends StateNotifier<VocabularyState>
   }
 
   @override
+  Future<void> retranslateEntry(VocabularyEntry entry) async {
+    state = state.copyWith(
+      currentResult: entry.copyWith(vocabDefSc: '重新生成的中文释义'),
+    );
+  }
+
+  @override
   void clearError() {
     state = state.copyWith(clearError: true);
   }

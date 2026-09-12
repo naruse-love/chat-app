@@ -94,6 +94,18 @@ class VocabularyDao {
     return maps.map((m) => VocabularyEntry.fromMap(m)).toList();
   }
 
+  /// 更新指定单词内容
+  Future<int> update(VocabularyEntry entry) async {
+    final db = await _dbHelper.database;
+    if (!db.isOpen || entry.id == null) return -1;
+    return await db.update(
+      'vocabulary',
+      entry.toMap(),
+      where: 'id = ?',
+      whereArgs: [entry.id],
+    );
+  }
+
   /// 删除指定 ID 的单词
   Future<int> delete(int id) async {
     final db = await _dbHelper.database;

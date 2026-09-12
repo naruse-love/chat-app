@@ -265,6 +265,29 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
     state = state.copyWith(clearCurrentResult: true);
   }
 
+  /// 对已存入生词本但缺少中文释义的单词重新调用 LLM 进行翻译
+  Future<void> retranslateEntry(VocabularyEntry entry) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final updated = await vocabularyService.retranslateEntry(entry);
+      if (!mounted) return;
+      final freshList =
+          await vocabularyDao.getAll(searchQuery: state.searchQuery);
+      if (!mounted) return;
+      state = state.copyWith(
+        isLoading: false,
+        currentResult: updated,
+        entries: freshList,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString(),
+      );
+    }
+  }
+
   /// 清除当前错误提示
   void clearError() {
     state = state.copyWith(clearError: true);

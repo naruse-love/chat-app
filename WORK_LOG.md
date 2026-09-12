@@ -1,3 +1,46 @@
+## 2026-09-12 Feature: Independent Vocabulary Translation Model Selection & Fallback Self-Healing (v1.31.0+32)
+
+### 变更文件
+- `lib/providers/vocabulary_config_provider.dart`:
+  - 新增生词本专属模型与配置状态管理器 `VocabularyConfigNotifier` 及 `vocabularyConfigProvider`；
+  - 支持为生词本单独挑选供应商（`ApiConfig`）与具体翻译模型（`ModelInfo`），与聊天会话隔离且互不影响，共享现有 API 配置生态；
+  - 基于 `SharedPreferences` 持久化 `vocab_api_config_id` 与 `vocab_model_id`，应用重启与后台引擎查询均可无缝恢复；
+  - 完备的智能兜底体系：未手动配置专属模型时自动回退至默认供应商与常用模型（如 `deepseek-v4-flash-free`），杜绝冷启动与通知查询未选模型导致的“未配置 API 模型”；
+  - 支持自定义模型 ID 输入与供应商模型列表在线/缓存刷新。
+- `lib/services/vocabulary_service.dart`:
+  - 引入 `resolveVocabLlm()` 统一凭据解析策略，确保前台查词与后台通知栏查询均能可靠获取目标 API 端点与凭证；
+  - 重构 `lookupWord`、`_translateWithLlm`、`_generateWithLlmFallback`、`getPureKanaCandidates`、`inferTypoCandidates` 采用专属配置；
+  - 新增 `retranslateEntry(VocabularyEntry)` 接口，支持对已有日文词条快速调用专属模型重新生成中文释义与例句翻译；
+  - 实现 SQLite 缓存命中自愈机制：若本地已有词条但缺失中文释义（如先前在无配置/网络异常时查入），查词时自动触发 LLM 补全翻译并自愈更新入库。
+- `lib/data/vocabulary_dao.dart`:
+  - 新增 `update(VocabularyEntry)` 方法，支持对生词库中已有单词进行部分字段更新与持久化。
+- `lib/providers/vocabulary_provider.dart`:
+  - `VocabularyNotifier` 新增 `retranslateEntry` 状态调度方法，重新翻译后即时刷新列表与当前激活生词卡片。
+- `lib/widgets/vocabulary_model_selector_dialog.dart`:
+  - 新增生词本专属模型选择对话框与便捷调用函数 `showVocabularyModelSelectorDialog`；
+  - 提供供应商下拉、模型选择下拉、自定义模型录入、列表刷新与“恢复默认”一键重置功能。
+- `lib/screens/vocabulary_screen.dart`:
+  - AppBar 动作栏新增专属翻译模型快捷切换按钮（`Icons.psychology_outlined`）；
+  - 搜索栏下方新增常驻翻译模型指示 Chip，直观显示当前供应商与模型名称并支持点击弹窗切换；
+  - 生词释义卡片交互优化：缺失中文释义时提供“生成释义”按钮，已有释义提供“重新生成”按钮，点击即通过专属模型补全。
+- `lib/screens/settings_screen.dart`:
+  - 新增“生词本设置”板块与“生词本专属翻译模型”设置项，展示当前模型配置并支持一键呼出模型选择弹窗。
+- `test/providers/vocabulary_config_provider_test.dart`:
+  - 新增生词本模型配置单元测试：覆盖默认加载、自定义切换持久化、自定义模型添加及恢复默认重置。
+- `test/services/vocabulary_service_model_selection_test.dart`:
+  - 新增专属模型服务调用与自愈测试：验证专属模型凭据独立下发、缓存空释义自愈补全及手动重翻译持久化。
+- `test/screens/vocabulary_screen_test.dart`:
+  - 完善 `MockVocabularyNotifier` 补充 `retranslateEntry` 实现。
+- `pubspec.yaml`, `WORK_LOG.md`, `.agents/context.md`:
+  - 项目版本号递增至 `1.31.0+32`。
+
+### 核心技术指标与决策
+- **全量测试基线**：801 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.31.0+32`
+
+---
+
 ## 2026-09-12 Fix & Hardening: Background FlutterEngine Plugin Registration, Cold-Start Query Buffering, Race Condition Guard & Notification UX (v1.30.0+31)
 
 ### 变更文件

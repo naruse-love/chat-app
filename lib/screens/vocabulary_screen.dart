@@ -6,6 +6,8 @@ import '../models/vocabulary_entry.dart';
 import '../models/word_candidate.dart';
 import '../providers/vocabulary_provider.dart';
 import '../providers/persistent_notification_provider.dart';
+import '../providers/vocabulary_config_provider.dart';
+import '../widgets/vocabulary_model_selector_dialog.dart';
 import '../services/native/native_services.dart';
 
 /// 单词本界面
@@ -85,6 +87,19 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
       appBar: AppBar(
         title: const Text('📚 单词本'),
         actions: [
+          Consumer(
+            builder: (context, ref, _) {
+              final vocabCfg = ref.watch(vocabularyConfigProvider);
+              final modelName = vocabCfg.model?.modelName ??
+                  vocabCfg.model?.id ??
+                  '专属模型';
+              return IconButton(
+                tooltip: '生词本专属翻译模型: $modelName',
+                icon: const Icon(Icons.psychology_outlined),
+                onPressed: () => showVocabularyModelSelectorDialog(context),
+              );
+            },
+          ),
           Consumer(
             builder: (context, ref, _) {
               final notifState = ref.watch(persistentNotificationProvider);
@@ -185,6 +200,59 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                 ),
               ],
             ),
+          ),
+
+          // 生词本专属翻译模型指示与快捷切换
+          Consumer(
+            builder: (context, ref, _) {
+              final vocabCfg = ref.watch(vocabularyConfigProvider);
+              final providerName = vocabCfg.config?.name ?? '默认供应商';
+              final modelName = vocabCfg.model?.modelName ??
+                  vocabCfg.model?.id ??
+                  '自动选择';
+              return Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                child: Row(
+                  children: [
+                    Icon(Icons.auto_awesome,
+                        size: 14, color: colorScheme.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      '翻译模型: ',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.outline,
+                        fontSize: 12,
+                      ),
+                    ),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () => showVocabularyModelSelectorDialog(context),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '$providerName · $modelName',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(Icons.arrow_drop_down,
+                                size: 16, color: colorScheme.primary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
 
           // 历史搜索过滤栏（展开时展示）
@@ -449,6 +517,8 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
   Widget _buildCurrentResultCard(BuildContext context, VocabularyEntry entry) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isLoading =
+        ref.watch(vocabularyProvider.select((s) => s.isLoading));
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -547,15 +617,30 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                 // 中文释义
                 if (entry.vocabDefSc.isNotEmpty) ...[
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(Icons.translate, size: 16, color: colorScheme.primary),
-                      const SizedBox(width: 6),
-                      Text(
-                        '中文释义',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.primary,
-                        ),
+                      Row(
+                        children: [
+                          Icon(Icons.translate, size: 16, color: colorScheme.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            '中文释义',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 16),
+                        tooltip: '使用专属模型重新生成释义',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: isLoading
+                            ? null
+                            : () => ref
+                                .read(vocabularyProvider.notifier)
+                                .retranslateEntry(entry),
                       ),
                     ],
                   ),
@@ -572,12 +657,23 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                     children: [
                       Icon(Icons.info_outline, size: 16, color: colorScheme.outline),
                       const SizedBox(width: 6),
-                      Text(
-                        '未配置 API 模型，无中文翻译',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.outline,
-                          fontStyle: FontStyle.italic,
+                      Expanded(
+                        child: Text(
+                          '未配置 API 模型或暂无中文释义',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.outline,
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.translate, size: 14),
+                        label: const Text('生成释义', style: TextStyle(fontSize: 12)),
+                        onPressed: isLoading
+                            ? null
+                            : () => ref
+                                .read(vocabularyProvider.notifier)
+                                .retranslateEntry(entry),
                       ),
                     ],
                   ),
