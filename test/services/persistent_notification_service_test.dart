@@ -491,5 +491,48 @@ void main() {
       notifier.dispose();
     });
   });
+
+  group('condenseNotificationDefinition Tests', () {
+    test('returns empty string for null or empty text', () {
+      expect(condenseNotificationDefinition(null), '');
+      expect(condenseNotificationDefinition(''), '');
+      expect(condenseNotificationDefinition('   '), '');
+    });
+
+    test('preserves short definitions with 1 or 2 items without hint', () {
+      const shortDef = '1. 食用；进食。\n2. 过日子，生活。';
+      final condensed = condenseNotificationDefinition(shortDef);
+      expect(condensed, shortDef);
+      expect(condensed.contains('(更多可在App内查看)'), isFalse);
+    });
+
+    test('condenses polysemous definitions like 君 (9+ meanings) to top 3 and appends hint', () {
+      const longKimiDef =
+          '1. （古代称呼）君主，帝王。\n'
+          '2. 贵人，长辈。\n'
+          '3. （女性对男性恋人或丈夫的亲昵称呼）你，君。\n'
+          '4. （平辈或对晚辈、后辈的第二人称代词）你。\n'
+          '5. （接尾词）...君（尊称或同辈称呼）。\n'
+          '6. 神明或敬仰的对象。\n'
+          '7. 封建时代对领主的尊称。\n'
+          '8. 艺妓、游女的雅称。\n'
+          '9. （下接语）若君、小君。';
+
+      final condensed = condenseNotificationDefinition(longKimiDef, maxItems: 3);
+      expect(condensed.contains('1. （古代称呼）君主，帝王。'), isTrue);
+      expect(condensed.contains('2. 贵人，长辈。'), isTrue);
+      expect(condensed.contains('3. （女性对男性恋人或丈夫的亲昵称呼）你，君。'), isTrue);
+      expect(condensed.contains('4. （平辈或对晚辈'), isFalse);
+      expect(condensed.endsWith('(更多可在App内查看)'), isTrue);
+    });
+
+    test('truncates overly long single-line definition if exceeding maxLength', () {
+      final veryLong = 'A' * 200;
+      final condensed = condenseNotificationDefinition(veryLong, maxLength: 80);
+      expect(condensed.length, lessThanOrEqualTo(100));
+      expect(condensed.endsWith('(更多可在App内查看)'), isTrue);
+    });
+  });
 }
+
 

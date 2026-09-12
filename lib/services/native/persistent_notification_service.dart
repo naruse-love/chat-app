@@ -45,6 +45,80 @@ abstract class IPersistentNotificationService {
   Future<void> dispose();
 }
 
+/// 为系统通知栏（BigTextStyle）精简超长释义
+/// 提取最核心的前 2-3 条主要义项，并在超出时追加「(更多可在App内查看)」提示，
+/// 确保通知栏展开卡片在 Android 限制下清晰易读、不被截断
+String condenseNotificationDefinition(
+  String? text, {
+  int maxItems = 3,
+  int maxLength = 160,
+  String moreHint = ' (更多可在App内查看)',
+}) {
+  if (text == null) return '';
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) return '';
+
+  // 1. 检查编号格式多义项（例如：1. 2. 3. 或 １ ２ ３ 或 ① ② ③）
+  final numberedPattern = RegExp(
+    r'(?:^|[\n\r]+|\s+)(?:[1-9１-９①-⑩][\.\s、\)）]|\([1-9１-９]\)|（[1-9１-９]）)',
+  );
+
+  final matches = numberedPattern.allMatches(trimmed).toList();
+  if (matches.length >= 2) {
+    final items = <String>[];
+    for (int i = 0; i < matches.length; i++) {
+      final start = matches[i].start;
+      final end =
+          (i + 1 < matches.length) ? matches[i + 1].start : trimmed.length;
+      final item = trimmed.substring(start, end).trim();
+      if (item.isNotEmpty) {
+        items.add(item);
+      }
+    }
+
+    if (items.length > maxItems) {
+      final topItems = items.take(maxItems).join('\n');
+      return '$topItems\n$moreHint'.trim();
+    } else {
+      final combined = items.join('\n');
+      if (combined.length > maxLength) {
+        return '${combined.substring(0, maxLength - moreHint.length).trim()}...$moreHint';
+      }
+      return combined;
+    }
+  }
+
+  // 2. 检查多行文本（按换行符拆分）
+  final lines = trimmed
+      .split(RegExp(r'[\n\r]+'))
+      .map((l) => l.trim())
+      .where((l) => l.isNotEmpty)
+      .toList();
+  if (lines.length > maxItems) {
+    final topLines = lines.take(maxItems).join('\n');
+    return '$topLines\n$moreHint'.trim();
+  } else if (lines.length > 1) {
+    final combined = lines.join('\n');
+    if (combined.length > maxLength) {
+      return '${combined.substring(0, maxLength - moreHint.length).trim()}...$moreHint';
+    }
+    return combined;
+  }
+
+  // 3. 单行超长文本
+  if (trimmed.length > maxLength) {
+    var cutPos = maxLength - moreHint.length;
+    final punctuationMatch =
+        RegExp(r'[。；;，,]').allMatches(trimmed.substring(0, cutPos));
+    if (punctuationMatch.isNotEmpty) {
+      cutPos = punctuationMatch.last.end;
+    }
+    return '${trimmed.substring(0, cutPos).trim()}...$moreHint';
+  }
+
+  return trimmed;
+}
+
 /// 模拟通知显示的数据结构，便于单元测试与状态观察
 class NotificationDisplayData {
   final String id;
@@ -126,9 +200,17 @@ class InMemoryPersistentNotificationService
             : (reading != null && reading.isNotEmpty && reading != word
                 ? '📖 $word【$reading】'
                 : '📖 $word'));
+
+    final condensedSc = definitionSc != null
+        ? condenseNotificationDefinition(definitionSc)
+        : null;
+    final condensedJa = definitionJa != null
+        ? condenseNotificationDefinition(definitionJa)
+        : null;
+
     final body = isLoading
         ? '正在获取释义与翻译，请稍候...'
-        : (error ?? definitionSc ?? definitionJa ?? '');
+        : (error ?? condensedSc ?? condensedJa ?? '');
 
     _displayedNotifications[id] = NotificationDisplayData(
       id: id,
@@ -136,8 +218,8 @@ class InMemoryPersistentNotificationService
       body: body,
       word: word,
       reading: reading,
-      definitionJa: definitionJa,
-      definitionSc: definitionSc,
+      definitionJa: condensedJa,
+      definitionSc: condensedSc,
       partOfSpeech: partOfSpeech,
       isLoading: isLoading,
       error: error,
@@ -312,9 +394,16 @@ class MethodChannelPersistentNotificationService
             : (reading != null && reading.isNotEmpty && reading != word
                 ? '📖 $word【$reading】'
                 : '📖 $word'));
+    final condensedSc = definitionSc != null
+        ? condenseNotificationDefinition(definitionSc)
+        : null;
+    final condensedJa = definitionJa != null
+        ? condenseNotificationDefinition(definitionJa)
+        : null;
+
     final body = isLoading
         ? '正在获取释义与翻译，请稍候...'
-        : (error ?? definitionSc ?? definitionJa ?? '');
+        : (error ?? condensedSc ?? condensedJa ?? '');
 
     _fallbackNotifications[id] = NotificationDisplayData(
       id: id,
@@ -322,8 +411,8 @@ class MethodChannelPersistentNotificationService
       body: body,
       word: word,
       reading: reading,
-      definitionJa: definitionJa,
-      definitionSc: definitionSc,
+      definitionJa: condensedJa,
+      definitionSc: condensedSc,
       partOfSpeech: partOfSpeech,
       isLoading: isLoading,
       error: error,
@@ -334,8 +423,8 @@ class MethodChannelPersistentNotificationService
         'id': id,
         'word': word,
         'reading': reading,
-        'definitionJa': definitionJa,
-        'definitionSc': definitionSc,
+        'definitionJa': condensedJa,
+        'definitionSc': condensedSc,
         'partOfSpeech': partOfSpeech,
         'isLoading': isLoading,
         'error': error,

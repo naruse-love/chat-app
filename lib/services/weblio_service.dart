@@ -423,11 +423,11 @@ class WeblioService {
     );
   }
 
-  /// 从 Weblio HTML 中提取所有候选词项（用于假名多汉字消歧）
+  /// 从 Weblio HTML 中提取所有候选词项（用于假名多汉字/外来语多义项消歧）
   static List<WordCandidate> extractCandidatesFromHtml(String html, String query) {
     final doc = html_parser.parse(html);
     final candidates = <WordCandidate>[];
-    final seenKanji = <String>{};
+    final seenKeys = <String>{};
 
     // 检查是否有未收录提示
     final bodyText = doc.body?.text ?? '';
@@ -442,22 +442,55 @@ class WeblioService {
       final midashigoText = midashigoElem?.text.trim() ?? '';
       if (midashigoText.isEmpty) continue;
 
-      // 提取假名读音与汉字
+      // 提取假名读音与汉字/区分项
       String reading = '';
-      final kanjiList = <String>[];
+      final candidateEntries = <({String kanji, String reading, String? disambig})>[];
 
       final bracketMatch = RegExp(r'^(.*?)【([^】]+)】').firstMatch(midashigoText);
       if (bracketMatch != null) {
-        reading = bracketMatch.group(1)!.replaceAll('・', '').replaceAll(RegExp(r'〔[^〕]*〕'), '').trim();
+        final kanaPart = bracketMatch
+            .group(1)!
+            .replaceAll('・', '')
+            .replaceAll(RegExp(r'〔[^〕]*〕'), '')
+            .trim();
+        reading = kanaPart.isNotEmpty ? kanaPart : query;
         final kanjiRaw = bracketMatch.group(2)!.trim();
         final splitKanji = kanjiRaw
             .split(RegExp(r'[/／、・\s]'))
             .map((s) => s.trim())
             .where((s) => s.isNotEmpty);
-        kanjiList.addAll(splitKanji);
+
+        for (final p in splitKanji) {
+          final hasKanji = RegExp(r'[\u4e00-\u9faf\u3400-\u4dbfヶ々]').hasMatch(p);
+          if (hasKanji) {
+            candidateEntries.add((kanji: p, reading: reading, disambig: p));
+          } else {
+            // 外来语 / 片假名词条的拉丁词源注记（如 アクセル【accel】、アクセル【axel】）
+            candidateEntries.add((
+              kanji: '$reading ($p)',
+              reading: reading,
+              disambig: reading,
+            ));
+          }
+        }
       } else {
-        kanjiList.add(midashigoText.replaceAll('・', '').trim());
+        final cleanMidashigo = midashigoText.replaceAll('・', '').trim();
         reading = query;
+        // 检查所属词典是否为人名/专有名词词典，以便加上区分标注
+        final dictName = _getDictNameForKiji(doc, kiji);
+        final isNameOrSpecific = dictName.contains('人名') ||
+            dictName.contains('固有名詞') ||
+            dictName.contains('Wikipedia') ||
+            dictName.contains('ウィキペディア') ||
+            kiji.text.contains('人名としての') ||
+            kiji.text.contains('男性名');
+        final displayLabel =
+            isNameOrSpecific ? '$cleanMidashigo (人名)' : cleanMidashigo;
+        candidateEntries.add((
+          kanji: displayLabel,
+          reading: reading,
+          disambig: cleanMidashigo,
+        ));
       }
 
       if (reading.isEmpty) {
@@ -476,7 +509,7 @@ class WeblioService {
         }
       }
 
-      // 提取第一条实质释义
+      // 提取精简主要意思（优先提取第一句核心义项，保持精炼短小）
       String def = '';
       String fallbackDef = '';
       for (final p in kiji.querySelectorAll('p')) {
@@ -485,15 +518,22 @@ class WeblioService {
             text.startsWith('読み方：') ||
             text.startsWith('[補説]') ||
             text.startsWith('[派生]') ||
-            text.startsWith('[用法]')) {
+            text.startsWith('[用法]') ||
+            text.startsWith('出典:')) {
           continue;
         }
         var clean = text
             .replaceAll(RegExp(r'［[^］]+］'), '')
             .replaceAll(RegExp(r'「[^」]+」'), '')
+            .replaceAll(RegExp(r'《[^》]+》'), '')
+            .replaceAll(RegExp(r'【[^】]+】'), '')
+            .replaceAll(RegExp(r'〔[^〕]+〕'), '')
             .trim();
-        if (text.contains('《') ||
-            text.contains('［文］') ||
+        clean = clean.replaceFirst(RegExp(r'^[1-9１-９①-⑩\.\s]+'), '').trim();
+
+        if (clean.isEmpty) continue;
+
+        if (text.contains('［文］') ||
             text.contains('［古］') ||
             clean.startsWith('《') ||
             clean.startsWith('【') ||
@@ -502,27 +542,34 @@ class WeblioService {
           continue;
         }
 
-        if (clean.length > 80) {
-          clean = '${clean.substring(0, 80)}...';
+        if (clean.length > 50) {
+          clean = '${clean.substring(0, 50)}...';
         }
         def = clean;
         break;
       }
       if (def.isEmpty && fallbackDef.isNotEmpty) {
-        def = fallbackDef.length > 80 ? '${fallbackDef.substring(0, 80)}...' : fallbackDef;
+        def = fallbackDef.length > 50
+            ? '${fallbackDef.substring(0, 50)}...'
+            : fallbackDef;
       }
 
-      for (final kanji in kanjiList) {
-        final cleanKanji = kanji.replaceAll(RegExp(r'[\s\[\]［］]'), '');
-        if (cleanKanji.isEmpty || seenKanji.contains(cleanKanji)) continue;
-        seenKanji.add(cleanKanji);
+      for (final entry in candidateEntries) {
+        final cleanKanji = entry.kanji.replaceAll(RegExp(r'[\s\[\]［］]'), '');
+        if (cleanKanji.isEmpty) continue;
+        final dedupeKey =
+            '${cleanKanji}_${def.length > 15 ? def.substring(0, 15) : def}';
+        if (seenKeys.contains(dedupeKey)) continue;
+        seenKeys.add(dedupeKey);
+
         candidates.add(
           WordCandidate(
             kanji: cleanKanji,
-            reading: reading,
+            reading: entry.reading,
             definition: def,
             partOfSpeech: pos,
             source: CandidateSource.weblio,
+            disambiguationWord: entry.disambig,
           ),
         );
       }
@@ -532,9 +579,11 @@ class WeblioService {
   }
 
   /// 纯 HTML 解析逻辑（支持无网络单元测试）
+  /// 优先小学馆《デジタル大辞泉》，多词典冲突时根据权威度评分降级人名/固有名词
   WeblioResult parseHtml(String html, String word, [String? sourceUrl]) {
     final doc = html_parser.parse(html);
-    final effectiveUrl = sourceUrl ?? 'https://www.weblio.jp/content/${Uri.encodeComponent(word)}';
+    final effectiveUrl = sourceUrl ??
+        'https://www.weblio.jp/content/${Uri.encodeComponent(word)}';
 
     // 检查是否有未收录提示
     final bodyText = doc.body?.text ?? '';
@@ -544,20 +593,15 @@ class WeblioService {
     }
 
     // 1. 优先定位小学馆《デジタル大辞泉》(SGKDJ)
-    final sgkdjAnchor = doc.querySelector('a[name="SGKDJ"]');
-    final sgkdjDiv = doc.querySelector('.Sgkdj');
-
-    if (sgkdjAnchor != null || sgkdjDiv != null) {
-      final sgkdjResult = _parseSgkdj(doc, word, effectiveUrl);
-      if (sgkdjResult != null) {
-        return sgkdjResult;
-      }
+    final sgkdjResult = _parseSgkdj(doc, word, effectiveUrl);
+    if (sgkdjResult != null) {
+      return sgkdjResult;
     }
 
-    // 2. 降级回退：首个可用词典条目 (.kiji)
-    final firstKiji = doc.querySelector('.kiji');
-    if (firstKiji != null) {
-      return _parseFallbackKiji(doc, firstKiji, word, effectiveUrl);
+    // 2. 降级回退：智能评估所有可用词典条目 (.kiji)，严格优先权威一般语言词典，降级人名/固有名词
+    final bestResult = _parseBestKiji(doc, word, effectiveUrl);
+    if (bestResult != null) {
+      return bestResult;
     }
 
     throw WeblioException('未在 Weblio 找到「$word」的词典释义');
@@ -587,24 +631,56 @@ class WeblioService {
   WeblioResult? _parseSgkdj(dom.Document doc, String word, String sourceUrl) {
     dom.Element? sgkdjDiv = doc.querySelector('.Sgkdj');
 
-    // 若未直接匹配到 .Sgkdj，尝试从 <a name="SGKDJ"> 后续兄弟节点查找
+    // 1. 若未直接匹配到 .Sgkdj，尝试从 name 包含 SGKDJ 的锚点查找
     if (sgkdjDiv == null) {
-      final anchor = doc.querySelector('a[name="SGKDJ"]');
-      if (anchor != null) {
-        var next = anchor.nextElementSibling;
-        while (next != null) {
-          if (next.classes.contains('kiji')) {
-            sgkdjDiv = next.querySelector('.Sgkdj') ?? next;
-            break;
+      final anchors = doc.querySelectorAll('a');
+      for (final a in anchors) {
+        final name = a.attributes['name'] ?? '';
+        if (name.toUpperCase().contains('SGKDJ')) {
+          var next = a.nextElementSibling;
+          while (next != null) {
+            if (next.classes.contains('kiji')) {
+              sgkdjDiv = next.querySelector('.Sgkdj') ?? next;
+              break;
+            }
+            final nested = next.querySelector('.kiji');
+            if (nested != null) {
+              sgkdjDiv = nested.querySelector('.Sgkdj') ?? nested;
+              break;
+            }
+            next = next.nextElementSibling;
           }
-          final nested = next.querySelector('.kiji');
-          if (nested != null) {
-            sgkdjDiv = nested.querySelector('.Sgkdj') ?? nested;
-            break;
-          }
-          next = next.nextElementSibling;
+          if (sgkdjDiv != null) break;
         }
       }
+    }
+
+    // 2. 尝试从包含「大辞泉」或「小学館」的 .pbarT 标题查找
+    if (sgkdjDiv == null) {
+      final pbars = doc.querySelectorAll('.pbarT');
+      for (final pb in pbars) {
+        final pbText = pb.text;
+        if (pbText.contains('大辞泉') || pbText.contains('小学館')) {
+          var next = pb.nextElementSibling;
+          while (next != null) {
+            if (next.classes.contains('kiji')) {
+              sgkdjDiv = next.querySelector('.Sgkdj') ?? next;
+              break;
+            }
+            final nested = next.querySelector('.kiji');
+            if (nested != null) {
+              sgkdjDiv = nested.querySelector('.Sgkdj') ?? nested;
+              break;
+            }
+            next = next.nextElementSibling;
+          }
+          if (sgkdjDiv != null) break;
+        }
+      }
+    }
+
+    if (sgkdjDiv == null) {
+      return null;
     }
 
     // 优先在 SGKDJ 所在的 kiji 容器内定位 midashigo，避免被排在前面的词典（如维基百科）污染
@@ -617,14 +693,12 @@ class WeblioService {
 
     // 1. 假名读音 (Reading)
     String reading = '';
-    if (sgkdjDiv != null) {
-      for (final p in sgkdjDiv.querySelectorAll('p')) {
-        final t = p.text.trim();
-        if (t.startsWith('読み方：')) {
-          reading = t.replaceFirst('読み方：', '').trim();
-          reading = reading.split(RegExp(r'[\s\[［]')).first;
-          break;
-        }
+    for (final p in sgkdjDiv.querySelectorAll('p')) {
+      final t = p.text.trim();
+      if (t.startsWith('読み方：')) {
+        reading = t.replaceFirst('読み方：', '').trim();
+        reading = reading.split(RegExp(r'[\s\[［]')).first;
+        break;
       }
     }
 
@@ -639,10 +713,10 @@ class WeblioService {
 
     // 2. 词性 (PoS)
     String pos = '';
-    final hinshiSpan = sgkdjDiv?.querySelector('.hinshi');
+    final hinshiSpan = sgkdjDiv.querySelector('.hinshi');
     if (hinshiSpan != null) {
       pos = hinshiSpan.text.trim().replaceAll(RegExp(r'[\s\[\]［］]'), '');
-    } else if (sgkdjDiv != null) {
+    } else {
       final posMatch = RegExp(r'［([^］]+)］').firstMatch(sgkdjDiv.text);
       if (posMatch != null) {
         pos = posMatch.group(1)!.trim();
@@ -669,82 +743,80 @@ class WeblioService {
     final defLines = <String>[];
     final examples = <WeblioExample>[];
 
-    if (sgkdjDiv != null) {
-      final ps = sgkdjDiv.querySelectorAll('p');
-      for (final p in ps) {
-        final text = p.text.trim().replaceAll(RegExp(r'\s+'), ' ');
-        if (text.isEmpty) continue;
+    final ps = sgkdjDiv.querySelectorAll('p');
+    for (final p in ps) {
+      final text = p.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+      if (text.isEmpty) continue;
 
-        // 跳过纯粹的辅助与语法信息行
-        if (text.startsWith('読み方：') ||
-            text.startsWith('[補説]') ||
-            text.startsWith('[派生]') ||
-            text.startsWith('[用法]')) {
-          continue;
-        }
+      // 跳过纯粹的辅助与语法信息行
+      if (text.startsWith('読み方：') ||
+          text.startsWith('[補説]') ||
+          text.startsWith('[派生]') ||
+          text.startsWith('[用法]')) {
+        continue;
+      }
 
-        // 跳过仅标明词性分类的短行
-        if (RegExp(r'^［[^］]+］$').hasMatch(text) &&
-            !RegExp(r'[0-9０-９１２３４５６７８９]').hasMatch(text)) {
-          continue;
-        }
+      // 跳过仅标明词性分类的短行
+      if (RegExp(r'^［[^］]+］$').hasMatch(text) &&
+          !RegExp(r'[0-9０-９１２３４５６７８９]').hasMatch(text)) {
+        continue;
+      }
 
-        // 提取例句 「...」
-        final exMatches = RegExp(r'「([^」]+)」').allMatches(text);
-        final matchedExBrackets = <String>[];
-        for (final m in exMatches) {
-          final raw = m.group(1)!.trim();
-          if (raw.length < 2) continue;
+      // 提取例句 「...」
+      final exMatches = RegExp(r'「([^」]+)」').allMatches(text);
+      final matchedExBrackets = <String>[];
+      for (final m in exMatches) {
+        final raw = m.group(1)!.trim();
+        if (raw.length < 2) continue;
 
-          // 仅处理包含连接符/波浪线或包含单词本体的有效例句，避免将「食う」等释义引用的同义/对义词误判为当前单词的例句
-          if (raw.contains(RegExp(r'[―—～〜]')) ||
-              (raw.contains(word) && raw.length > word.length)) {
-            matchedExBrackets.add(m.group(0)!);
+        // 仅处理包含连接符/波浪线或包含单词本体的有效例句
+        if (raw.contains(RegExp(r'[―—～〜]')) ||
+            (raw.contains(word) && raw.length > word.length)) {
+          matchedExBrackets.add(m.group(0)!);
 
-            // 「―・」替换为词干，「―/—/～/〜」替换为完整词头或词干
-            var restored = raw.replaceAll(RegExp(r'[―—～〜]・'), stem);
+          // 「―・」替换为词干，「―/—/～/〜」替换为完整词头或词干
+          var restored = raw.replaceAll(RegExp(r'[―—～〜]・'), stem);
 
-            // 若破折号后直接紧随送假名（如「―じる」对应「講じる」），替换为词干 stem 防止「講じるじる」
-            restored = restored.replaceAllMapped(
-              RegExp(r'[―—～〜]([\u3040-\u309f]+)'),
-              (m) {
-                final okuri = m.group(1)!;
-                if (word.endsWith(okuri)) {
-                  return '$stem$okuri';
-                }
-                return '$word$okuri';
-              },
-            );
+          // 若破折号后直接紧随送假名，替换为词干 stem 防止重复
+          restored = restored.replaceAllMapped(
+            RegExp(r'[―—～〜]([\u3040-\u309f]+)'),
+            (m) {
+              final okuri = m.group(1)!;
+              if (word.endsWith(okuri)) {
+                return '$stem$okuri';
+              }
+              return '$word$okuri';
+            },
+          );
 
-            // 其余独立破折号替换为完整词头（如「朝夕―」->「朝夕食べる」）
-            restored = restored.replaceAll(RegExp(r'[―—～〜]'), word);
+          // 其余独立破折号替换为完整词头
+          restored = restored.replaceAll(RegExp(r'[―—～〜]'), word);
 
-            final kanji = stripFurigana(restored);
-            final furigana = formatFurigana(restored);
+          final kanji = stripFurigana(restored);
+          final furigana = formatFurigana(restored);
 
-            if (kanji.isNotEmpty && !examples.any((e) => e.kanji == kanji)) {
-              examples.add(WeblioExample(kanji: kanji, furigana: furigana));
-            }
+          if (kanji.isNotEmpty && !examples.any((e) => e.kanji == kanji)) {
+            examples.add(WeblioExample(kanji: kanji, furigana: furigana));
           }
         }
+      }
 
-        // 清洗释义文本：仅剥离已识别出的例句括号，保留词义引用说明（如「食う」）
-        var cleanDef = text;
-        for (final exBracket in matchedExBrackets) {
-          cleanDef = cleanDef.replaceAll(exBracket, '');
-        }
-        cleanDef = cleanDef.replaceAll(RegExp(r'〈[^〉]*〉'), '').trim();
+      // 清洗释义文本
+      var cleanDef = text;
+      for (final exBracket in matchedExBrackets) {
+        cleanDef = cleanDef.replaceAll(exBracket, '');
+      }
+      cleanDef = cleanDef.replaceAll(RegExp(r'〈[^〉]*〉'), '').trim();
 
-        // 移除开头的词性标记
-        cleanDef = cleanDef.replaceFirst(RegExp(r'^［[^］]+］\s*'), '').trim();
+      // 移除开头的词性标记
+      cleanDef = cleanDef.replaceFirst(RegExp(r'^［[^］]+］\s*'), '').trim();
 
-        if (cleanDef.isNotEmpty &&
-            !cleanDef.startsWith('読み方：') &&
-            !cleanDef.startsWith('[補説]') &&
-            !cleanDef.startsWith('[派生]') &&
-            !cleanDef.startsWith('[用法]')) {
-          defLines.add(cleanDef);
-        }
+      if (cleanDef.isNotEmpty &&
+          !cleanDef.startsWith('読み方：') &&
+          !cleanDef.startsWith('[補説]') &&
+          !cleanDef.startsWith('[派生]') &&
+          !cleanDef.startsWith('[用法]')) {
+        defLines.add(cleanDef);
       }
     }
 
@@ -776,15 +848,17 @@ class WeblioService {
     );
   }
 
-  /// 解析回退词典 (首个可用 .kiji)
-  WeblioResult _parseFallbackKiji(
-    dom.Document doc,
-    dom.Element kiji,
-    String word,
-    String sourceUrl,
-  ) {
-    // 1. 尝试从前置同级或父级查找匹配该词条的 .pbarT 获取真实词典名
-    String sourceDict = 'Weblio辞書';
+  /// 获取指定 .kiji 元素所属词典的规范名称
+  static String _getDictNameForKiji(dom.Document doc, dom.Element kiji) {
+    if (kiji.classes.contains('Sgkdj') || kiji.querySelector('.Sgkdj') != null) {
+      return 'デジタル大辞泉';
+    }
+
+    final crossl = kiji.querySelector('.crossl');
+    if (crossl != null && crossl.text.trim().isNotEmpty) {
+      return crossl.text.trim();
+    }
+
     dom.Element? pbarT;
     var curr = kiji.parent;
     while (curr != null && pbarT == null) {
@@ -799,19 +873,130 @@ class WeblioService {
           pbarT = nested;
           break;
         }
+        if (prev.localName == 'a') {
+          final name = prev.attributes['name'] ?? '';
+          if (name.toUpperCase().contains('SGKDJ')) return 'デジタル大辞泉';
+          if (name.toUpperCase().contains('DJRIN')) return '大辞林';
+        }
         prev = prev.previousElementSibling;
       }
       curr = curr.parent;
     }
+
     pbarT ??= doc.querySelector('.pbarT');
     if (pbarT != null) {
       final text = pbarT.text.trim();
       if (text.isNotEmpty) {
-        sourceDict = text.split(RegExp(r'\s+')).first;
+        return text.split(RegExp(r'\s+')).first;
       }
     }
 
-    // 2. 读音
+    return 'Weblio辞書';
+  }
+
+  /// 计算词典条目的权威度优先级（严防人名/固有名词篡夺普通语言条目）
+  static int _scoreKiji(String dictName, String kijiText, dom.Element kiji) {
+    int score = 500;
+    final lower = dictName.toLowerCase();
+
+    // 1. 权威一般国语与外来语辞典（高优先级）
+    if (dictName.contains('大辞泉') || lower.contains('sgkdj') || kiji.classes.contains('Sgkdj')) {
+      score = 1000;
+    } else if (dictName.contains('大辞林') || lower.contains('djrin')) {
+      score = 900;
+    } else if (dictName.contains('国語辞典') ||
+        dictName.contains('広辞苑') ||
+        dictName.contains('明鏡') ||
+        dictName.contains('日本語大辞典') ||
+        dictName.contains('精選版')) {
+      score = 800;
+    } else if (dictName.contains('カタカナ') || dictName.contains('外来語')) {
+      score = 750;
+    } else if (dictName.contains('Wiktionary') || dictName.contains('ウィクショナリー')) {
+      score = 700;
+    }
+
+    // 2. 人名、固有名词、作品名、Wikipedia 降级（极低优先级）
+    final isNameOrProper = dictName.contains('人名') ||
+        dictName.contains('欧米人名') ||
+        dictName.contains('日本人名') ||
+        dictName.contains('外国人名') ||
+        dictName.contains('人物') ||
+        dictName.contains('著名人') ||
+        dictName.contains('固有名詞') ||
+        dictName.contains('作品名') ||
+        dictName.contains('アニメ') ||
+        dictName.contains('ゲーム') ||
+        dictName.contains('映画') ||
+        dictName.contains('音楽') ||
+        dictName.contains('楽曲') ||
+        dictName.contains('ウィキペディア') ||
+        dictName.contains('Wikipedia');
+
+    if (isNameOrProper) {
+      score = 50;
+    }
+
+    // 3. 内容惩罚/加分：若条目文本显式指代具体人名，大幅扣分
+    if (kijiText.contains('人名としての') ||
+        kijiText.contains('男性名') ||
+        kijiText.contains('女性名') ||
+        (kijiText.contains('アメリカの') && kijiText.contains('歌手')) ||
+        kijiText.contains('サッカー選手') ||
+        kijiText.contains('デンマーク語形')) {
+      score -= 300;
+    }
+
+    // 规范词典多义项编号加分
+    if (kijiText.contains('［名］') ||
+        kijiText.contains('［動') ||
+        kijiText.contains('［形') ||
+        RegExp(r'[１-９①-⑩]').hasMatch(kijiText)) {
+      score += 100;
+    }
+
+    return score;
+  }
+
+  /// 智能评估所有可用词典条目 (.kiji)，严格优先一般语言词典，降级人名/固有名词
+  WeblioResult? _parseBestKiji(
+    dom.Document doc,
+    String word,
+    String sourceUrl,
+  ) {
+    final kijis = doc.querySelectorAll('.kiji');
+    if (kijis.isEmpty) return null;
+
+    dom.Element? bestKiji;
+    int highestScore = -9999;
+    String bestDict = 'Weblio辞書';
+
+    for (final kiji in kijis) {
+      final dictName = _getDictNameForKiji(doc, kiji);
+      final score = _scoreKiji(dictName, kiji.text, kiji);
+      if (score > highestScore) {
+        highestScore = score;
+        bestKiji = kiji;
+        bestDict = dictName;
+      }
+    }
+
+    if (bestKiji != null) {
+      return _parseSingleKiji(doc, bestKiji, word, bestDict, sourceUrl);
+    }
+    return null;
+  }
+
+
+  /// 解析指定的单条 .kiji 条目
+  WeblioResult _parseSingleKiji(
+    dom.Document doc,
+    dom.Element kiji,
+    String word,
+    String sourceDict,
+    String sourceUrl,
+  ) {
+    // 1. 读音
     String reading = '';
     final midashigo = kiji.querySelector('.midashigo')?.text.trim() ?? '';
     if (midashigo.isNotEmpty) {
@@ -827,7 +1012,7 @@ class WeblioService {
       reading = word;
     }
 
-    // 3. 词性
+    // 2. 词性
     String pos = '';
     final hinshi = kiji.querySelector('.hinshi')?.text.trim();
     if (hinshi != null && hinshi.isNotEmpty) {
@@ -839,7 +1024,7 @@ class WeblioService {
       }
     }
 
-    // 4. 释义文本
+    // 3. 释义文本
     final pElements = kiji.querySelectorAll('p');
     final defLines = <String>[];
     for (final p in pElements) {
@@ -856,7 +1041,7 @@ class WeblioService {
         ? defLines.join('\n').trim()
         : kiji.text.trim().replaceAll(RegExp(r'\s+'), ' ');
 
-    // 5. 例句补充
+    // 4. 例句补充
     final examples = <WeblioExample>[];
     final wnryjLis = doc.querySelectorAll('.wnryj li');
     for (final li in wnryjLis) {

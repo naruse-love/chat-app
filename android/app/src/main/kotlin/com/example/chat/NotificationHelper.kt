@@ -196,11 +196,14 @@ object NotificationHelper {
             "📖 $word"
         }
 
+        val condensedSc = condenseForNotification(definitionSc, maxItems = 3, maxLength = 160)
+        val condensedJa = condenseForNotification(definitionJa, maxItems = 2, maxLength = 100)
+
         val shortBody = when {
-            !definitionSc.isNullOrEmpty() -> definitionSc
-            !definitionJa.isNullOrEmpty() -> definitionJa
+            condensedSc.isNotEmpty() -> condensedSc.lines().firstOrNull()?.trim() ?: condensedSc
+            condensedJa.isNotEmpty() -> condensedJa.lines().firstOrNull()?.trim() ?: condensedJa
             else -> "已收录至生词本"
-        }
+        }.let { if (it.length > 60) "${it.substring(0, 57)}..." else it }
 
         val bigTextBuilder = StringBuilder()
         if (!reading.isNullOrEmpty() && reading != word) {
@@ -209,11 +212,10 @@ object NotificationHelper {
         if (!partOfSpeech.isNullOrEmpty()) {
             bigTextBuilder.append("【词性】").append(partOfSpeech).append("\n")
         }
-        if (!definitionSc.isNullOrEmpty()) {
-            bigTextBuilder.append("【中文】").append(definitionSc).append("\n")
-        }
-        if (!definitionJa.isNullOrEmpty()) {
-            bigTextBuilder.append("【日文】").append(definitionJa)
+        if (condensedSc.isNotEmpty()) {
+            bigTextBuilder.append("【中文】").append(condensedSc)
+        } else if (condensedJa.isNotEmpty()) {
+            bigTextBuilder.append("【日文】").append(condensedJa)
         }
 
         val bigStyle = NotificationCompat.BigTextStyle()
@@ -233,6 +235,61 @@ object NotificationHelper {
             .setContentIntent(contentPendingIntent)
             .addAction(replyAction)
             .build()
+    }
+
+    private fun condenseForNotification(
+        text: String?,
+        maxItems: Int = 3,
+        maxLength: Int = 160,
+        hint: String = " (更多可在App内查看)"
+    ): String {
+        if (text.isNullOrBlank()) return ""
+        val trimmed = text.trim()
+
+        val numberedRegex = Regex("""(?:^|[\n\r]+|\s+)(?:[1-9１-９①-⑩][\.\s、\)）]|\([1-9１-９]\)|（[1-9１-９]）)""")
+        val matches = numberedRegex.findAll(trimmed).toList()
+        if (matches.size >= 2) {
+            val items = mutableListOf<String>()
+            for (i in matches.indices) {
+                val start = matches[i].range.first
+                val end = if (i + 1 < matches.size) matches[i + 1].range.first else trimmed.length
+                val item = trimmed.substring(start, end).trim()
+                if (item.isNotEmpty()) {
+                    items.add(item)
+                }
+            }
+
+            return if (items.size > maxItems) {
+                val topItems = items.take(maxItems).joinToString("\n")
+                "$topItems\n$hint".trim()
+            } else {
+                val combined = items.joinToString("\n")
+                if (combined.length > maxLength) {
+                    "${combined.substring(0, maxLength - hint.length).trim()}...$hint"
+                } else {
+                    combined
+                }
+            }
+        }
+
+        val lines = trimmed.split(Regex("""[\n\r]+""")).map { it.trim() }.filter { it.isNotEmpty() }
+        if (lines.size > maxItems) {
+            val topLines = lines.take(maxItems).joinToString("\n")
+            return "$topLines\n$hint".trim()
+        } else if (lines.size > 1) {
+            val combined = lines.joinToString("\n")
+            return if (combined.length > maxLength) {
+                "${combined.substring(0, maxLength - hint.length).trim()}...$hint"
+            } else {
+                combined
+            }
+        }
+
+        if (trimmed.length > maxLength) {
+            return "${trimmed.substring(0, maxLength - hint.length).trim()}...$hint"
+        }
+
+        return trimmed
     }
 
     fun showNotification(

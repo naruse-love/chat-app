@@ -102,6 +102,39 @@ void main() {
       expect(taberu.definition, contains('食物'));
     });
 
+    test('extractCandidatesFromHtml handles katakana loanwords with Latin roots like accel and axel', () {
+      const accelHtml = '''
+        <!DOCTYPE html>
+        <html>
+        <body>
+          <div class="kiji">
+            <h2 class="midashigo">アクセル【accel】</h2>
+            <span class="hinshi">［名］</span>
+            <p>自動車などの加速装置。アクセレーター。「アクセルを踏む」</p>
+          </div>
+          <div class="kiji">
+            <h2 class="midashigo">アクセル【axel】</h2>
+            <span class="hinshi">［名］</span>
+            <p>フィギュアスケートのジャンプの一。前向きに踏み切り、空中で回転する技。</p>
+          </div>
+        </body>
+        </html>
+      ''';
+
+      final candidates = WeblioService.extractCandidatesFromHtml(accelHtml, 'アクセル');
+      expect(candidates.length, 2);
+
+      expect(candidates[0].kanji, contains('accel'));
+      expect(candidates[0].reading, 'アクセル');
+      expect(candidates[0].searchWord, 'アクセル');
+      expect(candidates[0].definition, contains('加速装置'));
+
+      expect(candidates[1].kanji, contains('axel'));
+      expect(candidates[1].reading, 'アクセル');
+      expect(candidates[1].searchWord, 'アクセル');
+      expect(candidates[1].definition, contains('フィギュアスケート'));
+    });
+
     test('extractCandidatesFromHtml returns empty when word not found', () {
       const notFoundHtml = '''
         <!DOCTYPE html>
@@ -117,3 +150,4 @@ void main() {
     });
   });
 }
+

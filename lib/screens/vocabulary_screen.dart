@@ -354,11 +354,15 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
               ),
             ),
 
-          // 当前查词结果卡片
+          // 当前查词结果卡片 (以 Flexible 约束最大高度，配合卡片内部滚动杜绝任何屏幕尺寸下的溢出)
           if (state.currentResult != null &&
               !state.isLoading &&
               (state.candidates == null || state.candidates!.isEmpty))
-            _buildCurrentResultCard(context, state.currentResult!),
+            Flexible(
+              flex: 4,
+              fit: FlexFit.loose,
+              child: _buildCurrentResultCard(context, state.currentResult!),
+            ),
 
           // 单词列表标题
           Padding(
@@ -386,6 +390,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
 
           // 单词列表主体
           Expanded(
+            flex: 3,
             child: state.entries.isEmpty
                 ? Center(
                     child: Column(
@@ -613,133 +618,136 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
 
           const Divider(height: 1),
 
-          // 卡片内容：释义与例句
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 中文释义
-                if (entry.vocabDefSc.isNotEmpty) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.translate, size: 16, color: colorScheme.primary),
-                          const SizedBox(width: 6),
-                          Text(
-                            '中文释义',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: colorScheme.primary,
+          // 卡片内容：释义与例句 (以 Flexible 和 SingleChildScrollView 包裹，杜绝长文本布局溢出)
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 中文释义
+                  if (entry.vocabDefSc.isNotEmpty) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.translate, size: 16, color: colorScheme.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              '中文释义',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh, size: 16),
+                          tooltip: '使用专属模型重新生成释义',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: isLoading
+                              ? null
+                              : () => ref
+                                  .read(vocabularyProvider.notifier)
+                                  .retranslateEntry(entry),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      entry.vocabDefSc,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ] else ...[
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 16, color: colorScheme.outline),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '未配置 API 模型或暂无中文释义',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.outline,
+                              fontStyle: FontStyle.italic,
                             ),
                           ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.refresh, size: 16),
-                        tooltip: '使用专属模型重新生成释义',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: isLoading
-                            ? null
-                            : () => ref
-                                .read(vocabularyProvider.notifier)
-                                .retranslateEntry(entry),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  SelectableText(
-                    entry.vocabDefSc,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.translate, size: 14),
+                          label: const Text('生成释义', style: TextStyle(fontSize: 12)),
+                          onPressed: isLoading
+                              ? null
+                              : () => ref
+                                  .read(vocabularyProvider.notifier)
+                                  .retranslateEntry(entry),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                ] else ...[
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline, size: 16, color: colorScheme.outline),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          '未配置 API 模型或暂无中文释义',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.outline,
-                            fontStyle: FontStyle.italic,
+                    const SizedBox(height: 8),
+                  ],
+
+                  // 日语原文释义
+                  if (entry.vocabDefJa.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        Icon(Icons.menu_book, size: 16, color: colorScheme.secondary),
+                        const SizedBox(width: 6),
+                        Text(
+                          '日语释义 (${entry.sourceDict.isNotEmpty ? entry.sourceDict : "Weblio"})',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colorScheme.secondary,
                           ),
                         ),
-                      ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.translate, size: 14),
-                        label: const Text('生成释义', style: TextStyle(fontSize: 12)),
-                        onPressed: isLoading
-                            ? null
-                            : () => ref
-                                .read(vocabularyProvider.notifier)
-                                .retranslateEntry(entry),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
-
-                // 日语原文释义
-                if (entry.vocabDefJa.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      Icon(Icons.menu_book, size: 16, color: colorScheme.secondary),
-                      const SizedBox(width: 6),
-                      Text(
-                        '日语释义 (${entry.sourceDict.isNotEmpty ? entry.sourceDict : "Weblio"})',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: colorScheme.secondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  SelectableText(
-                    entry.vocabDefJa,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      height: 1.4,
+                      ],
                     ),
-                  ),
-                ],
-
-                // 例句模块
-                if (entry.sentKanji1 != null || entry.sentKanji2 != null) ...[
-                  const SizedBox(height: 10),
-                  const Divider(height: 1),
-                  const SizedBox(height: 8),
-                  Text(
-                    '例句',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.tertiary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  if (entry.sentKanji1 != null)
-                    _buildExampleRow(
-                      context,
-                      kanji: entry.sentKanji1!,
-                      furigana: entry.sentFurigana1,
-                      translation: entry.sentDefSc1,
-                    ),
-                  if (entry.sentKanji2 != null) ...[
-                    const SizedBox(height: 6),
-                    _buildExampleRow(
-                      context,
-                      kanji: entry.sentKanji2!,
-                      furigana: entry.sentFurigana2,
-                      translation: entry.sentDefSc2,
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      entry.vocabDefJa,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.4,
+                      ),
                     ),
                   ],
+
+                  // 例句模块
+                  if (entry.sentKanji1 != null || entry.sentKanji2 != null) ...[
+                    const SizedBox(height: 10),
+                    const Divider(height: 1),
+                    const SizedBox(height: 8),
+                    Text(
+                      '例句',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.tertiary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (entry.sentKanji1 != null)
+                      _buildExampleRow(
+                        context,
+                        kanji: entry.sentKanji1!,
+                        furigana: entry.sentFurigana1,
+                        translation: entry.sentDefSc1,
+                      ),
+                    if (entry.sentKanji2 != null) ...[
+                      const SizedBox(height: 6),
+                      _buildExampleRow(
+                        context,
+                        kanji: entry.sentKanji2!,
+                        furigana: entry.sentFurigana2,
+                        translation: entry.sentDefSc2,
+                      ),
+                    ],
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ],
@@ -873,7 +881,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                 return InkWell(
                   borderRadius: BorderRadius.circular(10),
                   onTap: () {
-                    _lookupController.text = candidate.kanji;
+                    _lookupController.text = candidate.searchWord;
                     ref
                         .read(vocabularyProvider.notifier)
                         .selectCandidate(candidate);
@@ -884,8 +892,8 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SizedBox(
-                          width: 80,
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 70, maxWidth: 130),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [

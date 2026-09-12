@@ -80,6 +80,34 @@ void main() {
       expect(result.definition, contains('試験。試行。実地に行ってみること。'));
     });
 
+    test('parseHtml prioritizes general dictionaries over person name dictionaries even when person name appears first', () {
+      const mixedHtml = '''
+        <!DOCTYPE html>
+        <html>
+        <body>
+          <div class="kiji">
+            <h2><span class="crossl">実名・人名事典</span></h2>
+            <h2 class="midashigo">アクセル</h2>
+            <span class="hinshi">［人名］</span>
+            <p>架空のキャラクター名。ゲーム作品に登場する人物。</p>
+          </div>
+          <div class="kiji">
+            <h2><span class="crossl">デジタル大辞泉</span></h2>
+            <h2 class="midashigo">アクセル【accel】</h2>
+            <span class="hinshi">［名］</span>
+            <p>自動車などの加速装置。アクセレーター。「アクセルを踏む」</p>
+          </div>
+        </body>
+        </html>
+      ''';
+
+      final result = service.parseHtml(mixedHtml, 'アクセル');
+      expect(result.word, 'アクセル');
+      expect(result.sourceDict, 'デジタル大辞泉');
+      expect(result.definition, contains('自動車などの加速装置'));
+      expect(result.definition, isNot(contains('架空のキャラクター名')));
+    });
+
     test('parseHtml throws WeblioException when word is not found', () {
       const notFoundHtml = '''
         <!DOCTYPE html>

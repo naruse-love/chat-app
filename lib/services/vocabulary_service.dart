@@ -203,22 +203,24 @@ class VocabularyService {
         final prompt = '''
 你是一位资深日语语言学专家与词典编纂者。
 用户输入了纯日语假名「$trimmed」。
-在日语中，部分纯假名对应多个不同汉字或截然不同的词义（例如：はし 对应 箸、橋、端；あめ 对应 雨、飴；こうじる 对应 高じる、講じる、興じる）。
+在日语中，部分纯假名对应多个不同汉字、外来语多重主要义项或截然不同的词义（例如：はし 对应 箸、橋、端；あめ 对应 雨、飴；こうじる 对应 高じる、講じる、興じる；アクセル 对应 加速踏板/油门、花滑阿克塞尔跳、欧美男子人名）。
 请评估该假名：
 - 如果该假名在标准日语中通常只对应单一汉字/单一常用词义（如：たべる 对应 食べる；ねこ 对应 猫），或者该假名本身并非有效词汇（如拼写笔误），请返回空数组 [] 或仅包含 1 个词项。
-- 如果该假名确实对应多个常用的不同汉字或截然不同的词义，请列出其最常用、最主要的 2 至 6 个汉字候选词项及其对应简明中文释义，供用户消歧确认。
+- 如果该假名确实对应多个常用的不同汉字、外来语核心义项或截然不同的词义，请列出其最常用、最主要的 2 至 5 个核心候选词项及其极其精简的核心主要意思（每个选项只保留主要意思，10-25字），供用户消歧确认。
 要求：
-1. kanji：对应汉字词（若为无汉字的常用纯假名词则写假名原形）。
+1. kanji：对应汉字词，若为外来语/同形多义假名词请附带精炼区分标识（例如：箸、橋；或 アクセル(油门/加速器)、アクセル(阿克塞尔跳)、アクセル(人名)）。
 2. reading：标准假名读音（即「$trimmed」）。
 3. partOfSpeech：词性标记（如［名］、［動上一］、［副］等）。
-4. definition：简明地道的简体中文释义（例如：筷子。用餐时夹取食物的双根餐具）。
-5. 请严格输出以下 JSON 数组格式，不要包含任何 markdown 代码块或解释说明：
+4. definition：简明主要意思（只列出最核心主要意思，精炼短小）。
+5. disambiguationWord：查词时使用的规范原词（即「$trimmed」或标准汉字形）。
+6. 请严格输出以下 JSON 数组格式，不要包含任何 markdown 代码块或解释说明：
 [
   {
-    "kanji": "汉字词",
+    "kanji": "候选词",
     "reading": "$trimmed",
     "partOfSpeech": "词性标记",
-    "definition": "简明中文释义"
+    "definition": "简明主要意思",
+    "disambiguationWord": "$trimmed"
   }
 ]
 ''';
@@ -352,8 +354,14 @@ class VocabularyService {
             final reading = item['reading']?.toString().trim() ?? originalQuery;
             final definition = item['definition']?.toString().trim() ?? '';
             final pos = item['partOfSpeech']?.toString().trim() ?? '';
+            final disambig = item['disambiguationWord']?.toString().trim();
 
-            if (kanji.isNotEmpty && !list.any((c) => c.kanji == kanji)) {
+            final isDuplicate = list.any((c) =>
+                c.kanji == kanji &&
+                (c.definition == definition ||
+                    (definition.isNotEmpty && c.definition.contains(definition))));
+
+            if (kanji.isNotEmpty && !isDuplicate) {
               list.add(
                 WordCandidate(
                   kanji: kanji,
@@ -361,6 +369,10 @@ class VocabularyService {
                   definition: definition,
                   partOfSpeech: pos,
                   source: source,
+                  disambiguationWord: disambig ??
+                      (kanji.contains('(') || kanji.contains('（')
+                          ? originalQuery
+                          : null),
                 ),
               );
             }

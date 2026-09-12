@@ -33,13 +33,29 @@ class WordCandidate {
   /// 来源（Weblio 词典或 AI 推测）
   final CandidateSource source;
 
+  /// 用于后续发起精确查词的规范原词（当 kanji 带区分标签如「アクセル (accel)」时，此字段为「アクセル」）
+  final String? disambiguationWord;
+
   const WordCandidate({
     required this.kanji,
     required this.reading,
     required this.definition,
     this.partOfSpeech = '',
     this.source = CandidateSource.weblio,
+    this.disambiguationWord,
   });
+
+  /// 获取用于后续发起精确查词的目标原词（自动剥离区分后缀或括号）
+  String get searchWord {
+    if (disambiguationWord != null && disambiguationWord!.trim().isNotEmpty) {
+      return disambiguationWord!.trim();
+    }
+    if (kanji.contains('（') || kanji.contains('(') || kanji.contains('【')) {
+      final base = kanji.split(RegExp(r'[（\(【]')).first.trim();
+      if (base.isNotEmpty) return base;
+    }
+    return kanji;
+  }
 
   Map<String, dynamic> toJson() => {
         'kanji': kanji,
@@ -47,6 +63,7 @@ class WordCandidate {
         'definition': definition,
         'partOfSpeech': partOfSpeech,
         'source': source.name,
+        if (disambiguationWord != null) 'disambiguationWord': disambiguationWord,
       };
 
   factory WordCandidate.fromJson(Map<String, dynamic> json) {
@@ -58,6 +75,7 @@ class WordCandidate {
       source: json['source'] == 'aiInference'
           ? CandidateSource.aiInference
           : CandidateSource.weblio,
+      disambiguationWord: json['disambiguationWord']?.toString().trim(),
     );
   }
 
@@ -70,7 +88,8 @@ class WordCandidate {
           reading == other.reading &&
           definition == other.definition &&
           partOfSpeech == other.partOfSpeech &&
-          source == other.source;
+          source == other.source &&
+          disambiguationWord == other.disambiguationWord;
 
   @override
   int get hashCode =>
@@ -78,9 +97,10 @@ class WordCandidate {
       reading.hashCode ^
       definition.hashCode ^
       partOfSpeech.hashCode ^
-      source.hashCode;
+      source.hashCode ^
+      disambiguationWord.hashCode;
 
   @override
   String toString() =>
-      'WordCandidate(kanji: $kanji, reading: $reading, def: $definition, pos: $partOfSpeech, source: ${source.name})';
+      'WordCandidate(kanji: $kanji, reading: $reading, def: $definition, pos: $partOfSpeech, source: ${source.name}, target: $searchWord)';
 }

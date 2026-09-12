@@ -193,7 +193,7 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
       clearPendingCandidateWord: true,
       clearCandidateReason: true,
     );
-    await lookupWord(candidate.kanji, forceDirect: true);
+    await lookupWord(candidate.searchWord, forceDirect: true);
   }
 
   /// 用户坚持按原输入（无论假名还是笔误）强制查询

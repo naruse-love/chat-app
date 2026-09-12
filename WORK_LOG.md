@@ -1,3 +1,33 @@
+## 2026-09-12 Fix: Weblio Dictionary Prioritization, Katakana Loanword Disambiguation, Layout Overflow & Notification Condensing (v1.34.0+35)
+
+### 变更文件
+- `lib/services/weblio_service.dart`:
+  - 词典权威度评分与人名降级：引入 `_getDictNameForKiji`、`_scoreKiji` 与 `_parseBestKiji`，小学馆《デジタル大辞泉》(SGKDJ 1000分)、《大辞林》(900分)、权威国语辞典(800分)严格优于人名辞典/Wikipedia人物条目(50分，负向惩罚 -300分)，彻底解决搜索片假名单词（如「アクセル」）错误输出人名释义的问题；
+  - 候选词消歧与外来语拉丁词根支持：`extractCandidatesFromHtml` 支持提取罗马字/英文词根（如 `アクセル【accel】` 与 `アクセル【axel】`），保留核心义项短句（<=50字）并通过 `cleanKanji_defPrefix` 复合键去重，确保多义项不被误杀；
+- `lib/models/word_candidate.dart`:
+  - 新增 `disambiguationWord` 与 `searchWord` getter：对于带消歧后缀的片假名或多义项候选词，自动提取纯检索词（如 `アクセル`）发起精准回流查询；
+- `lib/services/vocabulary_service.dart`:
+  - 提示词优化与多义项精简：更新 `getPureKanaCandidates` prompt，支持片假名多义词消歧，严格要求输出 10-25 字极简核心释义；`parseCandidatesJson` 针对相同汉字保留多条语义区分候选；
+- `lib/providers/vocabulary_provider.dart`:
+  - 候选词选定逻辑升级：`selectCandidate` 采用 `candidate.searchWord` 并以 `forceDirect: true` 直达查词与本地入库，消歧后流程丝滑无缝；
+- `lib/screens/vocabulary_screen.dart`:
+  - 彻底消除布局溢出奔溃：当前查词结果卡片使用 `Flexible(flex: 4, fit: FlexFit.loose)` 与内部 `Flexible(child: SingleChildScrollView)` 滚动容器，彻底杜绝多义项单词（如「君」含9大义项与多例句）在任意屏幕尺寸下的 `BOTTOM OVERFLOWED BY ... PIXELS` 报错；
+- `lib/services/native/persistent_notification_service.dart`:
+  - 优化通知栏长释义截断：新增 `condenseNotificationDefinition`，针对 3 项以上释义或超长文本精简提取前 2-3 项核心释义并追加 ` (更多可在App内查看)` 友好提示；
+- `android/app/src/main/kotlin/com/example/chat/NotificationHelper.kt`:
+  - Android 原生通知栏文本收敛：`condenseForNotification` 保障 `BigTextStyle` 在极端多义项文本下不超过系统阴影区显示边界；
+- `test/services/weblio_service_test.dart`, `test/services/weblio_candidates_test.dart`, `test/services/persistent_notification_service_test.dart`, `test/screens/vocabulary_screen_test.dart`:
+  - 新增外来语消歧、权威词典优先于人名辞典、通知栏多义项精炼截断、君（9义项）小屏手机防溢出全套自动化测试用例，全量测试套件扩充至 818/818 全部通过。
+- `pubspec.yaml`, `.agents/AGENTS.md`, `.agents/context.md`:
+  - 同步递增版本号至 `1.34.0+35`，基线测试用例更新为 818+。
+
+### 核心技术指标与决策
+- **全量测试基线**：818 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.34.0+35`
+
+---
+
 ## 2026-09-12 Docs: Comprehensive README.md Overhaul to Latest v1.33.0 Architecture & Feature Baseline (v1.33.0+34)
 
 ### 变更文件

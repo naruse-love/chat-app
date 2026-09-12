@@ -84,7 +84,7 @@ class MockVocabularyNotifier extends StateNotifier<VocabularyState>
       clearPendingCandidateWord: true,
       clearCandidateReason: true,
     );
-    await lookupWord(candidate.kanji, forceDirect: true);
+    await lookupWord(candidate.searchWord, forceDirect: true);
   }
 
   @override
@@ -496,6 +496,72 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(mockNotifier.retranslateCallCount, 1);
+  });
+
+  testWidgets('VocabularyScreen renders polysemous word with many definitions (like 君) without overflow', (tester) async {
+    final multiDefEntry = VocabularyEntry(
+      id: 99,
+      vocabKanji: '君',
+      vocabFurigana: 'きみ',
+      vocabDefJa:
+          '１ 主君。君主。「君に忠義を尽くす」\n'
+          '２ 天皇。また、国家。\n'
+          '３ 妻が夫をいう語。\n'
+          '４ 遊女・芸妓などをいう語。「室の君」\n'
+          '５ 敬意をもって呼ぶ語。あなた様。\n'
+          '６ 同輩や後輩を親しんで呼ぶ語。きみ。「君、どう思う？」\n'
+          '７ 女性が恋人や夫を親しんで呼ぶ語。\n'
+          '８ 神仏などを敬っていう語。\n'
+          '９ ［下接語］大君・若君・小君・我が君',
+      vocabDefSc:
+          '1. （古代称呼）君主，帝王。\n'
+          '2. 贵人，长辈。\n'
+          '3. （女性对男性恋人或丈夫的亲昵称呼）你，君。\n'
+          '4. （平辈或对晚辈、后辈的第二人称代词）你。\n'
+          '5. （接尾词）...君（尊称或同辈称呼）。\n'
+          '6. 神明或敬仰的对象。\n'
+          '7. 封建时代对领主的尊称。\n'
+          '8. 艺妓、游女的雅称。\n'
+          '9. （下接语）若君、小君。',
+      vocabPoS: '名・代',
+      sentKanji1: '君に忠義を尽くす',
+      sentDefSc1: '向主君尽忠',
+      sentKanji2: '君はどう思うか',
+      sentDefSc2: '你觉得怎么样？',
+      sourceDict: 'デジタル大辞泉',
+      createdAt: DateTime.now(),
+    );
+
+    final mockNotifier = MockVocabularyNotifier(VocabularyState(
+      currentResult: multiDefEntry,
+      entries: [multiDefEntry],
+    ));
+
+    // Test on a standard mobile viewport (360x640)
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify it renders the word and definitions without throwing any RenderFlex overflow
+    expect(find.text('君'), findsAtLeastNWidgets(2)); // Card + List
+    expect(find.text('きみ'), findsAtLeastNWidgets(1));
+    expect(find.text('名・代'), findsAtLeastNWidgets(1));
+    expect(find.text('中文释义'), findsOneWidget);
   });
 }
 
