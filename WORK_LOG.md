@@ -1,3 +1,43 @@
+## 2026-09-12 Feature: Direct Notification Shade Inline Search (RemoteInput), BigTextStyle Bilingual Definitions & Lazy-Activated Foreground Service (v1.29.0+30)
+
+### 变更文件
+- `android/app/src/main/AndroidManifest.xml`:
+  - 添加 `FOREGROUND_SERVICE` 与 `FOREGROUND_SERVICE_DATA_SYNC` 权限；
+  - 注册 `PersistentNotificationForegroundService`（`foregroundServiceType="dataSync"`）与 `NotificationActionReceiver`（处理 `com.example.chat.ACTION_INLINE_SEARCH`）。
+- `android/app/src/main/kotlin/com/example/chat/NotificationHelper.kt`:
+  - 封装通知渠道创建、通知构建、`RemoteInput` 行内搜索动作卡片（「🔍 输入单词」）与 `BigTextStyle` 展开式双语释义卡片；
+  - 实现 `ensureBackgroundEngine`：支持在 Flutter UI 未在前台活跃时按需唤醒后台 `FlutterEngine`，实现“平时轻量保活常驻，搜索时按需拉起引擎与组件”的懒加载运行机制；
+  - 统一 `setupMethodChannel`，处理 `showPersistentNotification`、`cancelPersistentNotification`、`updateSearchResultNotification` 等通道调用。
+- `android/app/src/main/kotlin/com/example/chat/PersistentNotificationForegroundService.kt`:
+  - Android 原生前台服务（Foreground Service），管理 `startForeground` 常驻保活，适配 Android N+ `stopForeground(STOP_FOREGROUND_REMOVE)`。
+- `android/app/src/main/kotlin/com/example/chat/NotificationActionReceiver.kt`:
+  - 接收系统通知栏行内输入事件，通过 `RemoteInput.getResultsFromIntent` 提取单词，即时更新通知栏为查询中状态（收起行内输入动画），并通过 MethodChannel 传递给 Flutter 引擎。
+- `android/app/src/main/kotlin/com/example/chat/MainActivity.kt`:
+  - 委托通知管理与生命周期至 `NotificationHelper`，维护通道引用与通知栏点击意图跳转。
+- `lib/services/native/persistent_notification_service.dart`:
+  - 扩展 `IPersistentNotificationService`：新增 `updateSearchResultNotification` 接口与 `onInlineQuerySubmitted` 行内查询广播流；
+  - 升级 `InMemoryPersistentNotificationService`：支持模拟行内查询 `simulateInlineQuery`、详细通知状态查询 `getNotificationData`；
+  - 升级 `MethodChannelPersistentNotificationService`：监听原生通道 `onInlineQuerySubmitted`，安全降级执行 `updateSearchResultNotification`。
+- `lib/providers/persistent_notification_provider.dart`:
+  - 增强 `PersistentNotificationState`：增加 `isSearching`、`lastSearchedWord`、`lastSearchResult`、`lastSearchError` 状态；
+  - `PersistentNotificationNotifier` 监听行内输入流，自动调度 `VocabularyService.lookupWord` 执行缓存、Weblio 抓取、LLM 兜底与 SQLite 入库，并即时回传至通知栏呈现展开释义。
+- `lib/app.dart`:
+  - 在 `_setupNotificationListener` 中主动读取 `persistentNotificationProvider`，确保后台冷启动或按需拉起时第一时间初始化监听器。
+- `lib/screens/settings_screen.dart`:
+  - 更新通知常驻设置项中文副标题，明确“直接输入单词并在通知栏即时展示释义”特性。
+- `pubspec.yaml`, `WORK_LOG.md`, `.agents/context.md`:
+  - 版本号由 `1.28.0+29` 递增至 `1.29.0+30`。
+- 测试套件更新：
+  - `test/services/persistent_notification_service_test.dart` 补充全链路测试（`updateSearchResultNotification` 状态记录、`simulateInlineQuery` 触发、`PersistentNotificationNotifier` 异步查词与错误恢复）。
+
+### 核心技术指标与决策
+- **全量测试基线**：789 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **Android 原生编译**：`compileDebugKotlin` BUILD SUCCESSFUL（0 errors, 0 warnings）
+- **版本号**：递增至 `1.29.0+30`
+
+---
+
 ## 2026-09-11 Fix & Hardening: Route Name Preservation, Auto-Focus on Notification Tap, Error Card Dismissal, Kana Validation & Bracket Middle Dot Splitting (v1.28.0+29)
 
 ### 变更文件

@@ -12,6 +12,7 @@ import 'screens/mcp_server_management_screen.dart';
 import 'screens/sandbox_management_screen.dart';
 import 'screens/model_selector_screen.dart';
 import 'screens/vocabulary_screen.dart';
+import 'providers/persistent_notification_provider.dart';
 
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -87,6 +88,9 @@ class _AppState extends ConsumerState<App> {
   }
 
   void _setupNotificationListener() {
+    // 确保常驻通知状态初始化及行内搜索事件流开始监听
+    ref.read(persistentNotificationProvider);
+
     // 监听通知栏常驻快捷入口点击事件
     final notificationService = ref.read(persistentNotificationServiceProvider);
     _notificationSub = notificationService.onNotificationTapped.listen((payload) {

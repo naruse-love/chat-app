@@ -1,24 +1,53 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/native/native_services.dart';
+import '../services/vocabulary_service.dart';
+import '../services/weblio_service.dart';
+import 'vocabulary_provider.dart';
 
 /// 常驻通知状态
 class PersistentNotificationState {
   final bool isEnabled;
   final bool isInitializing;
+  final bool isSearching;
+  final String? lastSearchedWord;
+  final String? lastSearchResult;
+  final String? lastSearchError;
 
   const PersistentNotificationState({
     this.isEnabled = false,
     this.isInitializing = true,
+    this.isSearching = false,
+    this.lastSearchedWord,
+    this.lastSearchResult,
+    this.lastSearchError,
   });
 
   PersistentNotificationState copyWith({
     bool? isEnabled,
     bool? isInitializing,
+    bool? isSearching,
+    String? lastSearchedWord,
+    bool clearLastSearchedWord = false,
+    String? lastSearchResult,
+    bool clearLastSearchResult = false,
+    String? lastSearchError,
+    bool clearLastSearchError = false,
   }) {
     return PersistentNotificationState(
       isEnabled: isEnabled ?? this.isEnabled,
       isInitializing: isInitializing ?? this.isInitializing,
+      isSearching: isSearching ?? this.isSearching,
+      lastSearchedWord: clearLastSearchedWord
+          ? null
+          : (lastSearchedWord ?? this.lastSearchedWord),
+      lastSearchResult: clearLastSearchResult
+          ? null
+          : (lastSearchResult ?? this.lastSearchResult),
+      lastSearchError: clearLastSearchError
+          ? null
+          : (lastSearchError ?? this.lastSearchError),
     );
   }
 }
@@ -29,14 +58,34 @@ class PersistentNotificationNotifier
   static const String prefKey = 'persistent_vocab_shortcut_enabled';
   static const String notificationId = 'chat_persistent_vocab';
   static const String notificationTitle = '📚 日语生词快捷查询';
-  static const String notificationBody = '点击快速进入生词查询与 Anki 词卡';
+  static const String notificationBody = '点击「🔍 输入单词」直接在通知栏查词并展示释义';
   static const String notificationPayload = '/vocabulary';
 
   final IPersistentNotificationService _notificationService;
+  final VocabularyService? vocabularyService;
+  final void Function()? onWordSaved;
+  StreamSubscription<String>? _inlineQuerySub;
 
-  PersistentNotificationNotifier(this._notificationService)
-      : super(const PersistentNotificationState()) {
+  PersistentNotificationNotifier(
+    this._notificationService, {
+    this.vocabularyService,
+    this.onWordSaved,
+  })  : super(const PersistentNotificationState()) {
     _initPreference();
+    _listenToInlineQueries();
+  }
+
+  void _listenToInlineQueries() {
+    _inlineQuerySub =
+        _notificationService.onInlineQuerySubmitted.listen((query) {
+      handleInlineSearch(query);
+    });
+  }
+
+  @override
+  void dispose() {
+    _inlineQuerySub?.cancel();
+    super.dispose();
   }
 
   Future<void> _initPreference() async {
@@ -88,11 +137,98 @@ class PersistentNotificationNotifier
     if (!mounted) return;
     state = state.copyWith(isEnabled: enable);
   }
+
+  /// 在通知栏行内直接发起搜索并即时更新释义卡片
+  Future<void> handleInlineSearch(String rawQuery) async {
+    final query = rawQuery.trim();
+    if (query.isEmpty) return;
+
+    state = state.copyWith(
+      isSearching: true,
+      lastSearchedWord: query,
+      clearLastSearchError: true,
+    );
+
+    // 1. 立即更新通知栏为加载状态
+    await _notificationService.updateSearchResultNotification(
+      id: notificationId,
+      word: query,
+      isLoading: true,
+    );
+
+    final service = vocabularyService;
+    if (service == null) {
+      if (!mounted) return;
+      state = state.copyWith(isSearching: false);
+      await _notificationService.updateSearchResultNotification(
+        id: notificationId,
+        word: query,
+        definitionSc: '已收到查询「$query」',
+        isLoading: false,
+      );
+      return;
+    }
+
+    try {
+      // 2. 执行查词主流程（本地缓存去重 -> Weblio 抓取 -> LLM 兜底翻译 -> SQLite 入库）
+      final entry = await service.lookupWord(query);
+      if (!mounted) return;
+
+      final summary = entry.vocabDefSc.isNotEmpty
+          ? entry.vocabDefSc
+          : entry.vocabDefJa;
+
+      state = state.copyWith(
+        isSearching: false,
+        lastSearchResult: summary,
+      );
+
+      // 3. 将包含读音、词性与双语释义的完整结果更新至通知栏（BigTextStyle）
+      await _notificationService.updateSearchResultNotification(
+        id: notificationId,
+        word: entry.vocabKanji,
+        reading: entry.vocabFurigana,
+        definitionJa: entry.vocabDefJa,
+        definitionSc: entry.vocabDefSc,
+        partOfSpeech: entry.vocabPoS,
+        isLoading: false,
+      );
+
+      onWordSaved?.call();
+    } catch (e) {
+      if (!mounted) return;
+      final errorMsg = e is WeblioException
+          ? e.message
+          : '未找到「$query」的相关释义或网络异常';
+
+      state = state.copyWith(
+        isSearching: false,
+        lastSearchError: errorMsg,
+      );
+
+      await _notificationService.updateSearchResultNotification(
+        id: notificationId,
+        word: query,
+        error: errorMsg,
+        isLoading: false,
+      );
+    }
+  }
 }
 
 /// Provider for PersistentNotificationNotifier
 final persistentNotificationProvider = StateNotifierProvider<
     PersistentNotificationNotifier, PersistentNotificationState>((ref) {
   final service = ref.watch(persistentNotificationServiceProvider);
-  return PersistentNotificationNotifier(service);
+  final vocabService = ref.watch(vocabularyServiceProvider);
+  return PersistentNotificationNotifier(
+    service,
+    vocabularyService: vocabService,
+    onWordSaved: () {
+      try {
+        ref.read(vocabularyProvider.notifier).loadEntries();
+      } catch (_) {}
+    },
+  );
 });
+

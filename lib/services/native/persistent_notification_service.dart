@@ -3,12 +3,24 @@ import 'package:flutter/services.dart';
 
 /// 系统通知栏常驻快捷入口服务抽象接口
 abstract class IPersistentNotificationService {
-  /// 显示或更新系统通知栏常驻快捷通知
+  /// 显示或更新系统通知栏常驻快捷通知（支持行内输入 RemoteInput）
   Future<void> showPersistentNotification({
     required String id,
     required String title,
     required String body,
     String? payload,
+  });
+
+  /// 更新通知栏以展示查词结果（BigTextStyle 展开卡片与行内输入框）
+  Future<void> updateSearchResultNotification({
+    required String id,
+    required String word,
+    String? reading,
+    String? definitionJa,
+    String? definitionSc,
+    String? partOfSpeech,
+    bool isLoading = false,
+    String? error,
   });
 
   /// 取消/移除指定的常驻快捷通知
@@ -20,11 +32,43 @@ abstract class IPersistentNotificationService {
   /// 获取冷启动或外部唤醒时的通知载荷（获取后通常自动消费清空）
   Future<String?> getLaunchPayload();
 
-  /// 用户在系统通知栏点击该常驻通知时的广播事件流（携带 payload）
+  /// 用户在系统通知栏点击该常驻通知主体的广播事件流（携带 payload）
   Stream<String> get onNotificationTapped;
+
+  /// 用户在系统通知栏行内输入框（RemoteInput）提交搜索词的广播事件流
+  Stream<String> get onInlineQuerySubmitted;
 
   /// 释放服务资源
   Future<void> dispose();
+}
+
+/// 模拟通知显示的数据结构，便于单元测试与状态观察
+class NotificationDisplayData {
+  final String id;
+  final String title;
+  final String body;
+  final String? payload;
+  final String? word;
+  final String? reading;
+  final String? definitionJa;
+  final String? definitionSc;
+  final String? partOfSpeech;
+  final bool isLoading;
+  final String? error;
+
+  const NotificationDisplayData({
+    required this.id,
+    required this.title,
+    required this.body,
+    this.payload,
+    this.word,
+    this.reading,
+    this.definitionJa,
+    this.definitionSc,
+    this.partOfSpeech,
+    this.isLoading = false,
+    this.error,
+  });
 }
 
 /// 内存模拟实现的常驻通知服务（适用于单元测试与 Headless 环境）
@@ -33,7 +77,13 @@ class InMemoryPersistentNotificationService
   final Set<String> _activeIds = {};
   final StreamController<String> _tapController =
       StreamController<String>.broadcast();
+  final StreamController<String> _inlineQueryController =
+      StreamController<String>.broadcast();
   String? _launchPayload;
+  final Map<String, NotificationDisplayData> _displayedNotifications = {};
+
+  NotificationDisplayData? getNotificationData(String id) =>
+      _displayedNotifications[id];
 
   @override
   Future<void> showPersistentNotification({
@@ -46,11 +96,55 @@ class InMemoryPersistentNotificationService
     if (payload != null) {
       _launchPayload = payload;
     }
+    _displayedNotifications[id] = NotificationDisplayData(
+      id: id,
+      title: title,
+      body: body,
+      payload: payload,
+    );
+  }
+
+  @override
+  Future<void> updateSearchResultNotification({
+    required String id,
+    required String word,
+    String? reading,
+    String? definitionJa,
+    String? definitionSc,
+    String? partOfSpeech,
+    bool isLoading = false,
+    String? error,
+  }) async {
+    _activeIds.add(id);
+    final title = isLoading
+        ? '🔍 正在查询「$word」...'
+        : (error != null
+            ? '⚠️ 未找到「$word」的释义'
+            : (reading != null && reading.isNotEmpty && reading != word
+                ? '📖 $word【$reading】'
+                : '📖 $word'));
+    final body = isLoading
+        ? '正在获取释义与翻译，请稍候...'
+        : (error ?? definitionSc ?? definitionJa ?? '');
+
+    _displayedNotifications[id] = NotificationDisplayData(
+      id: id,
+      title: title,
+      body: body,
+      word: word,
+      reading: reading,
+      definitionJa: definitionJa,
+      definitionSc: definitionSc,
+      partOfSpeech: partOfSpeech,
+      isLoading: isLoading,
+      error: error,
+    );
   }
 
   @override
   Future<void> cancelPersistentNotification(String id) async {
     _activeIds.remove(id);
+    _displayedNotifications.remove(id);
   }
 
   @override
@@ -68,10 +162,20 @@ class InMemoryPersistentNotificationService
   @override
   Stream<String> get onNotificationTapped => _tapController.stream;
 
+  @override
+  Stream<String> get onInlineQuerySubmitted => _inlineQueryController.stream;
+
   /// 用于测试：模拟用户点击了通知栏
   void simulateTap(String payload) {
     if (!_tapController.isClosed) {
       _tapController.add(payload);
+    }
+  }
+
+  /// 用于测试：模拟用户在通知栏行内输入框提交了单词
+  void simulateInlineQuery(String query) {
+    if (!_inlineQueryController.isClosed) {
+      _inlineQueryController.add(query);
     }
   }
 
@@ -83,7 +187,9 @@ class InMemoryPersistentNotificationService
   @override
   Future<void> dispose() async {
     _activeIds.clear();
+    _displayedNotifications.clear();
     await _tapController.close();
+    await _inlineQueryController.close();
   }
 }
 
@@ -98,7 +204,13 @@ class MethodChannelPersistentNotificationService
   final Set<String> _fallbackActiveIds = {};
   final StreamController<String> _tapController =
       StreamController<String>.broadcast();
+  final StreamController<String> _inlineQueryController =
+      StreamController<String>.broadcast();
   String? _fallbackLaunchPayload;
+  final Map<String, NotificationDisplayData> _fallbackNotifications = {};
+
+  NotificationDisplayData? getFallbackNotification(String id) =>
+      _fallbackNotifications[id];
 
   MethodChannelPersistentNotificationService({MethodChannel? channel})
       : _channel = channel ?? const MethodChannel(defaultChannelName) {
@@ -115,6 +227,17 @@ class MethodChannelPersistentNotificationService
       if (!_tapController.isClosed) {
         _tapController.add(payload);
       }
+    } else if (call.method == 'onInlineQuerySubmitted') {
+      String query = '';
+      if (call.arguments is Map) {
+        query = (call.arguments['query'] ?? '').toString();
+      } else if (call.arguments != null) {
+        query = call.arguments.toString();
+      }
+      final trimmed = query.trim();
+      if (trimmed.isNotEmpty && !_inlineQueryController.isClosed) {
+        _inlineQueryController.add(trimmed);
+      }
     }
     return null;
   }
@@ -128,6 +251,12 @@ class MethodChannelPersistentNotificationService
   }) async {
     _fallbackActiveIds.add(id);
     _fallbackLaunchPayload = payload;
+    _fallbackNotifications[id] = NotificationDisplayData(
+      id: id,
+      title: title,
+      body: body,
+      payload: payload,
+    );
 
     try {
       await _channel.invokeMethod('showPersistentNotification', {
@@ -146,8 +275,65 @@ class MethodChannelPersistentNotificationService
   }
 
   @override
+  Future<void> updateSearchResultNotification({
+    required String id,
+    required String word,
+    String? reading,
+    String? definitionJa,
+    String? definitionSc,
+    String? partOfSpeech,
+    bool isLoading = false,
+    String? error,
+  }) async {
+    _fallbackActiveIds.add(id);
+    final title = isLoading
+        ? '🔍 正在查询「$word」...'
+        : (error != null
+            ? '⚠️ 未找到「$word」的释义'
+            : (reading != null && reading.isNotEmpty && reading != word
+                ? '📖 $word【$reading】'
+                : '📖 $word'));
+    final body = isLoading
+        ? '正在获取释义与翻译，请稍候...'
+        : (error ?? definitionSc ?? definitionJa ?? '');
+
+    _fallbackNotifications[id] = NotificationDisplayData(
+      id: id,
+      title: title,
+      body: body,
+      word: word,
+      reading: reading,
+      definitionJa: definitionJa,
+      definitionSc: definitionSc,
+      partOfSpeech: partOfSpeech,
+      isLoading: isLoading,
+      error: error,
+    );
+
+    try {
+      await _channel.invokeMethod('updateSearchResultNotification', {
+        'id': id,
+        'word': word,
+        'reading': reading,
+        'definitionJa': definitionJa,
+        'definitionSc': definitionSc,
+        'partOfSpeech': partOfSpeech,
+        'isLoading': isLoading,
+        'error': error,
+      });
+    } on MissingPluginException {
+      // 桌面平台、Web 或测试环境优雅降级
+    } on PlatformException {
+      // 平台异常优雅降级
+    } catch (_) {
+      // 防止非受检异常中断业务流程
+    }
+  }
+
+  @override
   Future<void> cancelPersistentNotification(String id) async {
     _fallbackActiveIds.remove(id);
+    _fallbackNotifications.remove(id);
 
     try {
       await _channel.invokeMethod('cancelPersistentNotification', {'id': id});
@@ -188,8 +374,13 @@ class MethodChannelPersistentNotificationService
   Stream<String> get onNotificationTapped => _tapController.stream;
 
   @override
+  Stream<String> get onInlineQuerySubmitted => _inlineQueryController.stream;
+
+  @override
   Future<void> dispose() async {
     _fallbackActiveIds.clear();
+    _fallbackNotifications.clear();
     await _tapController.close();
+    await _inlineQueryController.close();
   }
 }

@@ -523,7 +523,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               return SwitchListTile(
                 secondary: const Icon(Icons.notifications_active_outlined),
                 title: const Text('通知栏常驻查词快捷入口'),
-                subtitle: const Text('在系统通知栏保持常驻快捷入口，随时一键调出生词查询与 Anki 词卡'),
+                subtitle: const Text('在系统通知栏常驻查词，支持直接输入单词并在通知栏即时展示释义'),
                 value: notifState.isEnabled,
                 onChanged: (value) {
                   ref
