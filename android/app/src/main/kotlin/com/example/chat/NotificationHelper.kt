@@ -246,6 +246,19 @@ object NotificationHelper {
         if (text.isNullOrBlank()) return ""
         val trimmed = text.trim()
 
+        if (trimmed.contains(hint.trim())) {
+            return if (trimmed.length > maxLength) {
+                val cleanWithoutHint = trimmed.replace(hint.trim(), "").trim()
+                if (cleanWithoutHint.length > maxLength - hint.length) {
+                    "${cleanWithoutHint.substring(0, maxLength - hint.length).trim()}...$hint"
+                } else {
+                    "$cleanWithoutHint$hint"
+                }
+            } else {
+                trimmed
+            }
+        }
+
         val numberedRegex = Regex("""(?:^|[\n\r]+|\s+)(?:[1-9１-９①-⑩][\.\s、\)）]|\([1-9１-９]\)|（[1-9１-９]）)""")
         val matches = numberedRegex.findAll(trimmed).toList()
         if (matches.size >= 2) {

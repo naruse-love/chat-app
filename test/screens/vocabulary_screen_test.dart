@@ -563,6 +563,66 @@ void main() {
     expect(find.text('名・代'), findsAtLeastNWidgets(1));
     expect(find.text('中文释义'), findsOneWidget);
   });
+
+  testWidgets('VocabularyScreen renders candidate confirmation card on small mobile viewport (360x520) without overflow', (tester) async {
+    final mockNotifier = MockVocabularyNotifier(const VocabularyState(
+      pendingCandidateWord: 'アクセル',
+      candidateReason: CandidateReason.pureKana,
+      candidates: [
+        WordCandidate(
+          kanji: 'アクセル (加速装置)',
+          reading: 'アクセル',
+          definition: '汽车等的加速踏板、油门。',
+          partOfSpeech: '名',
+        ),
+        WordCandidate(
+          kanji: 'アクセル (フィギュアスケート)',
+          reading: 'アクセル',
+          definition: '花样滑冰中的阿克塞尔跳。',
+          partOfSpeech: '名',
+        ),
+        WordCandidate(
+          kanji: 'アクセル (人名)',
+          reading: 'アクセル',
+          definition: '欧美常见的男性名字。',
+          partOfSpeech: '名',
+        ),
+        WordCandidate(
+          kanji: 'アクセル (その他)',
+          reading: 'アクセル',
+          definition: '其他动漫及游戏人物名称。',
+          partOfSpeech: '名',
+        ),
+      ],
+    ));
+
+    tester.view.physicalSize = const Size(360, 520);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('假名同音多义词确认'), findsOneWidget);
+    expect(find.text('アクセル (加速装置)'), findsOneWidget);
+
+    // Drag candidate list to scroll without layout overflow
+    await tester.drag(find.byType(ListView).first, const Offset(0, -120));
+    await tester.pumpAndSettle();
+    expect(find.text('アクセル (フィギュアスケート)'), findsOneWidget);
+  });
 }
 
 class MockVocabularyConfigNotifier extends StateNotifier<VocabularyConfigState>

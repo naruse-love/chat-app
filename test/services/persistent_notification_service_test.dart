@@ -532,6 +532,13 @@ void main() {
       expect(condensed.length, lessThanOrEqualTo(100));
       expect(condensed.endsWith('(更多可在App内查看)'), isTrue);
     });
+
+    test('does not duplicate hint if input already contains moreHint', () {
+      const alreadyCondensed = '1. 含义一\n2. 含义二\n (更多可在App内查看)';
+      final result = condenseNotificationDefinition(alreadyCondensed);
+      expect(result, alreadyCondensed);
+      expect(RegExp(r'\(更多可在App内查看\)').allMatches(result).length, 1);
+    });
   });
 }
 

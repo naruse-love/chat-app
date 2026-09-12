@@ -58,6 +58,11 @@ String condenseNotificationDefinition(
   final trimmed = text.trim();
   if (trimmed.isEmpty) return '';
 
+  // 若文本已包含提示后缀，说明已精简过，避免重复追加提示
+  if (trimmed.contains(moreHint.trim())) {
+    return trimmed;
+  }
+
   // 1. 检查编号格式多义项（例如：1. 2. 3. 或 １ ２ ３ 或 ① ② ③）
   final numberedPattern = RegExp(
     r'(?:^|[\n\r]+|\s+)(?:[1-9１-９①-⑩][\.\s、\)）]|\([1-9１-９]\)|（[1-9１-９]）)',

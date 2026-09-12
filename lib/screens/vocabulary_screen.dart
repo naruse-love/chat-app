@@ -293,9 +293,13 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
               ),
             ),
 
-          // 候选词消歧与确认卡片
+          // 候选词消歧与确认卡片 (以 Flexible 约束最大高度，内部列表自适应滚动杜绝溢出)
           if (state.candidates != null && state.candidates!.isNotEmpty)
-            _buildCandidateConfirmationCard(context, state),
+            Flexible(
+              flex: 4,
+              fit: FlexFit.loose,
+              child: _buildCandidateConfirmationCard(context, state),
+            ),
 
           // 加载进度指示器
           if (state.isLoading) ...[
@@ -831,6 +835,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -870,8 +875,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 280),
+          Flexible(
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: candidates.length,

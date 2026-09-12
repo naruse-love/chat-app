@@ -135,6 +135,69 @@ void main() {
       expect(candidates[1].definition, contains('フィギュアスケート'));
     });
 
+    test('extractCandidatesFromHtml correctly pairs single kiji with accel／axel to distinct numbered definitions', () {
+      const singleKijiSlashedHtml = '''
+        <!DOCTYPE html>
+        <html>
+        <body>
+          <div class="kiji">
+            <h2 class="midashigo">アクセル【accel／axel】</h2>
+            <span class="hinshi">［名］</span>
+            <p>１ 自動車などの加速装置。アクセレーター。「アクセルを踏む」</p>
+            <p>２ フィギュアスケートで、ジャンプの一。前向きに踏み切り、空中で回転する技。</p>
+          </div>
+        </body>
+        </html>
+      ''';
+
+      final candidates = WeblioService.extractCandidatesFromHtml(singleKijiSlashedHtml, 'アクセル');
+      expect(candidates.length, 2);
+
+      expect(candidates[0].kanji, contains('accel'));
+      expect(candidates[0].definition, contains('加速装置'));
+
+      expect(candidates[1].kanji, contains('axel'));
+      expect(candidates[1].definition, contains('フィギュアスケート'));
+    });
+
+    test('extractCandidatesFromHtml extracts distinct senses when midashigo has no Latin brackets and separates person names', () {
+      const mixedSensesHtml = '''
+        <!DOCTYPE html>
+        <html>
+        <body>
+          <div class="kiji">
+            <h2><span class="crossl">デジタル大辞泉</span></h2>
+            <h2 class="midashigo">アクセル</h2>
+            <span class="hinshi">［名］</span>
+            <p>１ 自動車などの加速装置。アクセレーター。「アクセルを踏む」</p>
+            <p>２ フィギュアスケートで、ジャンプの一。前向きに踏み切り、空中で回転する技。</p>
+          </div>
+          <div class="kiji">
+            <h2><span class="crossl">実名・人名事典</span></h2>
+            <h2 class="midashigo">アクセル</h2>
+            <span class="hinshi">［人名］</span>
+            <p>ヨーロッパ系の男性名。Axel。</p>
+          </div>
+        </body>
+        </html>
+      ''';
+
+      final candidates = WeblioService.extractCandidatesFromHtml(mixedSensesHtml, 'アクセル');
+      expect(candidates.length, 3);
+
+      expect(candidates[0].kanji, contains('加速装置'));
+      expect(candidates[0].definition, contains('加速装置'));
+      expect(candidates[0].searchWord, 'アクセル');
+
+      expect(candidates[1].kanji, contains('フィギュアスケート'));
+      expect(candidates[1].definition, contains('フィギュアスケート'));
+      expect(candidates[1].searchWord, 'アクセル');
+
+      expect(candidates[2].kanji, contains('人名'));
+      expect(candidates[2].definition, contains('男性名'));
+      expect(candidates[2].searchWord, 'アクセル');
+    });
+
     test('extractCandidatesFromHtml returns empty when word not found', () {
       const notFoundHtml = '''
         <!DOCTYPE html>

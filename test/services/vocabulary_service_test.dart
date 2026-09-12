@@ -114,6 +114,19 @@ class FakeWeblioService extends WeblioService {
         sourceUrl: 'https://www.weblio.jp/content/%E8%AC%9B%E3%81%98%E3%82%8B',
       );
     }
+    if (rawWord == 'アクセル') {
+      return const WeblioResult(
+        word: 'アクセル',
+        reading: 'アクセル',
+        definition: '１ 自動車などの加速装置。アクセレーター。\n２ フィギュアスケートで、ジャンプの一。',
+        partOfSpeech: '名',
+        examples: [
+          WeblioExample(kanji: 'アクセルを踏む', furigana: 'アクセルを踏む'),
+        ],
+        sourceDict: 'デジタル大辞泉',
+        sourceUrl: 'https://www.weblio.jp/content/%E3%82%A2%E3%82%AF%E3%82%BB%E3%83%AB',
+      );
+    }
     if (rawWord == '問題単語') {
       // 模拟释义有缺陷的死胡同重定向
       return const WeblioResult(
@@ -211,6 +224,34 @@ void main() {
       final cached = await vocabService.lookupWord('食べる');
       expect(cached.vocabKanji, '食べる');
       expect(fakeWeblio.lookupCallCount, 1); // No new network call
+    });
+
+    test('lookupWord automatically penetrates contaminated person name cache and updates database', () async {
+      // Pre-seed contaminated person name entry in database
+      final contaminated = VocabularyEntry(
+        vocabKanji: 'アクセル',
+        vocabFurigana: 'アクセル',
+        vocabDefJa: '架空のキャラクター名。ゲーム作品に登場する人物。',
+        vocabDefSc: '阿克塞尔，游戏人物',
+        vocabPoS: '人名',
+        sourceDict: '実名・人名事典',
+        createdAt: DateTime.now(),
+      );
+      final initialId = await vocabDao.insert(contaminated);
+      expect(await vocabDao.count(), 1);
+
+      // lookupWord should penetrate contaminated cache and query Weblio
+      final healed = await vocabService.lookupWord('アクセル');
+      expect(healed.vocabKanji, 'アクセル');
+      expect(healed.vocabDefJa, contains('自動車などの加速装置'));
+      expect(healed.sourceDict, 'デジタル大辞泉');
+      expect(fakeWeblio.lookupCallCount, 1);
+
+      // Verify database row was updated in place without duplicate rows
+      expect(await vocabDao.count(), 1);
+      final inDb = await vocabDao.findByKanji('アクセル');
+      expect(inDb?.id, initialId);
+      expect(inDb?.vocabDefJa, contains('自動車などの加速装置'));
     });
 
     test('lookupWord with forceRefresh: true bypasses cache and refetches without duplicating rows', () async {

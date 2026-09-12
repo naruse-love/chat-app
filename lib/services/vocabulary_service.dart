@@ -401,11 +401,15 @@ class VocabularyService {
       throw WeblioException('查询单词不能为空');
     }
 
-    // 1. 本地缓存命中检查（若缓存中仅有无实质释义的重定向残留，则自动穿透重查以自愈）
+    // 1. 本地缓存命中检查（若缓存中仅有无实质释义的重定向残留，或属于被污染的人名/专有名词条目，则自动穿透重查以自愈）
     if (!forceRefresh) {
       final cached = await vocabularyDao.findByKanji(word);
       if (cached != null &&
-          WeblioService.hasSubstantiveDefinition(cached.vocabDefJa)) {
+          WeblioService.hasSubstantiveDefinition(cached.vocabDefJa) &&
+          !WeblioService.isPersonOrProperNameDefinition(
+            cached.vocabDefJa,
+            cached.sourceDict,
+          )) {
         // 若缓存已有但缺失中文释义，尝试通过 LLM 进行自愈补全翻译
         if (cached.vocabDefSc.isEmpty) {
           final llm = await resolveVocabLlm();

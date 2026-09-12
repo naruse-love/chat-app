@@ -265,6 +265,14 @@ void main() {
       expect(WeblioService.hasSubstantiveDefinition(''), isFalse);
     });
 
+    test('isPersonOrProperNameDefinition correctly flags personal names and proper noun entries', () {
+      expect(WeblioService.isPersonOrProperNameDefinition('架空のキャラクター名。ゲーム作品に登場する人物。', '実名・人名事典'), isTrue);
+      expect(WeblioService.isPersonOrProperNameDefinition('ヨーロッパ系の男性名。Axel。', 'Weblio辞書'), isTrue);
+      expect(WeblioService.isPersonOrProperNameDefinition('人名としてのアクセルについて述べる。', 'Wiktionary'), isTrue);
+      expect(WeblioService.isPersonOrProperNameDefinition('自動車などの加速装置。アクセレーター。', 'デジタル大辞泉'), isFalse);
+      expect(WeblioService.isPersonOrProperNameDefinition('食物をかんで、のみこむ。', 'デジタル大辞泉'), isFalse);
+    });
+
     test('extractRedirectCandidates correctly extracts kanji and kana candidates from redirect text', () {
       final koujiruCands = WeblioService.extractRedirectCandidates('「こう（講）ずる」（サ変）の上一段化。', '講じる');
       expect(koujiruCands, contains('講ずる'));

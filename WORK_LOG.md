@@ -1,3 +1,30 @@
+## 2026-09-12 Fix: Robust Weblio Multi-Sense Extraction, Person Name Cache Penetration, Flexible Candidate Card & Notification Hint Deduplication (v1.35.0+36)
+
+### 变更文件
+- `lib/services/weblio_service.dart`:
+  - 污染缓存识别与自愈：新增 `isPersonOrProperNameDefinition`，智能检测释义与词典源是否属于纯人名、人物辞典、Wikipedia或虚构人物角色；
+  - 单条条目多义项（如片假名「アクセル」的油门加速器与阿克塞尔跳）独立提取：重构 `extractCandidatesFromHtml`，支持从同一 `.kiji` 内提取按数字编号划分的多个实质核心义项并分别赋予精炼释义，同时正确配对拉丁词源词根（`accel` / `axel`），使离线或无 LLM 场景下依然能准确呈现精炼核心义项候选供用户消歧；
+  - 补充 `.crossl` 标题定位与 `_parseSingleKiji` 例句及释义清洗：`_parseSgkdj` 支持根据 `.crossl` 类识别大辞泉条目；`_parseSingleKiji` 同步支持 `「...」` 例句提取、振假名注音和释义清洗；
+- `lib/services/vocabulary_service.dart`:
+  - 数据库历史人名污染缓存自动穿透：`lookupWord` 本地缓存命中检查增加 `!WeblioService.isPersonOrProperNameDefinition` 过滤，彻底解决用户此前查过「アクセル」导致数据库留存人名错误缓存、后续查词或消歧后重复命中返回人名的致命缺陷；
+- `lib/providers/vocabulary_provider.dart`:
+  - 选定候选词强制刷新穿透：`selectCandidate` 查词调用显式附带 `forceRefresh: true`，确保用户确认具体义项后发起全新查询并以权威释义覆盖本地数据库旧记录；
+- `lib/screens/vocabulary_screen.dart`:
+  - 候选词卡片自适应灵活布局：将 `_buildCandidateConfirmationCard` 纳入 `Flexible(flex: 4, fit: FlexFit.loose)`，内部候选列表采用 `Flexible` + `shrinkWrap` 自适应滚动，彻底消除在小屏幕设备（如 360x520）或弹出软键盘时因固定高卡片导致的 RenderFlex 溢出；
+- `lib/services/native/persistent_notification_service.dart` & `android/app/src/main/kotlin/com/example/chat/NotificationHelper.kt`:
+  - 通知栏精炼提示防重复：在 Dart `condenseNotificationDefinition` 与 Kotlin `condenseForNotification` 中增加已有提示检测与去重，杜绝通知栏出现多个重复 `(更多可在App内查看)` 提示；
+- `test/services/weblio_candidates_test.dart`, `test/services/weblio_service_test.dart`, `test/services/persistent_notification_service_test.dart`, `test/screens/vocabulary_screen_test.dart`, `test/services/vocabulary_service_test.dart`:
+  - 针对人名缓存穿透、单条 kiji 多义项候选词提取、accel/axel 独立配对、小屏幕候选词滚动防溢出、通知栏提示幂等性新增多组测试用例，全量测试套件扩充至 824/824 全部通过。
+- `pubspec.yaml`, `.agents/AGENTS.md`, `.agents/context.md`:
+  - 版本号递增至 `1.35.0+36`，基线自动化测试扩充至 824+。
+
+### 核心技术指标与决策
+- **全量测试基线**：824 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.35.0+36`
+
+---
+
 ## 2026-09-12 Fix: Weblio Dictionary Prioritization, Katakana Loanword Disambiguation, Layout Overflow & Notification Condensing (v1.34.0+35)
 
 ### 变更文件
