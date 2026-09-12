@@ -59,12 +59,21 @@ class PersistentNotificationForegroundService : Service() {
                 val notification = NotificationHelper.buildInitialNotification(
                     this, id, title, body, payload
                 )
-                startForeground(NotificationHelper.getNotificationIntId(id), notification)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    startForeground(
+                        NotificationHelper.getNotificationIntId(id),
+                        notification,
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                    )
+                } else {
+                    startForeground(NotificationHelper.getNotificationIntId(id), notification)
+                }
                 NotificationHelper.activeNotifications.add(id)
             }
             ACTION_STOP -> {
                 val id = intent.getStringExtra(EXTRA_ID) ?: "chat_persistent_vocab"
                 NotificationHelper.cancelNotification(this, id)
+                NotificationHelper.destroyBackgroundEngine()
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                 } else {

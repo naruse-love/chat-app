@@ -32,6 +32,18 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun provideFlutterEngine(context: android.content.Context): FlutterEngine? {
+        val bgEngine = NotificationHelper.backgroundEngine
+        if (bgEngine != null) {
+            return bgEngine
+        }
+        return super.provideFlutterEngine(context)
+    }
+
+    override fun shouldDestroyEngineWithHost(): Boolean {
+        return NotificationHelper.backgroundEngine == null
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -45,12 +57,16 @@ class MainActivity : FlutterActivity() {
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NotificationHelper.CHANNEL_NAME)
         methodChannel = channel
         NotificationHelper.activeMethodChannel = channel
+        NotificationHelper.isDartReady = true
         NotificationHelper.setupMethodChannel(this, channel)
     }
 
     override fun onDestroy() {
         if (NotificationHelper.activeMethodChannel == methodChannel) {
-            NotificationHelper.activeMethodChannel = null
+            if (NotificationHelper.backgroundEngine == null) {
+                NotificationHelper.activeMethodChannel = null
+                NotificationHelper.isDartReady = false
+            }
         }
         super.onDestroy()
     }

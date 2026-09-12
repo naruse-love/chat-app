@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/vocabulary_entry.dart';
 import '../services/native/native_services.dart';
 import '../services/vocabulary_service.dart';
 import '../services/weblio_service.dart';
@@ -63,8 +64,9 @@ class PersistentNotificationNotifier
 
   final IPersistentNotificationService _notificationService;
   final VocabularyService? vocabularyService;
-  final void Function()? onWordSaved;
+  final Function? onWordSaved;
   StreamSubscription<String>? _inlineQuerySub;
+  int _searchSeq = 0;
 
   PersistentNotificationNotifier(
     this._notificationService, {
@@ -73,6 +75,26 @@ class PersistentNotificationNotifier
   })  : super(const PersistentNotificationState()) {
     _initPreference();
     _listenToInlineQueries();
+  }
+
+  void _invokeWordSaved([VocabularyEntry? entry]) {
+    final cb = onWordSaved;
+    if (cb == null) return;
+    if (cb is void Function(VocabularyEntry?)) {
+      cb(entry);
+    } else if (cb is void Function(VocabularyEntry)) {
+      if (entry != null) cb(entry);
+    } else if (cb is void Function()) {
+      cb();
+    } else {
+      try {
+        (cb as dynamic)(entry);
+      } catch (_) {
+        try {
+          (cb as dynamic)();
+        } catch (_) {}
+      }
+    }
   }
 
   void _listenToInlineQueries() {
@@ -90,17 +112,27 @@ class PersistentNotificationNotifier
 
   Future<void> _initPreference() async {
     try {
+      // 1. 获取并立即处理冷启动/后台唤醒时由通知栏提交的待处理查询
+      final pendingQueries =
+          await _notificationService.getPendingInlineQueries();
+      for (final query in pendingQueries) {
+        unawaited(handleInlineSearch(query));
+      }
+
       final prefs = await SharedPreferences.getInstance();
       if (!mounted) return;
 
       final enabled = prefs.getBool(prefKey) ?? false;
       if (enabled) {
-        await _notificationService.showPersistentNotification(
-          id: notificationId,
-          title: notificationTitle,
-          body: notificationBody,
-          payload: notificationPayload,
-        );
+        // 仅在当前未在查词且未有查词结果时显示默认初始常驻通知，避免冲掉正在查询或最新结果卡片
+        if (!state.isSearching && state.lastSearchedWord == null) {
+          await _notificationService.showPersistentNotification(
+            id: notificationId,
+            title: notificationTitle,
+            body: notificationBody,
+            payload: notificationPayload,
+          );
+        }
         if (!mounted) return;
       }
 
@@ -143,6 +175,8 @@ class PersistentNotificationNotifier
     final query = rawQuery.trim();
     if (query.isEmpty) return;
 
+    final seq = ++_searchSeq;
+
     state = state.copyWith(
       isSearching: true,
       lastSearchedWord: query,
@@ -158,7 +192,7 @@ class PersistentNotificationNotifier
 
     final service = vocabularyService;
     if (service == null) {
-      if (!mounted) return;
+      if (seq != _searchSeq || !mounted) return;
       state = state.copyWith(isSearching: false);
       await _notificationService.updateSearchResultNotification(
         id: notificationId,
@@ -172,7 +206,7 @@ class PersistentNotificationNotifier
     try {
       // 2. 执行查词主流程（本地缓存去重 -> Weblio 抓取 -> LLM 兜底翻译 -> SQLite 入库）
       final entry = await service.lookupWord(query);
-      if (!mounted) return;
+      if (seq != _searchSeq || !mounted) return;
 
       final summary = entry.vocabDefSc.isNotEmpty
           ? entry.vocabDefSc
@@ -194,9 +228,9 @@ class PersistentNotificationNotifier
         isLoading: false,
       );
 
-      onWordSaved?.call();
+      _invokeWordSaved(entry);
     } catch (e) {
-      if (!mounted) return;
+      if (seq != _searchSeq || !mounted) return;
       final errorMsg = e is WeblioException
           ? e.message
           : '未找到「$query」的相关释义或网络异常';
@@ -224,9 +258,13 @@ final persistentNotificationProvider = StateNotifierProvider<
   return PersistentNotificationNotifier(
     service,
     vocabularyService: vocabService,
-    onWordSaved: () {
+    onWordSaved: (entry) {
       try {
-        ref.read(vocabularyProvider.notifier).loadEntries();
+        final notifier = ref.read(vocabularyProvider.notifier);
+        if (entry != null) {
+          notifier.selectEntry(entry);
+        }
+        notifier.loadEntries();
       } catch (_) {}
     },
   );

@@ -38,6 +38,9 @@ abstract class IPersistentNotificationService {
   /// 用户在系统通知栏行内输入框（RemoteInput）提交搜索词的广播事件流
   Stream<String> get onInlineQuerySubmitted;
 
+  /// 获取并清空原生端待处理的行内查询列表（用于冷启动或后台引擎拉起时防丢失）
+  Future<List<String>> getPendingInlineQueries();
+
   /// 释放服务资源
   Future<void> dispose();
 }
@@ -179,6 +182,20 @@ class InMemoryPersistentNotificationService
     }
   }
 
+  final List<String> _pendingQueries = [];
+
+  /// 用于测试：添加原生待处理查询
+  void addPendingQuery(String query) {
+    _pendingQueries.add(query);
+  }
+
+  @override
+  Future<List<String>> getPendingInlineQueries() async {
+    final list = List<String>.from(_pendingQueries);
+    _pendingQueries.clear();
+    return list;
+  }
+
   /// 用于测试：设置启动载荷
   void setLaunchPayload(String? payload) {
     _launchPayload = payload;
@@ -188,6 +205,7 @@ class InMemoryPersistentNotificationService
   Future<void> dispose() async {
     _activeIds.clear();
     _displayedNotifications.clear();
+    _pendingQueries.clear();
     await _tapController.close();
     await _inlineQueryController.close();
   }
@@ -216,6 +234,7 @@ class MethodChannelPersistentNotificationService
       : _channel = channel ?? const MethodChannel(defaultChannelName) {
     try {
       _channel.setMethodCallHandler(_handleMethodCall);
+      _channel.invokeMethod('clientReady').catchError((_) => null);
     } catch (_) {
       // 单元测试或无 Binding 环境下优雅降级
     }
@@ -375,6 +394,29 @@ class MethodChannelPersistentNotificationService
 
   @override
   Stream<String> get onInlineQuerySubmitted => _inlineQueryController.stream;
+
+  @override
+  Future<List<String>> getPendingInlineQueries() async {
+    try {
+      final res =
+          await _channel.invokeMethod<List<dynamic>>('getPendingInlineQueries');
+      if (res == null) return [];
+      final list = <String>[];
+      for (final item in res) {
+        if (item is String && item.trim().isNotEmpty) {
+          list.add(item.trim());
+        } else if (item is Map) {
+          final q = item['query']?.toString().trim();
+          if (q != null && q.isNotEmpty) {
+            list.add(q);
+          }
+        }
+      }
+      return list;
+    } catch (_) {
+      return [];
+    }
+  }
 
   @override
   Future<void> dispose() async {

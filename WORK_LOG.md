@@ -1,3 +1,40 @@
+## 2026-09-12 Fix & Hardening: Background FlutterEngine Plugin Registration, Cold-Start Query Buffering, Race Condition Guard & Notification UX (v1.30.0+31)
+
+### 变更文件
+- `android/app/src/main/kotlin/com/example/chat/NotificationHelper.kt`:
+  - 补充后台 `FlutterEngine` 插件注册：显式调用 `GeneratedPluginRegistrant.registerWith(engine)`，根除后台拉起引擎时 `sqflite` 与 `shared_preferences` 报 `MissingPluginException` 的致命缺陷；
+  - 实现冷启动待处理查询缓冲队列（`pendingInlineQueries`）与 `clientReady` / `getPendingInlineQueries` 握手机制，杜绝 Dart 引擎未完成初始化前调用 `invokeMethod` 导致的丢词风险；
+  - 增强通知视觉与交互体验：搜索中状态通知配置 `.setProgress(0, 0, true)` 动态进度条，全部通知卡片配置 `.setOnlyAlertOnce(true)` 防止频繁震动打扰，读音与原词相同时在展开大文本中自动去重；
+  - 完善后台引擎生命周期：新增 `destroyBackgroundEngine()`，在常驻通知取消时彻底释放后台引擎与内存。
+- `android/app/src/main/kotlin/com/example/chat/NotificationActionReceiver.kt`:
+  - 引入 `goAsync()` 异步生命周期管理，确保广播接收器在调度后台拉起引擎与分发查询过程中不被 Android 系统提前回收。
+- `android/app/src/main/kotlin/com/example/chat/PersistentNotificationForegroundService.kt`:
+  - 适配 Android Q+ (API 29+) 前台服务类型：显式传递 `FOREGROUND_SERVICE_TYPE_DATA_SYNC`，满足 Android 14 严格前台服务合规要求；
+  - 服务销毁时同步调用 `NotificationHelper.destroyBackgroundEngine()`。
+- `android/app/src/main/kotlin/com/example/chat/MainActivity.kt`:
+  - 重写 `provideFlutterEngine` 与 `shouldDestroyEngineWithHost`，优先复用后台已拉起的 `FlutterEngine`，避免前台唤醒时重复创建双引擎导致内存激增与数据库锁冲突；
+  - 完善 `activeMethodChannel` 与 `isDartReady` 生命周期联动。
+- `lib/services/native/persistent_notification_service.dart`:
+  - `IPersistentNotificationService` 接口扩充 `getPendingInlineQueries()`；
+  - `InMemoryPersistentNotificationService` 补充待处理查询队列测试桩方法；
+  - `MethodChannelPersistentNotificationService` 在构造时向原生通知 `clientReady`，并实现 `getPendingInlineQueries()` 查询拉取。
+- `lib/providers/persistent_notification_provider.dart`:
+  - `_initPreference()` 冷启动时主动拉取并消费原生端暂存的 `getPendingInlineQueries`，且在搜索中时不以默认通知覆盖当前状态；
+  - 引入单调递增序号 `_searchSeq`，对乱序返回的慢网络请求实施淘汰机制，保证通知栏与状态严格展示最新搜索词；
+  - 升级 `onWordSaved` 回调支持传递 `VocabularyEntry`，查词成功后若前台处于生词本界面即时联动展示该生词详情。
+- `test/services/persistent_notification_service_test.dart`:
+  - 扩充测试用例：覆盖 `getPendingInlineQueries` 队列消费、冷启动通知保护、`_searchSeq` 乱序丢弃及 `onWordSaved` 实体联动。
+- `pubspec.yaml`, `WORK_LOG.md`, `.agents/context.md`:
+  - 版本号递增至 `1.30.0+31`。
+
+### 核心技术指标与决策
+- **全量测试基线**：794 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **Android 原生编译**：`compileDebugKotlin` BUILD SUCCESSFUL（0 errors, 0 warnings）
+- **版本号**：递增至 `1.30.0+31`
+
+---
+
 ## 2026-09-12 Feature: Direct Notification Shade Inline Search (RemoteInput), BigTextStyle Bilingual Definitions & Lazy-Activated Foreground Service (v1.29.0+30)
 
 ### 变更文件

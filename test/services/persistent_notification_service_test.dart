@@ -37,6 +37,30 @@ class FakeVocabularyService implements VocabularyService {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class DelayedFakeVocabularyService extends FakeVocabularyService {
+  @override
+  Future<VocabularyEntry> lookupWord(
+    String rawWord, {
+    bool forceRefresh = false,
+    bool allowLlmFallback = true,
+  }) async {
+    lastLookedUpWord = rawWord;
+    if (rawWord == 'slow_word') {
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+    } else {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    return VocabularyEntry(
+      vocabKanji: rawWord,
+      vocabFurigana: rawWord,
+      vocabDefJa: '$rawWord 日文释义',
+      vocabDefSc: '$rawWord 释义',
+      vocabPoS: '［名］',
+      createdAt: DateTime.now(),
+    );
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -155,6 +179,14 @@ void main() {
       expect(data.title, contains('未找到「未知词」的释义'));
       expect(data.body, '未找到该词释义');
     });
+
+    test('getPendingInlineQueries returns and drains queued queries', () async {
+      service.addPendingQuery('猫');
+      service.addPendingQuery('桜');
+
+      expect(await service.getPendingInlineQueries(), ['猫', '桜']);
+      expect(await service.getPendingInlineQueries(), isEmpty);
+    });
   });
 
   group('MethodChannelPersistentNotificationService Fallback Tests', () {
@@ -217,6 +249,29 @@ void main() {
 
       await tapSub.cancel();
       await querySub.cancel();
+      await service.dispose();
+    });
+
+    test('getPendingInlineQueries handles channel responses', () async {
+      const channel = MethodChannel('test_pending_queries_channel');
+      final service = MethodChannelPersistentNotificationService(channel: channel);
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        (MethodCall methodCall) async {
+          if (methodCall.method == 'getPendingInlineQueries') {
+            return [
+              {'query': '富士山'},
+              '東京',
+            ];
+          }
+          return null;
+        },
+      );
+
+      final queries = await service.getPendingInlineQueries();
+      expect(queries, ['富士山', '東京']);
+
       await service.dispose();
     });
   });
@@ -362,6 +417,76 @@ void main() {
 
       expect(fakeVocabService.lastLookedUpWord, isNull);
       expect(notifier.state.isSearching, isFalse);
+
+      notifier.dispose();
+    });
+
+    test('consumes pending inline queries on initialization without overwriting notification', () async {
+      final fakeVocabService = FakeVocabularyService();
+      service.addPendingQuery('猫');
+
+      SharedPreferences.setMockInitialValues({
+        PersistentNotificationNotifier.prefKey: true,
+      });
+
+      final notifier = PersistentNotificationNotifier(
+        service,
+        vocabularyService: fakeVocabService,
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(fakeVocabService.lastLookedUpWord, '猫');
+      expect(notifier.state.lastSearchedWord, '猫');
+      final notifData = service.getNotificationData(PersistentNotificationNotifier.notificationId);
+      expect(notifData, isNotNull);
+      expect(notifData!.title, '📖 猫【ねこ】');
+
+      notifier.dispose();
+    });
+
+    test('discards out-of-order search results when newer search finishes first', () async {
+      final fakeVocabService = DelayedFakeVocabularyService();
+      final notifier = PersistentNotificationNotifier(
+        service,
+        vocabularyService: fakeVocabService,
+      );
+
+      // 启动慢查询 slow_word (60ms)
+      final future1 = notifier.handleInlineSearch('slow_word');
+
+      // 稍后启动快查询 fast_word (10ms)
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final future2 = notifier.handleInlineSearch('fast_word');
+
+      await Future.wait([future1, future2]);
+
+      // 最终状态与通知栏必须展示较新的 fast_word，而非被慢查询覆盖
+      expect(notifier.state.lastSearchedWord, 'fast_word');
+      expect(notifier.state.lastSearchResult, 'fast_word 释义');
+      final notifData = service.getNotificationData(PersistentNotificationNotifier.notificationId);
+      expect(notifData, isNotNull);
+      expect(notifData!.word, 'fast_word');
+
+      notifier.dispose();
+    });
+
+    test('invokes onWordSaved with VocabularyEntry upon successful lookup', () async {
+      final fakeVocabService = FakeVocabularyService();
+      VocabularyEntry? savedEntry;
+
+      final notifier = PersistentNotificationNotifier(
+        service,
+        vocabularyService: fakeVocabService,
+        onWordSaved: (entry) {
+          savedEntry = entry;
+        },
+      );
+
+      await notifier.handleInlineSearch('猫');
+
+      expect(savedEntry, isNotNull);
+      expect(savedEntry!.vocabKanji, '猫');
 
       notifier.dispose();
     });

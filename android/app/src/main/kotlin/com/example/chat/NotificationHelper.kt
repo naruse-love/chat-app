@@ -12,6 +12,7 @@ import androidx.core.app.RemoteInput
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
+import java.util.Collections
 
 object NotificationHelper {
     const val CHANNEL_NAME = "com.example.chat/persistent_notification"
@@ -25,6 +26,9 @@ object NotificationHelper {
     var backgroundEngine: FlutterEngine? = null
     var launchPayload: String? = null
     val activeNotifications = mutableSetOf<String>()
+    var isDartReady = false
+    val pendingInlineQueries: MutableList<Map<String, String>> =
+        Collections.synchronizedList(mutableListOf())
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -118,6 +122,7 @@ object NotificationHelper {
             .setContentText(body)
             .setOngoing(true)
             .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(contentPendingIntent)
             .addAction(replyAction)
@@ -137,8 +142,10 @@ object NotificationHelper {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("🔍 正在查询「$query」...")
             .setContentText("正在获取释义与翻译，请稍候...")
+            .setProgress(0, 0, true)
             .setOngoing(true)
             .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(contentPendingIntent)
             .addAction(replyAction)
@@ -176,6 +183,7 @@ object NotificationHelper {
                 .setStyle(bigStyle)
                 .setOngoing(true)
                 .setAutoCancel(false)
+                .setOnlyAlertOnce(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setContentIntent(contentPendingIntent)
                 .addAction(replyAction)
@@ -195,7 +203,7 @@ object NotificationHelper {
         }
 
         val bigTextBuilder = StringBuilder()
-        if (!reading.isNullOrEmpty()) {
+        if (!reading.isNullOrEmpty() && reading != word) {
             bigTextBuilder.append("【读音】").append(reading).append("\n")
         }
         if (!partOfSpeech.isNullOrEmpty()) {
@@ -220,6 +228,7 @@ object NotificationHelper {
             .setStyle(bigStyle)
             .setOngoing(true)
             .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(contentPendingIntent)
             .addAction(replyAction)
@@ -275,9 +284,67 @@ object NotificationHelper {
         activeNotifications.remove(id)
     }
 
+    fun handleInlineQuery(
+        context: Context,
+        id: String,
+        query: String,
+        onDone: () -> Unit = {}
+    ) {
+        // 1. 立即更新通知栏显示正在查询状态（带进度条并收起行内输入框）
+        showSearchingNotification(context, id, query)
+
+        val queryData = mapOf("id" to id, "query" to query)
+
+        if (isDartReady && activeMethodChannel != null) {
+            try {
+                activeMethodChannel?.invokeMethod("onInlineQuerySubmitted", queryData)
+            } catch (e: Exception) {
+                pendingInlineQueries.add(queryData)
+            }
+            onDone()
+        } else {
+            // Dart 尚未就绪，加入待处理队列缓冲，并拉起后台引擎
+            pendingInlineQueries.add(queryData)
+            ensureBackgroundEngine(context) { channel ->
+                if (isDartReady) {
+                    synchronized(pendingInlineQueries) {
+                        val list = ArrayList(pendingInlineQueries)
+                        pendingInlineQueries.clear()
+                        for (q in list) {
+                            channel.invokeMethod("onInlineQuerySubmitted", q)
+                        }
+                    }
+                }
+            }
+            onDone()
+        }
+    }
+
     fun setupMethodChannel(context: Context, channel: MethodChannel) {
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
+                "clientReady" -> {
+                    isDartReady = true
+                    synchronized(pendingInlineQueries) {
+                        if (pendingInlineQueries.isNotEmpty()) {
+                            val list = ArrayList(pendingInlineQueries)
+                            pendingInlineQueries.clear()
+                            for (q in list) {
+                                channel.invokeMethod("onInlineQuerySubmitted", q)
+                            }
+                        }
+                    }
+                    result.success(true)
+                }
+                "getPendingInlineQueries" -> {
+                    isDartReady = true
+                    val list = synchronized(pendingInlineQueries) {
+                        val copy = ArrayList(pendingInlineQueries)
+                        pendingInlineQueries.clear()
+                        copy
+                    }
+                    result.success(list)
+                }
                 "showPersistentNotification" -> {
                     val id = call.argument<String>("id") ?: "chat_persistent_vocab"
                     val title = call.argument<String>("title") ?: "📚 日语生词快捷查询"
@@ -303,6 +370,7 @@ object NotificationHelper {
                     try {
                         PersistentNotificationForegroundService.stopService(context, id)
                         cancelNotification(context, id)
+                        destroyBackgroundEngine()
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("NOTIFICATION_ERROR", e.message, null)
@@ -349,7 +417,7 @@ object NotificationHelper {
         }
     }
 
-    fun ensureBackgroundEngine(context: Context, onReady: (MethodChannel) -> Unit) {
+    fun ensureBackgroundEngine(context: Context, onReady: (MethodChannel) -> Unit = {}) {
         val active = activeMethodChannel
         if (active != null) {
             onReady(active)
@@ -359,6 +427,8 @@ object NotificationHelper {
         try {
             if (backgroundEngine == null) {
                 val engine = FlutterEngine(context.applicationContext)
+                // 必须注册所有原生插件（sqflite, shared_preferences, secure_storage 等）
+                io.flutter.plugins.GeneratedPluginRegistrant.registerWith(engine)
                 engine.dartExecutor.executeDartEntrypoint(
                     DartExecutor.DartEntrypoint.createDefault()
                 )
@@ -371,5 +441,13 @@ object NotificationHelper {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    fun destroyBackgroundEngine() {
+        try {
+            backgroundEngine?.destroy()
+        } catch (_: Exception) {}
+        backgroundEngine = null
+        isDartReady = false
     }
 }

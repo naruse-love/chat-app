@@ -15,15 +15,11 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         if (query.isNullOrEmpty()) return
 
-        // 1. 立即更新通知栏显示正在查询状态，提供即时视觉反馈并收起系统行内输入框
-        NotificationHelper.showSearchingNotification(context, id, query)
-
-        // 2. 将输入事件传递给 Flutter 引擎（若引擎休眠则按需拉起）
-        NotificationHelper.ensureBackgroundEngine(context) { channel ->
-            channel.invokeMethod("onInlineQuerySubmitted", mapOf(
-                "id" to id,
-                "query" to query
-            ))
+        val pendingResult = goAsync()
+        NotificationHelper.handleInlineQuery(context, id, query) {
+            try {
+                pendingResult.finish()
+            } catch (_: Exception) {}
         }
     }
 }
