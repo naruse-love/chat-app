@@ -69,12 +69,158 @@ class VocabularyConfigNotifier extends StateNotifier<VocabularyConfigState> {
 
   static String _cacheKey(String configId) => 'cached_models_$configId';
 
+  List<ModelInfo> _getFallbackModelsForConfig(ApiConfig config) {
+    final configId = config.id.toLowerCase();
+    final baseUrl = config.baseUrl.toLowerCase();
+    final name = config.name.toLowerCase();
+
+    if (configId == 'opencode_free' || baseUrl.contains('opencode.ai')) {
+      return ModelInfo.defaultOpenCodeFallbackModels
+          .where((m) => m.id.toLowerCase().contains('free'))
+          .toList();
+    }
+
+    if (baseUrl.contains('deepseek') || name.contains('deepseek')) {
+      return [
+        ModelInfo(
+          id: 'deepseek-chat',
+          provider: 'deepseek',
+          modelName: 'DeepSeek Chat (V3)',
+          supportsVision: false,
+          supportsTools: true,
+        ),
+        ModelInfo(
+          id: 'deepseek-reasoner',
+          provider: 'deepseek',
+          modelName: 'DeepSeek Reasoner (R1)',
+          supportsVision: false,
+          supportsTools: true,
+        ),
+      ];
+    }
+
+    if (baseUrl.contains('openai') || name.contains('openai')) {
+      return [
+        ModelInfo(
+          id: 'gpt-4o-mini',
+          provider: 'openai',
+          modelName: 'GPT-4o mini',
+          supportsVision: true,
+          supportsTools: true,
+        ),
+        ModelInfo(
+          id: 'gpt-4o',
+          provider: 'openai',
+          modelName: 'GPT-4o',
+          supportsVision: true,
+          supportsTools: true,
+        ),
+      ];
+    }
+
+    if (baseUrl.contains('anthropic') || name.contains('claude')) {
+      return [
+        ModelInfo(
+          id: 'claude-3-5-haiku-20241022',
+          provider: 'anthropic',
+          modelName: 'Claude 3.5 Haiku',
+          supportsVision: true,
+          supportsTools: true,
+        ),
+        ModelInfo(
+          id: 'claude-3-5-sonnet-20241022',
+          provider: 'anthropic',
+          modelName: 'Claude 3.5 Sonnet',
+          supportsVision: true,
+          supportsTools: true,
+        ),
+      ];
+    }
+
+    if (baseUrl.contains('siliconflow') || name.contains('silicon')) {
+      return [
+        ModelInfo(
+          id: 'deepseek-ai/DeepSeek-V3',
+          provider: 'siliconflow',
+          modelName: 'DeepSeek V3',
+          supportsVision: false,
+          supportsTools: true,
+        ),
+        ModelInfo(
+          id: 'Qwen/Qwen2.5-7B-Instruct',
+          provider: 'siliconflow',
+          modelName: 'Qwen 2.5 7B Instruct',
+          supportsVision: false,
+          supportsTools: true,
+        ),
+      ];
+    }
+
+    // 通用 OpenAI 兼容接口兜底候选
+    return [
+      ModelInfo(
+        id: 'gpt-4o-mini',
+        provider: config.name,
+        modelName: 'gpt-4o-mini',
+        supportsVision: true,
+        supportsTools: true,
+      ),
+      ModelInfo(
+        id: 'deepseek-chat',
+        provider: config.name,
+        modelName: 'deepseek-chat',
+        supportsVision: false,
+        supportsTools: true,
+      ),
+      ModelInfo(
+        id: 'gpt-4o',
+        provider: config.name,
+        modelName: 'gpt-4o',
+        supportsVision: true,
+        supportsTools: true,
+      ),
+    ];
+  }
+
   ModelInfo? _pickDefaultModel(List<ModelInfo> list, ApiConfig? config) {
     if (list.isEmpty) return null;
-    if (config?.id == 'opencode_free') {
+    final configId = config?.id.toLowerCase() ?? '';
+    final baseUrl = config?.baseUrl.toLowerCase() ?? '';
+
+    if (configId == 'opencode_free' || baseUrl.contains('opencode.ai')) {
       final idx = list.indexWhere((m) => m.id == 'deepseek-v4-flash-free');
       if (idx != -1) return list[idx];
+      final freeIdx =
+          list.indexWhere((m) => m.id.toLowerCase().contains('free'));
+      if (freeIdx != -1) return list[freeIdx];
     }
+
+    // 优先轻量/高性价比翻译模型（flash / mini / turbo / chat / haiku）
+    final preferredIds = [
+      'deepseek-chat',
+      'gpt-4o-mini',
+      'claude-3-5-haiku-20241022',
+      'deepseek-ai/DeepSeek-V3',
+      'qwen-plus',
+      'qwen-turbo',
+    ];
+    for (final pref in preferredIds) {
+      final idx =
+          list.indexWhere((m) => m.id.toLowerCase() == pref.toLowerCase());
+      if (idx != -1) return list[idx];
+    }
+
+    // 模糊匹配常见经济型模型关键字
+    final keywordIdx = list.indexWhere((m) {
+      final id = m.id.toLowerCase();
+      return id.contains('mini') ||
+          id.contains('flash') ||
+          id.contains('turbo') ||
+          id.contains('haiku') ||
+          id.contains('chat');
+    });
+    if (keywordIdx != -1) return list[keywordIdx];
+
     return list.first;
   }
 
@@ -139,13 +285,7 @@ class VocabularyConfigNotifier extends StateNotifier<VocabularyConfigState> {
       }
 
       if (models.isEmpty) {
-        if (configId == 'opencode_free') {
-          models = ModelInfo.defaultOpenCodeFallbackModels
-              .where((m) => m.id.toLowerCase().contains('free'))
-              .toList();
-        } else {
-          models = ModelInfo.defaultOpenCodeFallbackModels;
-        }
+        models = _getFallbackModelsForConfig(chosenConfig);
       }
 
       // 确定选中的模型
@@ -160,7 +300,27 @@ class VocabularyConfigNotifier extends StateNotifier<VocabularyConfigState> {
             supportsVision: false,
             supportsTools: true,
           );
-          models = [...models, chosenModel];
+          models = [chosenModel, ...models];
+        }
+      }
+
+      // 检查该配置上次在聊天中使用的模型
+      if (chosenModel == null) {
+        final lastChatModelId =
+            prefs.getString('last_selected_model_${chosenConfig.id}');
+        if (lastChatModelId != null && lastChatModelId.isNotEmpty) {
+          chosenModel =
+              models.where((m) => m.id == lastChatModelId).firstOrNull;
+          if (chosenModel == null) {
+            chosenModel = ModelInfo(
+              id: lastChatModelId,
+              provider: chosenConfig.name,
+              modelName: lastChatModelId,
+              supportsVision: false,
+              supportsTools: true,
+            );
+            models = [chosenModel, ...models];
+          }
         }
       }
 
@@ -172,6 +332,9 @@ class VocabularyConfigNotifier extends StateNotifier<VocabularyConfigState> {
                 models.where((m) => m.id == chatModel.id).firstOrNull;
             if (match != null) {
               chosenModel = match;
+            } else {
+              chosenModel = chatModel;
+              models = [chatModel, ...models];
             }
           }
         } catch (_) {}
@@ -215,6 +378,8 @@ class VocabularyConfigNotifier extends StateNotifier<VocabularyConfigState> {
           await prefs.setString(_cacheKey(config.id), encoded);
         } catch (_) {}
 
+        if (state.config?.id != config.id) return;
+
         ModelInfo? current = state.model;
         if (targetModelId != null) {
           final found =
@@ -223,7 +388,12 @@ class VocabularyConfigNotifier extends StateNotifier<VocabularyConfigState> {
             current = found;
           }
         }
-        current ??= _pickDefaultModel(fetched, config);
+        final cur = current;
+        if (cur != null && !fetched.any((m) => m.id == cur.id)) {
+          fetched = [cur, ...fetched];
+        } else {
+          current ??= _pickDefaultModel(fetched, config);
+        }
 
         if (!mounted) return;
         state = state.copyWith(
@@ -238,57 +408,71 @@ class VocabularyConfigNotifier extends StateNotifier<VocabularyConfigState> {
 
   /// 为生词本切换供应商
   Future<void> setConfig(ApiConfig config) async {
+    // 立即确定新供应商可用的候选模型列表与默认模型，避免短暂的模型与供应商不匹配状态
+    final cacheKey = _cacheKey(config.id);
+    List<ModelInfo> models = [];
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedJson = prefs.getString(cacheKey);
+      if (cachedJson != null && cachedJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(cachedJson);
+        models = decoded
+            .whereType<Map<String, dynamic>>()
+            .map((m) => ModelInfo.fromJson(m))
+            .toList();
+      }
+    } catch (_) {}
+
+    if (models.isEmpty) {
+      models = _getFallbackModelsForConfig(config);
+    }
+
+    ModelInfo? chosenModel;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedModelId = prefs.getString(keyVocabModelId);
+      if (savedModelId != null && models.any((m) => m.id == savedModelId)) {
+        chosenModel = models.firstWhere((m) => m.id == savedModelId);
+      } else {
+        final lastSelectedId =
+            prefs.getString('last_selected_model_${config.id}');
+        if (lastSelectedId != null && lastSelectedId.isNotEmpty) {
+          chosenModel =
+              models.where((m) => m.id == lastSelectedId).firstOrNull;
+          if (chosenModel == null) {
+            chosenModel = ModelInfo(
+              id: lastSelectedId,
+              provider: config.name,
+              modelName: lastSelectedId,
+              supportsVision: false,
+              supportsTools: true,
+            );
+            models = [chosenModel, ...models];
+          }
+        }
+      }
+    } catch (_) {}
+
+    chosenModel ??= _pickDefaultModel(models, config);
+
     state = state.copyWith(
       config: config,
+      model: chosenModel,
+      availableModels: models,
       isLoading: true,
       isCustomSelected: true,
       clearError: true,
     );
+
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(keyVocabApiConfigId, config.id);
-
-      final cacheKey = _cacheKey(config.id);
-      final cachedJson = prefs.getString(cacheKey);
-      List<ModelInfo> models = [];
-      if (cachedJson != null && cachedJson.isNotEmpty) {
-        try {
-          final List<dynamic> decoded = jsonDecode(cachedJson);
-          models = decoded
-              .whereType<Map<String, dynamic>>()
-              .map((m) => ModelInfo.fromJson(m))
-              .toList();
-        } catch (_) {}
-      }
-      if (models.isEmpty) {
-        if (config.id == 'opencode_free') {
-          models = ModelInfo.defaultOpenCodeFallbackModels
-              .where((m) => m.id.toLowerCase().contains('free'))
-              .toList();
-        } else {
-          models = ModelInfo.defaultOpenCodeFallbackModels;
-        }
-      }
-
-      final savedModelId = prefs.getString(keyVocabModelId);
-      ModelInfo? chosenModel;
-      if (savedModelId != null && models.any((m) => m.id == savedModelId)) {
-        chosenModel = models.firstWhere((m) => m.id == savedModelId);
-      } else {
-        chosenModel = _pickDefaultModel(models, config);
-        if (chosenModel != null) {
-          await prefs.setString(keyVocabModelId, chosenModel.id);
-        }
+      if (chosenModel != null) {
+        await prefs.setString(keyVocabModelId, chosenModel.id);
       }
 
       if (!mounted) return;
-      state = state.copyWith(
-        config: config,
-        model: chosenModel,
-        availableModels: models,
-        isLoading: false,
-        isCustomSelected: true,
-      );
+      state = state.copyWith(isLoading: false);
 
       _refreshModelsInBackground(config, chosenModel?.id);
     } catch (e) {
@@ -308,8 +492,11 @@ class VocabularyConfigNotifier extends StateNotifier<VocabularyConfigState> {
     } catch (_) {}
 
     final currentModels = List<ModelInfo>.from(state.availableModels);
-    if (!currentModels.any((m) => m.id == model.id)) {
-      currentModels.add(model);
+    final existingIdx = currentModels.indexWhere((m) => m.id == model.id);
+    if (existingIdx == -1) {
+      currentModels.insert(0, model);
+    } else {
+      currentModels[existingIdx] = model;
     }
 
     state = state.copyWith(
@@ -363,12 +550,16 @@ class VocabularyConfigNotifier extends StateNotifier<VocabularyConfigState> {
         final prefs = await SharedPreferences.getInstance();
         final encoded = jsonEncode(models.map((m) => m.toJson()).toList());
         await prefs.setString(_cacheKey(currentConfig.id), encoded);
+      } else {
+        models = _getFallbackModelsForConfig(currentConfig);
       }
 
       ModelInfo? selected = state.model;
-      if (selected == null || !models.any((m) => m.id == selected!.id)) {
-        selected = _pickDefaultModel(models, currentConfig);
+      final sel = selected;
+      if (sel != null && !models.any((m) => m.id == sel.id)) {
+        models = [sel, ...models];
       }
+      selected ??= _pickDefaultModel(models, currentConfig);
 
       if (!mounted) return;
       state = state.copyWith(

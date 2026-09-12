@@ -8,6 +8,9 @@ import 'package:chat/services/vocabulary_service.dart';
 import 'package:chat/data/vocabulary_dao.dart';
 
 import 'package:chat/models/word_candidate.dart';
+import 'package:chat/models/api_config.dart';
+import 'package:chat/models/model_info.dart';
+import 'package:chat/providers/vocabulary_config_provider.dart';
 import 'package:chat/services/native/native_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -132,8 +135,11 @@ class MockVocabularyNotifier extends StateNotifier<VocabularyState>
     state = state.copyWith(clearCurrentResult: true);
   }
 
+  int retranslateCallCount = 0;
+
   @override
   Future<void> retranslateEntry(VocabularyEntry entry) async {
+    retranslateCallCount++;
     state = state.copyWith(
       currentResult: entry.copyWith(vocabDefSc: '重新生成的中文释义'),
     );
@@ -367,4 +373,154 @@ void main() {
     final textField = tester.widget<TextField>(find.byType(TextField).first);
     expect(textField.focusNode?.hasFocus, isTrue);
   });
+
+  testWidgets('VocabularyScreen model indicator chip renders and does not overflow on 320px viewport with long name', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final mockNotifier = MockVocabularyNotifier(const VocabularyState());
+    final longModel = ModelInfo(
+      id: 'extremely-long-custom-model-id-for-japanese-translation-evaluation-v3-enterprise',
+      provider: 'Very Long Provider Name Incorporated',
+      modelName: 'extremely-long-custom-model-id-for-japanese-translation-evaluation-v3-enterprise',
+      supportsVision: false,
+      supportsTools: true,
+    );
+
+    final vocabConfigNotifier = MockVocabularyConfigNotifier(VocabularyConfigState(
+      config: ApiConfig(
+        id: 'cfg_long',
+        name: 'Very Long Provider Name Incorporated',
+        baseUrl: 'https://long-provider.com/v1',
+        apiKeyRef: 'k_long',
+        isDefault: false,
+        createdAt: DateTime.now(),
+      ),
+      model: longModel,
+      availableModels: [longModel],
+    ));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+          vocabularyConfigProvider.overrideWith((ref) => vocabConfigNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify no RenderFlex overflow exception occurred!
+    expect(tester.takeException(), isNull);
+    expect(find.byIcon(Icons.auto_awesome), findsOneWidget);
+    expect(find.byIcon(Icons.psychology_outlined), findsOneWidget);
+  });
+
+  testWidgets('VocabularyScreen shows 生成释义 when vocabDefSc is empty and invokes retranslateEntry on tap', (tester) async {
+    final entryWithoutSc = VocabularyEntry(
+      id: 10,
+      vocabKanji: '青空',
+      vocabFurigana: 'あおぞら',
+      vocabDefJa: '晴れわたった青い空。',
+      vocabDefSc: '', // Empty!
+      vocabPoS: '名',
+      sourceDict: '大辞泉',
+      createdAt: DateTime.now(),
+    );
+
+    final mockNotifier = MockVocabularyNotifier(VocabularyState(
+      currentResult: entryWithoutSc,
+      entries: [entryWithoutSc],
+    ));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('未配置 API 模型或暂无中文释义'), findsOneWidget);
+    final generateBtn = find.text('生成释义');
+    expect(generateBtn, findsOneWidget);
+
+    await tester.tap(generateBtn);
+    await tester.pumpAndSettle();
+
+    expect(mockNotifier.retranslateCallCount, 1);
+  });
+
+  testWidgets('VocabularyScreen shows 重新生成 when vocabDefSc is present and invokes retranslateEntry on tap', (tester) async {
+    final entryWithSc = VocabularyEntry(
+      id: 11,
+      vocabKanji: '星空',
+      vocabFurigana: 'ほしぞら',
+      vocabDefJa: '星の出ている夜空。',
+      vocabDefSc: '繁星密布的夜空。',
+      vocabPoS: '名',
+      sourceDict: '大辞泉',
+      createdAt: DateTime.now(),
+    );
+
+    final mockNotifier = MockVocabularyNotifier(VocabularyState(
+      currentResult: entryWithSc,
+      entries: [entryWithSc],
+    ));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('繁星密布的夜空。'), findsAtLeastNWidgets(1));
+    final regenerateBtn = find.byTooltip('使用专属模型重新生成释义');
+    expect(regenerateBtn, findsOneWidget);
+
+    await tester.tap(regenerateBtn);
+    await tester.pumpAndSettle();
+
+    expect(mockNotifier.retranslateCallCount, 1);
+  });
+}
+
+class MockVocabularyConfigNotifier extends StateNotifier<VocabularyConfigState>
+    implements VocabularyConfigNotifier {
+  @override
+  late final Future<void> initialization = Future.value();
+
+  MockVocabularyConfigNotifier(super.state);
+
+  @override
+  set initialization(Future<void> value) {}
+
+  @override
+  Future<void> addCustomModel(String modelId) async {}
+
+  @override
+  Future<void> fetchModels({bool forceRefresh = false}) async {}
+
+  @override
+  Future<void> resetToDefault() async {}
+
+  @override
+  Future<void> setConfig(ApiConfig config) async {}
+
+  @override
+  Future<void> setModel(ModelInfo model) async {}
 }

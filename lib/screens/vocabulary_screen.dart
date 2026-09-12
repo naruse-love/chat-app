@@ -225,27 +225,32 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                         fontSize: 12,
                       ),
                     ),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: () => showVocabularyModelSelectorDialog(context),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '$providerName · $modelName',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
+                    Flexible(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: () => showVocabularyModelSelectorDialog(context),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  '$providerName · $modelName',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 2),
-                            Icon(Icons.arrow_drop_down,
-                                size: 16, color: colorScheme.primary),
-                          ],
+                              const SizedBox(width: 2),
+                              Icon(Icons.arrow_drop_down,
+                                  size: 16, color: colorScheme.primary),
+                            ],
+                          ),
                         ),
                       ),
                     ),

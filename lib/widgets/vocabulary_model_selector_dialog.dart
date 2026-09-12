@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/api_config.dart';
+import '../models/model_info.dart';
 import '../providers/api_config_provider.dart';
 import '../providers/vocabulary_config_provider.dart';
 
@@ -40,9 +42,33 @@ class _VocabularyModelSelectorDialogState
     final vocabState = ref.watch(vocabularyConfigProvider);
     final vocabNotifier = ref.read(vocabularyConfigProvider.notifier);
 
-    final configs = apiState.configs;
+    // 去重供应商列表并校验当前选中项
+    final Map<String, ApiConfig> uniqueConfigs = {};
+    for (final c in apiState.configs) {
+      uniqueConfigs.putIfAbsent(c.id, () => c);
+    }
+    final configs = uniqueConfigs.values.toList();
     final currentConfig = vocabState.config;
     final currentModel = vocabState.model;
+
+    final selectedConfigId = configs.any((c) => c.id == currentConfig?.id)
+        ? currentConfig?.id
+        : (configs.isNotEmpty ? configs.first.id : null);
+
+    // 去重模型列表并确保当前选中模型在选项中
+    final Map<String, ModelInfo> uniqueModels = {};
+    if (currentModel != null) {
+      uniqueModels[currentModel.id] = currentModel;
+    }
+    for (final m in vocabState.availableModels) {
+      uniqueModels.putIfAbsent(m.id, () => m);
+    }
+    final availableModels = uniqueModels.values.toList();
+
+    final selectedModelId =
+        availableModels.any((m) => m.id == currentModel?.id)
+            ? currentModel?.id
+            : (availableModels.isNotEmpty ? availableModels.first.id : null);
 
     return AlertDialog(
       title: Row(
@@ -102,9 +128,9 @@ class _VocabularyModelSelectorDialogState
                 const Text('暂无可用 API 配置，请先在设置中添加')
               else
                 DropdownButtonFormField<String>(
+                  key: ValueKey('vocab_provider_dropdown_$selectedConfigId'),
                   isExpanded: true,
-                  initialValue: currentConfig?.id ??
-                      (configs.isNotEmpty ? configs.first.id : null),
+                  initialValue: selectedConfigId,
                   decoration: InputDecoration(
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -125,7 +151,7 @@ class _VocabularyModelSelectorDialogState
                     );
                   }).toList(),
                   onChanged: (selectedId) {
-                    if (selectedId != null) {
+                    if (selectedId != null && selectedId != currentConfig?.id) {
                       final chosen =
                           configs.firstWhere((c) => c.id == selectedId);
                       vocabNotifier.setConfig(chosen);
@@ -173,10 +199,12 @@ class _VocabularyModelSelectorDialogState
               ),
               const SizedBox(height: 6),
 
-              if (vocabState.availableModels.isNotEmpty)
+              if (availableModels.isNotEmpty)
                 DropdownButtonFormField<String>(
+                  key: ValueKey(
+                      'vocab_model_dropdown_${selectedConfigId}_$selectedModelId'),
                   isExpanded: true,
-                  initialValue: currentModel?.id,
+                  initialValue: selectedModelId,
                   decoration: InputDecoration(
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -186,7 +214,7 @@ class _VocabularyModelSelectorDialogState
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  items: vocabState.availableModels.map((m) {
+                  items: availableModels.map((m) {
                     return DropdownMenuItem<String>(
                       value: m.id,
                       child: Text(
@@ -197,7 +225,7 @@ class _VocabularyModelSelectorDialogState
                   }).toList(),
                   onChanged: (modelId) {
                     if (modelId != null) {
-                      final match = vocabState.availableModels
+                      final match = availableModels
                           .firstWhere((m) => m.id == modelId);
                       vocabNotifier.setModel(match);
                     }

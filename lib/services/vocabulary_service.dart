@@ -112,7 +112,7 @@ class VocabularyService {
               ? savedModelId
               : (config.id == 'opencode_free'
                   ? 'deepseek-v4-flash-free'
-                  : 'default');
+                  : 'gpt-4o-mini');
           return ResolvedVocabLlm(
             config: config,
             modelId: modelId,
@@ -122,7 +122,7 @@ class VocabularyService {
       }
     } catch (_) {}
 
-    // 4. 智能兜底：从 apiConfigDao 中获取默认配置（或第一项配置）并选用默认模型
+    // 4. 智能兜底：从 apiConfigDao 中获取默认配置（或第一项配置）并选用适合该配置的模型
     try {
       var defaultCfg = await apiConfigDao.getDefault();
       if (defaultCfg == null) {
@@ -136,7 +136,9 @@ class VocabularyService {
             await apiConfigDao.getApiKey(defaultCfg.apiKeyRef) ?? '';
         final modelId = defaultCfg.id == 'opencode_free'
             ? 'deepseek-v4-flash-free'
-            : 'gpt-4o';
+            : (defaultCfg.baseUrl.toLowerCase().contains('deepseek')
+                ? 'deepseek-chat'
+                : 'gpt-4o-mini');
         return ResolvedVocabLlm(
           config: defaultCfg,
           modelId: modelId,
@@ -159,6 +161,9 @@ class VocabularyService {
       if (vocabCfg.config != null && vocabCfg.model != null) {
         return true;
       }
+      if (vocabCfg.isLoading) {
+        return true;
+      }
     } catch (_) {}
 
     // 2. 检查 Chat 主界面的 activeConfig 与 selectedModel
@@ -172,8 +177,7 @@ class VocabularyService {
       }
     } catch (_) {}
 
-    // 3. 当存在 ref 时，无论处于异步加载阶段还是后台通知，均可通过 resolveVocabLlm 自愈获取模型
-    return true;
+    return false;
   }
 
   /// 判断输入文本是否为纯假名（平假名/片假名/长音符/中黑点，且至少包含一个真实假名字符）
@@ -782,7 +786,7 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
       finalReading = aiReading;
     }
 
-    final updated = entry.copyWith(
+    var updated = entry.copyWith(
       vocabFurigana: finalReading,
       vocabDefJa: finalDefJa,
       vocabDefSc: definitionSc.isNotEmpty ? definitionSc : entry.vocabDefSc,
@@ -793,6 +797,12 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
 
     if (updated.id != null) {
       await vocabularyDao.update(updated);
+    } else {
+      final existing = await vocabularyDao.findByKanji(updated.vocabKanji);
+      if (existing?.id != null) {
+        updated = updated.copyWith(id: existing!.id);
+        await vocabularyDao.update(updated);
+      }
     }
     return updated;
   }

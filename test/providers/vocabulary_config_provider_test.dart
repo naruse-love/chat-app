@@ -197,4 +197,64 @@ void main() {
     expect(prefs.getString(VocabularyConfigNotifier.keyVocabApiConfigId), isNull);
     expect(prefs.getString(VocabularyConfigNotifier.keyVocabModelId), isNull);
   });
+
+  test('VocabularyConfigNotifier resolves provider-appropriate fallback models for OpenAI and DeepSeek', () async {
+    final openAiConfig = ApiConfig(
+      id: 'cfg_openai',
+      name: 'OpenAI Provider',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKeyRef: 'key_openai',
+      isDefault: false,
+      createdAt: DateTime.now(),
+    );
+    await apiConfigDao.insert(openAiConfig, 'sk-test');
+
+    final deepSeekConfig = ApiConfig(
+      id: 'cfg_deepseek',
+      name: 'DeepSeek Official',
+      baseUrl: 'https://api.deepseek.com/v1',
+      apiKeyRef: 'key_deepseek',
+      isDefault: false,
+      createdAt: DateTime.now(),
+    );
+    await apiConfigDao.insert(deepSeekConfig, 'sk-deepseek');
+
+    final notifier = VocabularyConfigNotifier(apiConfigDao, fakeChat);
+    await notifier.initialization;
+
+    // Switch to OpenAI
+    await notifier.setConfig(openAiConfig);
+    expect(notifier.state.config?.id, 'cfg_openai');
+    // Model must be gpt-4o-mini or gpt-4o, NEVER opencode free!
+    expect(notifier.state.model?.id, anyOf('gpt-4o-mini', 'gpt-4o'));
+    expect(notifier.state.model?.id.contains('free'), isFalse);
+
+    // Switch to DeepSeek
+    await notifier.setConfig(deepSeekConfig);
+    expect(notifier.state.config?.id, 'cfg_deepseek');
+    expect(notifier.state.model?.id, anyOf('deepseek-chat', 'deepseek-reasoner'));
+    expect(notifier.state.model?.id.contains('opencode'), isFalse);
+  });
+
+  test('VocabularyConfigNotifier adopts last selected model previously used in chat for that config', () async {
+    final customConfig = ApiConfig(
+      id: 'cfg_recalled',
+      name: 'Recall Provider',
+      baseUrl: 'https://api.recall.com/v1',
+      apiKeyRef: 'key_recall',
+      isDefault: false,
+      createdAt: DateTime.now(),
+    );
+    await apiConfigDao.insert(customConfig, 'sk-recall');
+
+    // Simulate chat module having saved a selected model for this config
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_selected_model_cfg_recalled', 'custom-recalled-model');
+
+    final notifier = VocabularyConfigNotifier(apiConfigDao, fakeChat);
+    await notifier.initialization;
+
+    await notifier.setConfig(customConfig);
+    expect(notifier.state.model?.id, 'custom-recalled-model');
+  });
 }

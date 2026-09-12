@@ -1,3 +1,36 @@
+## 2026-09-12 Fix: Robust Vocabulary Model Selection, Provider-Specific Fallbacks, Deduplication & Layout Overflow Protection (v1.32.0+33)
+
+### 变更文件
+- `lib/providers/vocabulary_config_provider.dart`:
+  - 修复模型兜底匹配漏洞：针对非 OpenCode 供应商（OpenAI、DeepSeek、SiliconFlow、Anthropic 等）引入 `_getFallbackModelsForConfig`，杜绝向 OpenAI/DeepSeek 接口错误分发 OpenCode 模型（如 `deepseek-v4-flash-free`）引发的 400/404 远端报错；
+  - 供应商模型记忆继承：新增 `last_selected_model_$configId` 记忆读取，生词本切换供应商时自动继承该供应商历史在聊天或生词本中最近使用的有效模型；
+  - 原子化供应商/模型切换：重构 `setConfig`，在状态变更时同步计算并确定目标供应商的合法模型与候选列表，彻底消除由于异步延迟造成的“供应商-模型不匹配”短暂悬空态；
+  - 模型列表去重与保留：在 `setModel` 与后台静默刷新中确保当前选中模型置顶并严格去重。
+- `lib/widgets/vocabulary_model_selector_dialog.dart`:
+  - 彻底修复 `DropdownButtonFormField` 崩溃与断言失败：为供应商与模型下拉框绑定动态 `key: ValueKey(...)`，避免供应商切换时旧选中值在新候选列表不存在导致的 Flutter 3.33+ 断言抛错；
+  - 供应商与模型数据清洗去重：使用 LinkedHashMap 按 ID 去重，防止后端或持久化返回重复条目时导致的下拉列表重复 key 崩溃。
+- `lib/screens/vocabulary_screen.dart`:
+  - 布局防溢出重构：将生词本页面顶部的翻译模型指示 Chip 包裹在 `Flexible` 与 `Text(overflow: TextOverflow.ellipsis)` 中，彻底解决小屏设备（<360dp）或长模型名称下的 `RenderFlex overflowed by ... pixels` 渲染越界警告。
+- `lib/services/vocabulary_service.dart`:
+  - 兜底模型自适应：更新 `resolveVocabLlm` 中非 OpenCode 供应商默认模型为匹配端点的合法模型（如 DeepSeek 使用 `deepseek-chat`，OpenAI 兼容端点使用 `gpt-4o-mini`）；
+  - 修复 `hasLlmConfigured` 无条件返回 `true` 的逻辑缺陷；
+  - 完善 `retranslateEntry` 的持久化安全性：当词条无显式主键 ID 时，自动通过 `findByKanji` 查询回填数据库 ID 并更新持久化。
+- `test/widgets/vocabulary_model_selector_dialog_test.dart`:
+  - 新增生词本模型选择弹窗全套 Widget 测试（5 个独立用例），覆盖对话框正常渲染、供应商切换安全重绑、自定义模型录入即时刷新、重复 ID 去重容错以及重置默认配置交互。
+- `test/providers/vocabulary_config_provider_test.dart`:
+  - 扩充单元测试，覆盖不同供应商的专属兜底模型解析与 `last_selected_model` 继承行为。
+- `test/screens/vocabulary_screen_test.dart`:
+  - 增加 320dp 极窄屏幕抗布局溢出测试及生词重翻译交互测试。
+- `pubspec.yaml`, `.agents/AGENTS.md`, `.agents/context.md`, `WORK_LOG.md`:
+  - 项目版本号递增至 `1.32.0+33`。
+
+### 核心技术指标与决策
+- **全量测试基线**：811 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.32.0+33`
+
+---
+
 ## 2026-09-12 Feature: Independent Vocabulary Translation Model Selection & Fallback Self-Healing (v1.31.0+32)
 
 ### 变更文件
