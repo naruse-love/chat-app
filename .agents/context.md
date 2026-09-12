@@ -11,7 +11,7 @@
 - **Flutter SDK**：`D:\work\flutter-sdk\flutter\bin\flutter.bat`
 - **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支）
 - **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过，`flutter analyze` 必须 0 issues
-- **当前版本**：`1.32.0+33`
+- **当前版本**：`1.33.0+34`
 
 ---
 
@@ -53,7 +53,7 @@
 | **26 / MCP 客户端体系、动态工具网桥与全链路加固** | 构建 Model Context Protocol (MCP 2024-11-05) 客户端体系与动态工具网桥：多通道传输层（`SseMcpTransport`、`WebSocketMcpTransport`、`StdioMcpTransport` 跨平台支持与优雅降级）、`JsonRpcEngine` 协议引擎（超时、请求路由与错误映射）、`McpClient` 核心客户端（初始化握手、保活心跳、工具/资源/Prompt 检索与执行）、`McpDynamicTool` 桥接适配器（OpenAI Schema 命名空间隔离与参数宽容解析）；SQLite v4 `mcp_servers` 表与 `SecureStorageService` 敏感凭据存储；`McpProvider`（StateNotifier 异步 `mounted` 安全与 `ToolRegistry` 动态注入/注销）；`McpServerManagementScreen` 管理页面、设置页入口及 `ChatBubble` / `ToolConfirmationCard` 专属 MCP 徽章与参数预览；完成全链路对抗性测试与加固交付（2026-09-01） | ✅ 完成 |
 | **27 / 统一 Agent 运行时、可观测性体系与全量交付** | 构建 Agent 全局 Token 预算与滑动窗口压缩引擎（`TokenBudgetManager`）、跨模型容错与对抗防御自愈网关（`AgentFaultTolerance`）、四大维度工具链统一调度管道终极集成；实现多步执行折叠时间线组件（`AgentExecutionTimelineWidget`）、响应式 Token 预算指示徽章（`TokenBudgetBadge`）与熔断预警卡片（`CircuitBreakerAlertWidget`）；完成全套自动化测试套件构建与逆向对抗加固（774 测试全部通过）（2026-09-02） | ✅ 完成 |
 
-**当前测试状态：774 / 774 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.16.0+17。**
+**当前测试状态：811 / 811 测试用例全部通过，`flutter analyze` 0 issues，版本号：v1.33.0+34。**
 
 ---
 
@@ -273,7 +273,7 @@ test/
 # 静态分析（必须 0 issues）
 D:\work\flutter-sdk\flutter\bin\flutter.bat analyze
 
-# 运行全部测试（必须 774/774 通过）
+# 运行全部测试（必须 811/811 通过）
 D:\work\flutter-sdk\flutter\bin\flutter.bat test --no-pub
 
 # 编译 Debug APK

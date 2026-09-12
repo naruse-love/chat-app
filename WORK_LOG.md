@@ -1,3 +1,28 @@
+## 2026-09-12 Docs: Comprehensive README.md Overhaul to Latest v1.33.0 Architecture & Feature Baseline (v1.33.0+34)
+
+### 变更文件
+- `README.md`:
+  - 徽章与状态全面刷新：版本号更新至 `v1.33.0`，全量自动化测试基线更新至 `811/811 Passed (100%)`，静态分析保持 `0 Issues`；
+  - 核心特性全景扩展至 9 大核心维度：
+    - 新增「7. 日语生词本学习体系与智能翻译」：涵盖 Weblio 权威词典解析、语法活用与重定向递归“查到底”（Trace-to-Root Recursion）、防叠字例句还原、LLM 智能翻译与元语言套话清洗、全量 AI 兜底自愈、纯假名消歧（Disambiguation）与 AI 拼写笔误推测（Typo Inference）、专属独立翻译模型配置（`VocabularyConfigProvider`）及 SQLite v5 持久化；
+    - 新增「8. 系统通知栏常驻快捷查词与行内搜索」：涵盖 Android 系统通知栏无声常驻卡片一键调起、原生 `RemoteInput` 行内直接查词、`BigTextStyle` 展开式双语释义卡片、Android 14 合规原生前台服务（`PersistentNotificationForegroundService` + `dataSync`）、后台 `FlutterEngine` 插件注册与冷启动缓冲队列机制；
+    - 新增「9. 本地安全沙箱管理与工作区系统」：涵盖应用内沙箱文件管理界面（配额进度条、文件树、图片/文本预览、导出与清空）、Android 符号链接别名自愈（兼容 `/data/user/0` 与 `/data/data`）、工作区路径自定义与 WSL/Windows 盘符越权防御、多语言 Isolate 代码解释器增强（`main()` 执行、`Math`/`console` 对象、`len`/`range`、自定义递归函数）；
+    - 升级「6. 深度思考链、LaTeX 数学公式与 HITL 确认」：扩充基于 `flutter_math_fork` 的 LaTeX 数学公式排版渲染、CJK 汉字紧邻公式边界解析、美元货币防误触、TeX 徽标与源码复制、思考过程 Markdown 富文本渲染与独立一键复制、6 档全英文思考等级；
+    - 升级「1. 开放模型与多服务商接入」与「2. MCP 客户端与网桥」：补充模型持久化缓存与上次选择记忆、Streamable HTTP `/mcp` 极速直连通道、W3C 多行 SSE 报文解析及启动时后台自动连接；
+    - 更新「3. 智能体工具库」：精炼核心内置 14 个工具，移动原生特权工具默认按需收敛，接入 `RealLocationService` 真实定位，补充参数别名自愈机制；
+  - 架构拓扑图（Mermaid）升级：纳入 `VocabularyService`、`WeblioService`、`PersistentNotificationService`、`RealLocationService`、`VocabularyDao` (SQLite v5) 等全新服务层与数据层组件；
+  - 目录树地图升级：完整补充全部新增 Screen、Widget、Provider、Service、DAO、Model 与 Android Kotlin 原生文件；
+  - 测试矩阵升级：对齐 811 个自动化测试用例，覆盖生词本、通知栏、沙箱、代码解释器、LaTeX 公式等全部新增套件。
+- `pubspec.yaml`, `.agents/AGENTS.md`, `.agents/context.md`:
+  - 同步递增项目版本号至 `1.33.0+34`，同步测试基线至 811 个测试用例。
+
+### 核心技术指标与决策
+- **全量测试基线**：811 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.33.0+34`
+
+---
+
 ## 2026-09-12 Fix: Robust Vocabulary Model Selection, Provider-Specific Fallbacks, Deduplication & Layout Overflow Protection (v1.32.0+33)
 
 ### 变更文件
