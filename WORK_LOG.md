@@ -1,3 +1,24 @@
+## 2026-09-14 Fix: AnkiDroid Field Alias Completeness, Punctuation Normalization & Bridge Null-Safety (v1.39.0+40)
+
+### 变更文件
+- `lib/services/anki_export_service.dart`:
+  - **空安全防御**：修复 `NativeAnkidroidBridge` 中 `getDeckList`、`getModelList` 与 `getFieldList` 对底层结果 `result.asValue?.value` 为 null 时的潜在 `NoSuchMethodError` 崩溃隐患，增加空值默认回退；
+  - **标点符号标准化**：将字段名规范化正则升级为全标点/空白过滤（`[^a-z0-9\u4e00-\u9fa5\u3040-\u30ff\u3400-\u4dbf]`），彻底解决 `Meaning (SC)`、`Vocab (Kanji)`、`Def: Chinese`、`Card #1 Front` 等带括号、冒号、空格、井号的字段无法匹配别名的问题；
+  - **例句释义别名补全**：修复 `_sentDefSc1Aliases` 中缺失 `sentdefsc`、`sentdef`、`senttrans`、`sentmeaning`、`sentencetranslation`、`sentencemeaning` 等无序号形式导致的字段错位回退（曾错误回退为 `VocabPoS` 词性或 `VocabDefJa` 日日释义）；
+  - **Yomitan 与日文原生长尾别名全覆盖**：扩充 `Term`、`Reading`、`Glossary`、`単語`、`表記`、`見出し語`、`読み`、`よみ`、`ふりがな`、`平仮名`、`振仮名`、`意味`、`品詞`、`国語`、`例文` 等主流牌组字段；
+  - **来源链接字段支持**：新增 `_sourceUrlAliases`（`url`、`link`、`sourceurl`、`来源链接`），方便用户定制包含词条原网页链接的卡片；
+- `test/services/anki_export_service_test.dart`:
+  - 扩充测试用例覆盖标点与括号字段、Yomitan 标准字段、日文原生别名、`SentDefSC` 无序号映射、URL 映射及超出 13 字段安全回退，总测试用例数达 860+；
+- `pubspec.yaml`, `.agents/AGENTS.md`, `.agents/context.md`:
+  - 同步递增版本号至 `1.39.0+40`，更新测试基线与上下文。
+
+### 核心技术指标与决策
+- **全量测试基线**：860 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.39.0+40`
+
+---
+
 ## 2026-09-14 Fix: AnkiDroid Dynamic Field Mapping Adaptation & Model Field Count Mismatch Resolution (v1.38.0+39)
 
 ### 变更文件

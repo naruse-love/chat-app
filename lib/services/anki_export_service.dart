@@ -72,7 +72,8 @@ class NativeAnkidroidBridge implements AnkidroidBridge {
     if (result.isError) {
       throw Exception(result.asError!.error.toString());
     }
-    final map = result.asValue!.value;
+    final map = result.asValue?.value;
+    if (map == null) return {};
     final res = <int, String>{};
     map.forEach((k, v) {
       final id = k is int ? k : int.tryParse(k.toString());
@@ -100,7 +101,8 @@ class NativeAnkidroidBridge implements AnkidroidBridge {
     if (result.isError) {
       throw Exception(result.asError!.error.toString());
     }
-    final map = result.asValue!.value;
+    final map = result.asValue?.value;
+    if (map == null) return {};
     final res = <int, String>{};
     map.forEach((k, v) {
       final id = k is int ? k : int.tryParse(k.toString());
@@ -118,7 +120,8 @@ class NativeAnkidroidBridge implements AnkidroidBridge {
     if (result.isError) {
       throw Exception(result.asError!.error.toString());
     }
-    final list = result.asValue!.value;
+    final list = result.asValue?.value;
+    if (list == null) return [];
     return list.map((e) => e.toString()).toList();
   }
 
@@ -336,129 +339,257 @@ ruby rt { font-size: 0.55em; color: #64748b; }
 
   static const Set<String> _vocabKanjiAliases = {
     'vocabkanji',
+    'vocabularykanji',
     'kanji',
     'word',
     'front',
+    'front1',
+    'frontside',
+    'cardfront',
+    'cardfront1',
+    'card1front',
     'expression',
     'headword',
+    'term',
     'vocab',
+    'vocabulary',
     'question',
     'q',
+    'japanese',
+    'targetword',
+    'target',
     '单词',
     '词',
     '表记',
     '词汇',
     '正面',
     '问题',
+    '単語',
+    '表記',
+    '見出し語',
+    '見出し',
+    '語',
   };
 
   static const Set<String> _vocabFuriganaAliases = {
     'vocabfurigana',
+    'vocabularyfurigana',
     'furigana',
     'reading',
     'kana',
+    'hiragana',
     'pronunciation',
+    'yomi',
+    'vocabreading',
+    'vocabularyreading',
     '读音',
     '假名',
     '读法',
     '发音',
+    '平假名',
+    '平仮名',
+    'ひらがな',
+    'ふりがな',
+    '読み',
+    'よみ',
+    '振仮名',
+    '振り仮名',
   };
 
   static const Set<String> _vocabPoSAliases = {
     'vocabpos',
+    'vocabularypos',
     'pos',
     'partofspeech',
     '词性',
+    '品詞',
   };
 
   static const Set<String> _vocabDefScAliases = {
     'vocabdefsc',
+    'vocabularydefsc',
     'defsc',
     'meaning',
+    'meaningsc',
+    'scmeaning',
+    'definitionsc',
+    'scdef',
+    'defchinese',
+    'meaningchinese',
+    'translationchinese',
+    'glossary',
     'back',
+    'back1',
+    'backside',
+    'cardback',
+    'cardback1',
+    'card1back',
     'definition',
     'def',
     'translation',
     'answer',
     'a',
+    'meaningcn',
+    'defcn',
+    'translationcn',
     '释义',
     '中文释义',
     '中文',
     '背面',
     '答案',
+    '意味',
+    '和訳',
+    '中訳',
+    '翻訳',
   };
 
   static const Set<String> _vocabDefJaAliases = {
     'vocabdefja',
+    'vocabularydefja',
     'defja',
     'definitionja',
     'meaningja',
+    'jameaning',
+    'jadef',
+    'defjapanese',
+    'meaningjapanese',
+    'translationjapanese',
     '日日释义',
     '日文释义',
     '日语释义',
+    '日日',
+    '国語',
+    '国語释义',
   };
 
   static const Set<String> _sentKanji1Aliases = {
     'sentkanji1',
     'sentkanji',
+    'sent1kanji',
+    'sentence1kanji',
     'sentence1',
     'sentence',
     'example1',
     'example',
     'examplesentence1',
     'examplesentence',
+    'sent1',
+    'sent',
     '例句1',
     '例句',
+    '例文1',
+    '例文',
   };
 
   static const Set<String> _sentFurigana1Aliases = {
     'sentfurigana1',
     'sentfurigana',
+    'sent1furigana',
+    'sentence1furigana',
     'sentreading1',
+    'sentreading',
+    'sent1reading',
     'sentencefurigana1',
+    'sentencefurigana',
+    'sentencereading1',
+    'sentencereading',
+    'sentence1reading',
+    'examplereading1',
+    'examplereading',
     '例句假名1',
     '例句假名',
     '例句读音1',
+    '例句读音',
+    '例文假名1',
+    '例文假名',
+    '例文読み1',
+    '例文読み',
   };
 
   static const Set<String> _sentDefSc1Aliases = {
     'sentdefsc1',
+    'sentdefsc',
+    'sent1defsc',
+    'sentence1defsc',
     'sentdef1',
+    'sentdef',
+    'sent1def',
     'senttrans1',
+    'senttrans',
+    'sent1trans',
+    'sentence1trans',
     'sentmeaning1',
+    'sentmeaning',
+    'sent1meaning',
+    'sentence1meaning',
     'examplesentencedef1',
+    'examplesentencedef',
     'sentencetranslation1',
+    'sentencetranslation',
+    'sentence1translation',
+    'sentencemeaning',
+    'sentencemeaning1',
+    'examplemeaning1',
+    'examplemeaning',
+    'exampletrans1',
+    'exampletrans',
     '例句翻译1',
     '例句释义1',
     '例句翻译',
     '例句释义',
+    '例文訳1',
+    '例文訳',
   };
 
   static const Set<String> _sentKanji2Aliases = {
     'sentkanji2',
+    'sent2kanji',
+    'sentence2kanji',
     'sentence2',
     'example2',
     'examplesentence2',
+    'sent2',
     '例句2',
+    '例文2',
   };
 
   static const Set<String> _sentFurigana2Aliases = {
     'sentfurigana2',
+    'sent2furigana',
+    'sentence2furigana',
     'sentreading2',
+    'sent2reading',
     'sentencefurigana2',
+    'sentencereading2',
+    'sentence2reading',
+    'examplereading2',
     '例句假名2',
     '例句读音2',
+    '例文假名2',
+    '例文読み2',
   };
 
   static const Set<String> _sentDefSc2Aliases = {
     'sentdefsc2',
+    'sent2defsc',
+    'sentence2defsc',
     'sentdef2',
+    'sent2def',
     'senttrans2',
+    'sent2trans',
+    'sentence2trans',
     'sentmeaning2',
+    'sent2meaning',
+    'sentence2meaning',
     'examplesentencedef2',
     'sentencetranslation2',
+    'sentence2translation',
+    'sentencemeaning2',
+    'examplemeaning2',
+    'exampletrans2',
     '例句翻译2',
     '例句释义2',
+    '例文訳2',
   };
 
   static const Set<String> _sourceDictAliases = {
@@ -469,6 +600,8 @@ ruby rt { font-size: 0.55em; color: #64748b; }
     '来源',
     '词典',
     '词典来源',
+    '辞書',
+    '出典',
   };
 
   static const Set<String> _noteIdAliases = {
@@ -485,6 +618,15 @@ ruby rt { font-size: 0.55em; color: #64748b; }
     'level',
     '标签',
     '分类',
+    'タグ',
+  };
+
+  static const Set<String> _sourceUrlAliases = {
+    'sourceurl',
+    'url',
+    'link',
+    '来源链接',
+    '链接',
   };
 
   /// 根据字段名和索引，将 VocabularyEntry 属性映射为对应字段值
@@ -493,8 +635,10 @@ ruby rt { font-size: 0.55em; color: #64748b; }
     VocabularyEntry entry, [
     int? fallbackIndex,
   ]) {
-    final norm =
-        fieldName.trim().toLowerCase().replaceAll(RegExp(r'[-_\s]'), '');
+    final norm = fieldName
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\u4e00-\u9fa5\u3040-\u30ff\u3400-\u4dbf]'), '');
 
     if (_vocabKanjiAliases.contains(norm)) {
       return entry.vocabKanji.trim();
@@ -534,6 +678,9 @@ ruby rt { font-size: 0.55em; color: #64748b; }
     }
     if (_noteIdAliases.contains(norm)) {
       return entry.id?.toString() ?? '';
+    }
+    if (_sourceUrlAliases.contains(norm)) {
+      return entry.sourceUrl;
     }
     if (_tagsAliases.contains(norm)) {
       return entry.sourceDict.isNotEmpty ? entry.sourceDict : 'AI生词本';

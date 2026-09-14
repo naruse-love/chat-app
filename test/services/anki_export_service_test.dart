@@ -419,5 +419,160 @@ void main() {
       expect(result.isSuccess, isTrue);
       expect(result.failedEntries.isEmpty, isTrue);
     });
+
+    test('entryToModelFields correctly handles SentDefSC without trailing 1 and sentence aliases', () {
+      final fields = AnkiExportService.entryToModelFields(
+        sampleEntry,
+        ['SentKanji', 'SentFurigana', 'SentDefSC'],
+      );
+      expect(fields.length, 3);
+      expect(fields[0], '青空が広がる');
+      expect(fields[1], '青空[あおぞら]が 広[ひろ]がる');
+      expect(fields[2], '晴空万里'); // Must be SentDefSC1, NOT VocabPoS
+
+      final fields2 = AnkiExportService.entryToModelFields(
+        sampleEntry,
+        ['Sentence', 'SentenceReading', 'SentenceTranslation', 'SentenceMeaning'],
+      );
+      expect(fields2.length, 4);
+      expect(fields2[0], '青空が広がる');
+      expect(fields2[1], '青空[あおぞら]が 広[ひろ]がる');
+      expect(fields2[2], '晴空万里');
+      expect(fields2[3], '晴空万里');
+    });
+
+    test('entryToModelFields handles fields with punctuation, brackets, parentheses and colons', () {
+      final fields = AnkiExportService.entryToModelFields(
+        sampleEntry,
+        [
+          'Vocab (Kanji)',
+          'Meaning (SC)',
+          'Sent [Kanji 1]',
+          'Def: Chinese',
+          'Card #1 Front',
+          'Card #1 Back',
+        ],
+      );
+      expect(fields.length, 6);
+      expect(fields[0], '青空');
+      expect(fields[1], '蔚蓝的天空；晴空。');
+      expect(fields[2], '青空が広がる');
+      expect(fields[3], '蔚蓝的天空；晴空。');
+      expect(fields[4], '青空');
+      expect(fields[5], '蔚蓝的天空；晴空。');
+    });
+
+    test('entryToModelFields handles Yomitan standard fields and Japanese native aliases', () {
+      final yomitanFields = [
+        'Term',
+        'Reading',
+        'Glossary',
+        'Sentence',
+        'SentenceReading',
+        'SentenceMeaning',
+      ];
+      final yomitanValues = AnkiExportService.entryToModelFields(
+        sampleEntry,
+        yomitanFields,
+      );
+      expect(yomitanValues.length, 6);
+      expect(yomitanValues[0], '青空');
+      expect(yomitanValues[1], 'あおぞら');
+      expect(yomitanValues[2], '蔚蓝的天空；晴空。');
+      expect(yomitanValues[3], '青空が広がる');
+      expect(yomitanValues[4], '青空[あおぞら]が 広[ひろ]がる');
+      expect(yomitanValues[5], '晴空万里');
+
+      final jaFields = [
+        '単語',
+        '表記',
+        '読み',
+        '意味',
+        '品詞',
+        '国語',
+        '例文',
+        '出典',
+      ];
+      final jaValues = AnkiExportService.entryToModelFields(
+        sampleEntry,
+        jaFields,
+      );
+      expect(jaValues.length, 8);
+      expect(jaValues[0], '青空');
+      expect(jaValues[1], '青空');
+      expect(jaValues[2], 'あおぞら');
+      expect(jaValues[3], '蔚蓝的天空；晴空。');
+      expect(jaValues[4], '名');
+      expect(jaValues[5], '晴れ渡った青い空。');
+      expect(jaValues[6], '青空が広がる');
+      expect(jaValues[7], 'デジタル大辞泉');
+    });
+
+    test('entryToModelFields handles sourceUrl aliases', () {
+      final fields = AnkiExportService.entryToModelFields(
+        sampleEntry,
+        ['Word', 'Meaning', 'URL', '来源链接'],
+      );
+      expect(fields.length, 4);
+      expect(fields[0], '青空');
+      expect(fields[1], '蔚蓝的天空；晴空。');
+      expect(fields[2], 'https://weblio.jp/content/青空');
+      expect(fields[3], 'https://weblio.jp/content/青空');
+    });
+
+    test('exportEntries with 3-field sentence deck (SentKanji, SentFurigana, SentDefSC)', () async {
+      final bridge = MockAnkidroidBridge()
+        ..models[80] = '例句卡片'
+        ..modelFields[80] = ['SentKanji', 'SentFurigana', 'SentDefSC'];
+      final service = AnkiExportService(bridge: bridge);
+
+      final result = await service.exportEntries(
+        [sampleEntry],
+        modelName: '例句卡片',
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.successCount, 1);
+      expect(bridge.lastAddedNote['mid'], 80);
+      expect(bridge.lastAddedNote['fields'].length, 3);
+      expect(bridge.lastAddedNote['fields'][0], '青空が広がる');
+      expect(bridge.lastAddedNote['fields'][1], '青空[あおぞら]が 広[ひろ]がる');
+      expect(bridge.lastAddedNote['fields'][2], '晴空万里');
+    });
+
+    test('entryToModelFields handles empty modelFields list by returning 13 standard fields', () {
+      final fields = AnkiExportService.entryToModelFields(sampleEntry, []);
+      expect(fields.length, 13);
+      expect(fields[0], '青空');
+      expect(fields[12], '7');
+    });
+
+    test('entryToModelFields safely handles unknown fields beyond 13 items without throwing OutOfBounds', () {
+      final extraFields = List<String>.generate(20, (i) => 'UNKNOWN_EXTRA_$i');
+      final fields = AnkiExportService.entryToModelFields(sampleEntry, extraFields);
+      expect(fields.length, 20);
+      expect(fields[0], '青空'); // Index 0 fallback to ankiFields[0]
+      expect(fields[12], '7'); // Index 12 fallback to ankiFields[12]
+      expect(fields[13], ''); // Index 13 out of ankiFields bounds -> safely returns ''
+      expect(fields[19], ''); // Index 19 safely returns ''
+    });
+
+    test('entryToModelFields handles single-field model correctly', () {
+      final fields = AnkiExportService.entryToModelFields(sampleEntry, ['Front']);
+      expect(fields.length, 1);
+      expect(fields[0], '青空');
+    });
+
+    test('entryToModelFields handles kana aliases including hiragana, yomi and furigana', () {
+      final fields = AnkiExportService.entryToModelFields(
+        sampleEntry,
+        ['hiragana', 'ふりがな', 'よみ', '振り仮名'],
+      );
+      expect(fields.length, 4);
+      expect(fields[0], 'あおぞら');
+      expect(fields[1], 'あおぞら');
+      expect(fields[2], 'あおぞら');
+      expect(fields[3], 'あおぞら');
+    });
   });
 }
