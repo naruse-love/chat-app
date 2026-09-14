@@ -11,7 +11,7 @@
 - **Flutter SDK**：`D:\work\flutter-sdk\flutter\bin\flutter.bat`
 - **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支）
 - **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过，`flutter analyze` 必须 0 issues
-- **当前版本**：`1.42.0+43`
+- **当前版本**：`1.43.0+44`
 
 ---
 
@@ -19,6 +19,7 @@
 
 | Milestone | 描述 | 状态 |
 |-----------|------|------|
+| **Milestone 29** | **GitHub Actions CI/CD 自动化构建发布与应用内版本更新检测体系**：配置 CI 持续集成（静态分析、自动化测试、Debug APK 编译）与 Release 自动发布工作流（推送 `v*` Tag 触发正式签名打包、生成 Release 资产与更新日志）；实现 Android Release 签名配置与 debug 回退容灾；实现 `UpdateService`、`UpdateNotifier` 与 `UpdateDialog`，支持启动静默检测与设置页手动检测，集成 Markdown 更新日志、包体大小展示、下载进度条与系统安装器调用；新增测试用例，全量 898 用例 100% 通过，0 静态分析问题。 | ✅ 完成 |
 | **Milestone 28** | **日语生词本多标签精准对齐、音调提取、外来语原词与 Anki 模板零错位架构**：增加 `vocabPitch` 字段与 SQLite v7 迁移；WeblioService 支持音调提取为标准圆圈数字（⓪-⑩）、清洗假名形态素连字符；支持外来语片假名提取英文原词（如 thrill 代替 すりる）；规范动词学习者词性（他動1/自動5）；SentFurigana 关键词加粗渲染 `<b>...</b>`；彻底废除 AnkiExportService 盲目位置回退，未知字段安全返回空串避免例句串位；修复 AnkiConfigProvider 异步加载竞态，新增 `ensureLoaded()` 保证重进应用持久化配置不被默认值覆盖 | ✅ 完成 |
 | 1-27 | 核心体系（从基础模型、数据库、SSE、搜索、图片、UI、全套原生特权、MCP 客户端与动态网桥、Token 预算压缩、自愈容错网关）全部实现并交付 | ✅ 完成 |
 | **原生工具收敛、数学公式/思考Markdown、模型持久化与MCP超时自愈** | 移除原生7工具收敛核心为14工具；思考过程支持Markdown渲染；引入flutter_math_fork支持LaTeX数学公式解析；模型持久化缓存与上次选择记忆；修复MCP POST SSE即时响应解析与超时自愈、开机自动连接MCP；思考等级拓展为6档英文 | ✅ 完成 |

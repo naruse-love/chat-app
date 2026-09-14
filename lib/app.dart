@@ -13,6 +13,8 @@ import 'screens/sandbox_management_screen.dart';
 import 'screens/model_selector_screen.dart';
 import 'screens/vocabulary_screen.dart';
 import 'providers/persistent_notification_provider.dart';
+import 'providers/update_provider.dart';
+import 'widgets/update_dialog.dart';
 
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -80,11 +82,35 @@ class App extends ConsumerStatefulWidget {
 
 class _AppState extends ConsumerState<App> {
   StreamSubscription<String>? _notificationSub;
+  Timer? _updateCheckTimer;
 
   @override
   void initState() {
     super.initState();
     _setupNotificationListener();
+    _initAutoUpdateCheck();
+  }
+
+  void _initAutoUpdateCheck() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _updateCheckTimer = Timer(const Duration(seconds: 2), () async {
+        if (!mounted) return;
+        final updateState = ref.read(updateProvider);
+        if (updateState.autoCheckEnabled) {
+          final updateInfo = await ref
+              .read(updateProvider.notifier)
+              .checkForUpdate(silent: true);
+          if (!mounted) return;
+          if (updateInfo != null && updateInfo.hasUpdate) {
+            final navContext = appNavigatorKey.currentContext;
+            if (navContext != null && navContext.mounted) {
+              UpdateDialog.show(navContext, updateInfo: updateInfo);
+            }
+          }
+        }
+      });
+    });
   }
 
   void _setupNotificationListener() {
@@ -132,6 +158,7 @@ class _AppState extends ConsumerState<App> {
 
   @override
   void dispose() {
+    _updateCheckTimer?.cancel();
     _notificationSub?.cancel();
     super.dispose();
   }

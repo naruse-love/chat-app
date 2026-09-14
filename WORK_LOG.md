@@ -1,3 +1,36 @@
+## 2026-09-14 Feat: GitHub Actions CI/CD Pipeline & In-App Version Update Detection (v1.43.0+44)
+
+### 变更文件
+- `.github/workflows/ci.yml`:
+  - 新建 CI 流水线：在 push / PR 到 `main` 分支时自动执行 Java 17、Flutter 环境准备、依赖安装、代码格式检查、`flutter analyze` 静态分析门禁、`flutter test` 自动化测试门禁及 Debug APK 构建验证。
+- `.github/workflows/release.yml`:
+  - 新建 Release 自动发布工作流：推送 `v*` 格式 Tag 时触发，支持从 GitHub Secrets 自动还原 Base64 keystore 密钥、生成 `key.properties` 签名配置、构建 Release 签名 APK、自动创建 GitHub Release 并附加 APK 文件及自动生成 Changelog。
+- `android/key.properties.example` & `android/app/build.gradle.kts`:
+  - 新建签名配置模板及生成指南；
+  - `build.gradle.kts` 配置 Release 签名：存在 `key.properties` 时采用正式密钥签名，不存在时自动优雅降级为 debug 签名以保证本地日常开发畅通。
+- `.gitignore`:
+  - 放开 `.github/workflows/` 允许 CI 配置入库；严格忽略 `android/key.properties`、`*.jks`、`*.keystore` 签名凭证。
+- `lib/models/update_model.dart`:
+  - 新增 `UpdateInfo` 数据模型：解析 GitHub Release 最新版本、发布说明、APK 下载链接、文件大小及网页地址；
+  - 实现健壮的语义化版本对比算法 `isVersionNewer`（兼容 `v` 前缀、纯数字版本、`+buildNumber` 构建号对比）。
+- `lib/services/update_service.dart`:
+  - 新增 `UpdateService`：通过 GitHub API 检测最新 Release、支持 404 优雅无更新处理、基于 `Dio` 的带进度 APK 下载、通过 `open_filex` 启动系统安装器，以及外部浏览器打开发布页。
+- `lib/providers/update_provider.dart`:
+  - 新增 `UpdateNotifier` & `UpdateState`：管理更新生命周期（idle / checking / available / notAvailable / downloading / downloaded / error）；
+  - 支持 `SharedPreferences` 持久化启动自动检测开关、支持取消下载。
+- `lib/widgets/update_dialog.dart`:
+  - 新增现代化更新弹窗：支持 Markdown 渲染更新日志、文件大小徽章、下载进度条（百分比 + 已下载MB/总MB）、安装器启动与外部下载入口。
+- `lib/app.dart`:
+  - 在应用初始化时加入 2 秒静默更新自检机制，检测到新版本自动弹出 `UpdateDialog`；使用严格受控可取消的 `Timer` 并在 `dispose()` 中注销，杜绝异步泄漏。
+- `lib/screens/settings_screen.dart`:
+  - 在设置页面新增「关于与版本更新」卡片：展示当前动态版本号、启动时自动检测更新开关、手动「检查新版本」交互入口与 GitHub 仓库快速跳转。
+- `android/app/src/main/AndroidManifest.xml`:
+  - 添加 `android.permission.REQUEST_INSTALL_PACKAGES` 权限，支持 Android 8.0+ 应用内调用系统安装器。
+- `pubspec.yaml`:
+  - 版本号自增至 `1.43.0+44`；引入 `package_info_plus: ^8.0.0` 与 `open_filex: ^4.5.0`。
+- `test/models/update_model_test.dart`, `test/services/update_service_test.dart`, `test/providers/update_provider_test.dart`, `test/widgets/update_dialog_test.dart`:
+  - 覆盖版本比对、JSON 解析、GitHub API 请求、状态流转、取消下载及 UI 弹窗全流程测试用例，全量 898 个测试用例 100% 通过。
+
 ## 2026-09-14 Feat: Learner Verb PoS Alignment, Card EdgeTTS Online Pronunciation & Japanese Definition Toggle (v1.42.0+43)
 
 ### 变更文件

@@ -7,7 +7,9 @@ import '../providers/persistent_notification_provider.dart';
 import '../providers/vocabulary_config_provider.dart';
 import '../providers/anki_config_provider.dart';
 import '../providers/vocabulary_provider.dart';
+import '../providers/update_provider.dart';
 import '../widgets/vocabulary_model_selector_dialog.dart';
+import '../widgets/update_dialog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -26,6 +28,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _obscureBingCookie = true;
 
   bool _hasSynced = false;
+  String _currentVersion = '1.43.0+44';
 
   void _syncFieldsIfNeeded(AppSettings settings) {
     if (settings.isLoaded && !_hasSynced) {
@@ -48,6 +51,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _googleModelController = TextEditingController(text: settings.googleSearchModel);
     _bingCookieController = TextEditingController(text: settings.bingCookie);
     _hasSynced = settings.isLoaded;
+
+    ref.read(updateServiceProvider).getCurrentVersion().then((ver) {
+      if (mounted) {
+        setState(() {
+          _currentVersion = ver;
+        });
+      }
+    });
   }
 
   @override
@@ -699,6 +710,91 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 }
               }
+            },
+          ),
+          const Divider(),
+
+          // 关于与版本更新区块
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Text(
+              '关于与版本更新',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('当前版本'),
+            subtitle: Text(_currentVersion),
+            trailing: Chip(
+              label: Text(_currentVersion.split('+').first, style: const TextStyle(fontSize: 11)),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.autorenew),
+            title: const Text('启动时自动检查更新'),
+            subtitle: const Text('开启后每次打开应用将在后台静默检测新版本'),
+            value: ref.watch(updateProvider).autoCheckEnabled,
+            onChanged: (value) {
+              ref.read(updateProvider.notifier).setAutoCheckEnabled(value);
+            },
+          ),
+          Builder(
+            builder: (ctx) {
+              final updateState = ref.watch(updateProvider);
+              final isChecking = updateState.status == UpdateStatus.checking;
+              return ListTile(
+                leading: const Icon(Icons.system_update_rounded),
+                title: const Text('检查新版本'),
+                subtitle: const Text('连接 GitHub Releases 校验最新版本'),
+                trailing: isChecking
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.chevron_right),
+                onTap: isChecking
+                    ? null
+                    : () async {
+                        final scaffoldMessenger = ScaffoldMessenger.of(ctx);
+                        final info = await ref
+                            .read(updateProvider.notifier)
+                            .checkForUpdate(silent: false);
+                        if (!ctx.mounted) return;
+                        if (info != null && info.hasUpdate) {
+                          UpdateDialog.show(ctx, updateInfo: info);
+                        } else if (info != null && !info.hasUpdate) {
+                          scaffoldMessenger.showSnackBar(
+                            SnackBar(
+                              content: Text('当前已是最新版本 (${info.currentVersion})'),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        } else {
+                          final error = ref.read(updateProvider).errorMessage;
+                          scaffoldMessenger.showSnackBar(
+                            SnackBar(
+                              content: Text(error ?? '检查更新失败，请重试'),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.open_in_browser),
+            title: const Text('访问 GitHub 仓库'),
+            subtitle: const Text('查看源代码、Releases 历史或提交 Issue'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              ref.read(updateProvider.notifier).openReleaseInBrowser();
             },
           ),
         ],

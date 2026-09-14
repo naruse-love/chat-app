@@ -11,10 +11,16 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
-.github/
+.github/agents/
+.github/prompts/
 .agents/*/
 test/**/*challenger*
 test/**/*empirical*
+
+# Android 签名密钥（禁止提交）
+android/key.properties
+*.jks
+*.keystore
 
 # IntelliJ related
 *.iml
