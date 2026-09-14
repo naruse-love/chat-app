@@ -48,6 +48,11 @@ class MockAnkidroidBridge implements AnkidroidBridge {
   Future<Map<int, String>> getModelList() async => Map.from(models);
 
   @override
+  Future<List<String>> getFieldList(int modelId) async {
+    return List.from(modelFields[modelId] ?? AnkiExportService.ankiFields);
+  }
+
+  @override
   Future<int> addNewCustomModel({
     required String name,
     required List<String> fields,
@@ -67,10 +72,9 @@ class MockAnkidroidBridge implements AnkidroidBridge {
 
   @override
   Future<List<dynamic>> findDuplicateNotesWithKey(int mid, String key) async {
-    // 模拟真实 AnkiDroid 底层：严格检查首字段（fieldNames[0]）是否与 key 字段语义对齐
+    // 模拟真实 AnkiDroid 底层：按目标模型首字段比对 key
     final fields = modelFields[mid] ?? AnkiExportService.ankiFields;
-    final firstFieldName = fields.isNotEmpty ? fields.first : '';
-    if (firstFieldName == 'VocabKanji' && duplicateKeys.contains(key)) {
+    if (fields.isNotEmpty && duplicateKeys.contains(key)) {
       return [
         {'id': 999, 'key': key}
       ];
@@ -90,6 +94,13 @@ class MockAnkidroidBridge implements AnkidroidBridge {
     }
     if (throwOnWord != null && fields.contains(throwOnWord)) {
       throw Exception('针对单词「$throwOnWord」的模拟错误');
+    }
+    // 仿真真实 AnkiDroid 底层：严格校验传入字段数与 Model 字段数一致
+    final expectedFields = modelFields[mid] ?? AnkiExportService.ankiFields;
+    if (fields.length != expectedFields.length) {
+      throw ArgumentError(
+        'Incorrect flds argument : expected ${expectedFields.length}, got ${fields.length}',
+      );
     }
     lastAddedNote = {
       'mid': mid,
@@ -129,14 +140,14 @@ void main() {
 
     test('ankiFields has VocabKanji as first field for AnkiDroid duplicate key alignment', () {
       expect(AnkiExportService.ankiFields.first, 'VocabKanji');
-      expect(AnkiExportService.ankiFields.length, 14);
+      expect(AnkiExportService.ankiFields.length, 13);
       expect(AnkiExportService.ankiFields, contains('NoteID'));
-      expect(AnkiExportService.ankiFields, contains('Tags'));
+      expect(AnkiExportService.ankiFields.contains('Tags'), isFalse);
     });
 
-    test('entryToFields maps VocabularyEntry to exact 14 fields correctly with VocabKanji first', () {
+    test('entryToFields maps VocabularyEntry to exact 13 fields correctly with VocabKanji first', () {
       final fields = AnkiExportService.entryToFields(sampleEntry);
-      expect(fields.length, 14);
+      expect(fields.length, 13);
       expect(fields[0], '青空'); // VocabKanji (first field for Anki duplicate key)
       expect(fields[1], 'あおぞら'); // VocabFurigana
       expect(fields[2], '名'); // VocabPoS
@@ -150,7 +161,6 @@ void main() {
       expect(fields[10], '在蓝天下'); // SentDefSC2
       expect(fields[11], 'デジタル大辞泉'); // SourceDict
       expect(fields[12], '7'); // NoteID
-      expect(fields[13], 'デジタル大辞泉'); // Tags
     });
 
     test('entryToFields handles null id and optional fields gracefully', () {
@@ -159,11 +169,10 @@ void main() {
         createdAt: DateTime(2026, 9, 14),
       );
       final fields = AnkiExportService.entryToFields(minimalEntry);
-      expect(fields.length, 14);
+      expect(fields.length, 13);
       expect(fields[0], '猫'); // VocabKanji
       expect(fields[5], ''); // SentKanji1 empty
       expect(fields[12], ''); // NoteID empty
-      expect(fields[13], 'AI生词本'); // Fallback tag
     });
 
     test('exportEntries returns error when platform is not supported', () async {
@@ -288,6 +297,127 @@ void main() {
       expect(res.isSuccess, isFalse);
       expect(res.toString(), contains('success: 3'));
       expect(res.toString(), contains('skipped: 2'));
+    });
+
+    test('entryToModelFields adapts to 13-field standard model', () {
+      final fields = AnkiExportService.entryToModelFields(
+        sampleEntry,
+        AnkiExportService.ankiFields,
+      );
+      expect(fields.length, 13);
+      expect(fields[0], '青空');
+      expect(fields[1], 'あおぞら');
+      expect(fields[2], '名');
+      expect(fields[3], '蔚蓝的天空；晴空。');
+      expect(fields[4], '晴れ渡った青い空。');
+      expect(fields[11], 'デジタル大辞泉');
+      expect(fields[12], '7');
+    });
+
+    test('entryToModelFields adapts to 14-field legacy model containing Tags', () {
+      final legacy14Fields = [...AnkiExportService.ankiFields, 'Tags'];
+      final fields = AnkiExportService.entryToModelFields(
+        sampleEntry,
+        legacy14Fields,
+      );
+      expect(fields.length, 14);
+      expect(fields[0], '青空');
+      expect(fields[12], '7');
+      expect(fields[13], 'デジタル大辞泉');
+    });
+
+    test('entryToModelFields adapts to 2-field Basic model (Front, Back)', () {
+      final fields = AnkiExportService.entryToModelFields(
+        sampleEntry,
+        ['Front', 'Back'],
+      );
+      expect(fields.length, 2);
+      expect(fields[0], '青空');
+      expect(fields[1], '蔚蓝的天空；晴空。');
+    });
+
+    test('entryToModelFields handles case-insensitive aliases and positional fallback', () {
+      final mixedFields = [
+        'kanji',
+        'READING',
+        'pos',
+        'meaning',
+        'example1',
+        'sentencefurigana1',
+        'senttrans1',
+        'UNKNOWN_POS_7',
+        'UNKNOWN_POS_8',
+      ];
+      final fields = AnkiExportService.entryToModelFields(
+        sampleEntry,
+        mixedFields,
+      );
+      expect(fields.length, 9);
+      expect(fields[0], '青空'); // kanji alias
+      expect(fields[1], 'あおぞら'); // READING alias
+      expect(fields[2], '名'); // pos alias
+      expect(fields[3], '蔚蓝的天空；晴空。'); // meaning alias
+      expect(fields[4], '青空が広がる'); // example1 alias
+      expect(fields[5], '青空[あおぞら]が 広[ひろ]がる'); // sentencefurigana1 alias
+      expect(fields[6], '晴空万里'); // senttrans1 alias
+      expect(fields[7], '晴空万里'); // UNKNOWN_POS_7 fallback to ankiFields[7] (SentDefSC1)
+      expect(fields[8], '青空の下で'); // UNKNOWN_POS_8 fallback to ankiFields[8] (SentKanji2)
+    });
+
+    test('exportEntries dynamically queries getFieldList and exports 2-field Basic model without error', () async {
+      final bridge = MockAnkidroidBridge()
+        ..models[50] = '基础问答卡片'
+        ..modelFields[50] = ['Front', 'Back'];
+      final service = AnkiExportService(bridge: bridge);
+
+      final result = await service.exportEntries(
+        [sampleEntry],
+        modelName: '基础问答卡片',
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.successCount, 1);
+      expect(bridge.lastAddedNote['mid'], 50);
+      expect(bridge.lastAddedNote['fields'].length, 2);
+      expect(bridge.lastAddedNote['fields'][0], '青空');
+      expect(bridge.lastAddedNote['fields'][1], '蔚蓝的天空；晴空。');
+    });
+
+    test('exportEntries dynamically queries getFieldList and exports 14-field legacy model containing Tags without error', () async {
+      final bridge = MockAnkidroidBridge()
+        ..models[60] = '历史14字段模型'
+        ..modelFields[60] = [...AnkiExportService.ankiFields, 'Tags'];
+      final service = AnkiExportService(bridge: bridge);
+
+      final result = await service.exportEntries(
+        [sampleEntry],
+        modelName: '历史14字段模型',
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.successCount, 1);
+      expect(bridge.lastAddedNote['mid'], 60);
+      expect(bridge.lastAddedNote['fields'].length, 14);
+      expect(bridge.lastAddedNote['fields'][0], '青空');
+      expect(bridge.lastAddedNote['fields'][13], 'デジタル大辞泉');
+    });
+
+    test('exportEntries duplicate check adapts to first field value of custom model', () async {
+      final bridge = MockAnkidroidBridge()
+        ..models[70] = '自定义FrontBack'
+        ..modelFields[70] = ['Front', 'Back']
+        ..duplicateKeys = ['青空'];
+      final service = AnkiExportService(bridge: bridge);
+
+      final result = await service.exportEntries(
+        [sampleEntry],
+        modelName: '自定义FrontBack',
+      );
+
+      expect(result.successCount, 0);
+      expect(result.skipCount, 1);
+      expect(result.isSuccess, isTrue);
+      expect(result.failedEntries.isEmpty, isTrue);
     });
   });
 }

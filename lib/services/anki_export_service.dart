@@ -13,6 +13,7 @@ abstract class AnkidroidBridge {
   Future<Map<int, String>> getDeckList();
   Future<int> addNewDeck(String name);
   Future<Map<int, String>> getModelList();
+  Future<List<String>> getFieldList(int modelId);
   Future<int> addNewCustomModel({
     required String name,
     required List<String> fields,
@@ -111,6 +112,17 @@ class NativeAnkidroidBridge implements AnkidroidBridge {
   }
 
   @override
+  Future<List<String>> getFieldList(int modelId) async {
+    await init();
+    final result = await _isolate!.getFieldList(modelId);
+    if (result.isError) {
+      throw Exception(result.asError!.error.toString());
+    }
+    final list = result.asValue!.value;
+    return list.map((e) => e.toString()).toList();
+  }
+
+  @override
   Future<int> addNewCustomModel({
     required String name,
     required List<String> fields,
@@ -177,7 +189,7 @@ class AnkiExportService implements AnkiExportServiceInterface {
   static const String defaultDeckName = '日语生词本';
   static const String defaultModelName = '日语生词本-AI';
 
-  /// 14 个标准 Anki 卡片字段（首字段为唯一主键 VocabKanji，确保 AnkiDroid 重复检测与卡片标题精准匹配）
+  /// 13 个标准 Anki 卡片字段（首字段为唯一主键 VocabKanji，确保 AnkiDroid 重复检测与卡片标题精准匹配）
   static const List<String> ankiFields = [
     'VocabKanji',
     'VocabFurigana',
@@ -192,7 +204,6 @@ class AnkiExportService implements AnkiExportServiceInterface {
     'SentDefSC2',
     'SourceDict',
     'NoteID',
-    'Tags',
   ];
 
   static const String defaultQfmt = '''
@@ -323,7 +334,222 @@ ruby rt { font-size: 0.55em; color: #64748b; }
     }
   }
 
-  /// 将单词实体转换为 14 个字段列表
+  static const Set<String> _vocabKanjiAliases = {
+    'vocabkanji',
+    'kanji',
+    'word',
+    'front',
+    'expression',
+    'headword',
+    'vocab',
+    'question',
+    'q',
+    '单词',
+    '词',
+    '表记',
+    '词汇',
+    '正面',
+    '问题',
+  };
+
+  static const Set<String> _vocabFuriganaAliases = {
+    'vocabfurigana',
+    'furigana',
+    'reading',
+    'kana',
+    'pronunciation',
+    '读音',
+    '假名',
+    '读法',
+    '发音',
+  };
+
+  static const Set<String> _vocabPoSAliases = {
+    'vocabpos',
+    'pos',
+    'partofspeech',
+    '词性',
+  };
+
+  static const Set<String> _vocabDefScAliases = {
+    'vocabdefsc',
+    'defsc',
+    'meaning',
+    'back',
+    'definition',
+    'def',
+    'translation',
+    'answer',
+    'a',
+    '释义',
+    '中文释义',
+    '中文',
+    '背面',
+    '答案',
+  };
+
+  static const Set<String> _vocabDefJaAliases = {
+    'vocabdefja',
+    'defja',
+    'definitionja',
+    'meaningja',
+    '日日释义',
+    '日文释义',
+    '日语释义',
+  };
+
+  static const Set<String> _sentKanji1Aliases = {
+    'sentkanji1',
+    'sentkanji',
+    'sentence1',
+    'sentence',
+    'example1',
+    'example',
+    'examplesentence1',
+    'examplesentence',
+    '例句1',
+    '例句',
+  };
+
+  static const Set<String> _sentFurigana1Aliases = {
+    'sentfurigana1',
+    'sentfurigana',
+    'sentreading1',
+    'sentencefurigana1',
+    '例句假名1',
+    '例句假名',
+    '例句读音1',
+  };
+
+  static const Set<String> _sentDefSc1Aliases = {
+    'sentdefsc1',
+    'sentdef1',
+    'senttrans1',
+    'sentmeaning1',
+    'examplesentencedef1',
+    'sentencetranslation1',
+    '例句翻译1',
+    '例句释义1',
+    '例句翻译',
+    '例句释义',
+  };
+
+  static const Set<String> _sentKanji2Aliases = {
+    'sentkanji2',
+    'sentence2',
+    'example2',
+    'examplesentence2',
+    '例句2',
+  };
+
+  static const Set<String> _sentFurigana2Aliases = {
+    'sentfurigana2',
+    'sentreading2',
+    'sentencefurigana2',
+    '例句假名2',
+    '例句读音2',
+  };
+
+  static const Set<String> _sentDefSc2Aliases = {
+    'sentdefsc2',
+    'sentdef2',
+    'senttrans2',
+    'sentmeaning2',
+    'examplesentencedef2',
+    'sentencetranslation2',
+    '例句翻译2',
+    '例句释义2',
+  };
+
+  static const Set<String> _sourceDictAliases = {
+    'sourcedict',
+    'source',
+    'dict',
+    'dictionary',
+    '来源',
+    '词典',
+    '词典来源',
+  };
+
+  static const Set<String> _noteIdAliases = {
+    'noteid',
+    'id',
+    'uid',
+    '编号',
+    '卡片编号',
+  };
+
+  static const Set<String> _tagsAliases = {
+    'tags',
+    'tag',
+    'level',
+    '标签',
+    '分类',
+  };
+
+  /// 根据字段名和索引，将 VocabularyEntry 属性映射为对应字段值
+  static String mapFieldValue(
+    String fieldName,
+    VocabularyEntry entry, [
+    int? fallbackIndex,
+  ]) {
+    final norm =
+        fieldName.trim().toLowerCase().replaceAll(RegExp(r'[-_\s]'), '');
+
+    if (_vocabKanjiAliases.contains(norm)) {
+      return entry.vocabKanji.trim();
+    }
+    if (_vocabFuriganaAliases.contains(norm)) {
+      return entry.vocabFurigana;
+    }
+    if (_vocabPoSAliases.contains(norm)) {
+      return entry.vocabPoS;
+    }
+    if (_vocabDefScAliases.contains(norm)) {
+      return entry.vocabDefSc;
+    }
+    if (_vocabDefJaAliases.contains(norm)) {
+      return entry.vocabDefJa;
+    }
+    if (_sentKanji1Aliases.contains(norm)) {
+      return entry.sentKanji1 ?? '';
+    }
+    if (_sentFurigana1Aliases.contains(norm)) {
+      return entry.sentFurigana1 ?? '';
+    }
+    if (_sentDefSc1Aliases.contains(norm)) {
+      return entry.sentDefSc1 ?? '';
+    }
+    if (_sentKanji2Aliases.contains(norm)) {
+      return entry.sentKanji2 ?? '';
+    }
+    if (_sentFurigana2Aliases.contains(norm)) {
+      return entry.sentFurigana2 ?? '';
+    }
+    if (_sentDefSc2Aliases.contains(norm)) {
+      return entry.sentDefSc2 ?? '';
+    }
+    if (_sourceDictAliases.contains(norm)) {
+      return entry.sourceDict;
+    }
+    if (_noteIdAliases.contains(norm)) {
+      return entry.id?.toString() ?? '';
+    }
+    if (_tagsAliases.contains(norm)) {
+      return entry.sourceDict.isNotEmpty ? entry.sourceDict : 'AI生词本';
+    }
+
+    // 若名称未匹配且提供了位置索引，在 13 个标准字段范围内按位置回退
+    if (fallbackIndex != null &&
+        fallbackIndex >= 0 &&
+        fallbackIndex < ankiFields.length) {
+      return mapFieldValue(ankiFields[fallbackIndex], entry);
+    }
+
+    return '';
+  }
+
+  /// 将单词实体转换为 13 个标准字段列表
   static List<String> entryToFields(VocabularyEntry entry) {
     return [
       entry.vocabKanji.trim(),
@@ -339,8 +565,21 @@ ruby rt { font-size: 0.55em; color: #64748b; }
       entry.sentDefSc2 ?? '',
       entry.sourceDict,
       entry.id?.toString() ?? '',
-      entry.sourceDict.isNotEmpty ? entry.sourceDict : 'AI生词本',
     ];
+  }
+
+  /// 将单词实体按目标模型实际字段列表动态自适应映射为字段值列表
+  static List<String> entryToModelFields(
+    VocabularyEntry entry,
+    List<String> modelFields,
+  ) {
+    if (modelFields.isEmpty) {
+      return entryToFields(entry);
+    }
+    return List<String>.generate(
+      modelFields.length,
+      (index) => mapFieldValue(modelFields[index], entry, index),
+    );
   }
 
   /// 查找或创建目标牌组，返回 deckId
@@ -409,6 +648,16 @@ ruby rt { font-size: 0.55em; color: #64748b; }
       final deckId = await getOrCreateDeck(targetDeck);
       final modelId = await getOrCreateModel(targetModel);
 
+      List<String> modelFields;
+      try {
+        modelFields = await _bridge.getFieldList(modelId);
+        if (modelFields.isEmpty) {
+          modelFields = ankiFields;
+        }
+      } catch (_) {
+        modelFields = ankiFields;
+      }
+
       int successCount = 0;
       int skipCount = 0;
       final failedEntries = <VocabularyEntry>[];
@@ -426,12 +675,20 @@ ruby rt { font-size: 0.55em; color: #64748b; }
             continue;
           }
 
-          // AnkiDroid 原生去重检测（以首字段 VocabKanji 为主键，查询 AnkiDroid 是否已有同名卡片）
+          // 查重键自适应：优先取目标模型首字段对应的值，回退为 cleanKanji
+          final duplicateKey = (modelFields.isNotEmpty
+                  ? mapFieldValue(modelFields.first, entry, 0)
+                  : cleanKanji)
+              .trim();
+          final keyToCheck =
+              duplicateKey.isNotEmpty ? duplicateKey : cleanKanji;
+
+          // AnkiDroid 原生去重检测（以首字段为键，查询 AnkiDroid 是否已有同名卡片）
           bool isDuplicate = false;
           try {
             final dupes = await _bridge.findDuplicateNotesWithKey(
               modelId,
-              cleanKanji,
+              keyToCheck,
             );
             if (dupes.isNotEmpty) {
               isDuplicate = true;
@@ -446,7 +703,7 @@ ruby rt { font-size: 0.55em; color: #64748b; }
             continue;
           }
 
-          final fields = entryToFields(entry);
+          final fields = entryToModelFields(entry, modelFields);
           final tags = [
             'AI生词本',
             if (entry.sourceDict.isNotEmpty) entry.sourceDict,

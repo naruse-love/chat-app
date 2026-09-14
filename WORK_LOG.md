@@ -1,3 +1,25 @@
+## 2026-09-14 Fix: AnkiDroid Dynamic Field Mapping Adaptation & Model Field Count Mismatch Resolution (v1.38.0+39)
+
+### 变更文件
+- `lib/services/anki_export_service.dart`:
+  - **网桥扩展**：在 `AnkidroidBridge` 与 `NativeAnkidroidBridge` 中新增 `Future<List<String>> getFieldList(int modelId)` 原生 ContentProvider 查询方法；
+  - **规范化卡片字段**：修正 `AnkiExportService.ankiFields` 为 13 个实际卡片字段（移除模板中通过内置 `{{Tags}}` 渲染的 `'Tags'` 伪字段，避免原生模型字段数不一致）；
+  - **智能动态字段映射**：实现 `mapFieldValue` 与 `entryToModelFields(entry, modelFields)`，支持大小写不敏感别名（如 `kanji`/`word`/`front`、`reading`/`kana`、`pos`、`meaning`/`back`/`definition`、`sentence`/`example1`、`id` 等），若目标模型定义了 `Tags` 字段亦能智能填充，未匹配项支持按位置自适应回退，确保生成字段数组长度严格等于 `modelFields.length`；
+  - **查重键自适应**：在 `exportEntries` 中优先以目标模型首字段映射值作为查重键，彻底解决 `findDuplicateNotesWithKey` 键与首列对齐问题；
+  - **彻底修复崩溃**：杜绝向 AnkiDroid `AddContentApi.addNote` 传入字段数量与模型定义不一致导致的 `IllegalArgumentException: Incorrect flds argument` 报错崩溃；
+- `test/services/anki_export_service_test.dart`:
+  - 增强 `MockAnkidroidBridge` 实现 `getFieldList` 并模拟真实 AnkiDroid 严格字段数量校验（不匹配时抛出 `ArgumentError('Incorrect flds argument...')`）；
+  - 补充 13 字段标准模型、14 字段（含 Tags）历史模型、2 字段（Basic Front/Back）通用问答模型自适应与查重键动态适配测试；
+- `pubspec.yaml`, `.agents/AGENTS.md`, `.agents/context.md`:
+  - 递增版本号至 `1.38.0+39`，全量测试基线扩充至 856/856 全部通过。
+
+### 核心技术指标与决策
+- **全量测试基线**：856 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.38.0+39`
+
+---
+
 ## 2026-09-14 Fix: AnkiDroid Duplicate Detection Alignment, Android 11+ Package Visibility & Export UX (v1.37.0+38)
 
 ### 变更文件
