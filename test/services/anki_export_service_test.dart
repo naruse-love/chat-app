@@ -405,7 +405,7 @@ void main() {
       expect(mapped[3], 'いとも'); // VocabFurigana (cleaned)
       expect(mapped[4], '非常，十分，很'); // VocabDefSC
       expect(mapped[5], ''); // VocabDefTC: empty, NOT poisoned with SentKanji1!
-      expect(mapped[6], ''); // VocabPlus: empty, NOT poisoned with SentDefSC1!
+      expect(mapped[6], '非常に。たいそう。まったく。'); // VocabPlus: correctly maps to vocabDefJa (original Japanese definition)!
       expect(mapped[7], ''); // VocabAudio: empty, NOT poisoned with SentKanji2!
       expect(mapped[8], ''); // SentType1: empty, NOT poisoned!
       expect(mapped[9], 'いとも簡単にやってのけた'); // SentKanji1

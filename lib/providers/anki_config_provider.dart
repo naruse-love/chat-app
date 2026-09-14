@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Anki 导出配置状态
 class AnkiConfig {
-  static const String defaultDeckName = '日语生词本';
+  static const String defaultDeckName = 'gal';
   static const String defaultModelName = '日语生词本-AI';
 
   final String deckName;

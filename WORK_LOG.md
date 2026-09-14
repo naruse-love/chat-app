@@ -1,3 +1,33 @@
+## 2026-09-14 Feat: Learner Verb PoS Alignment, Card EdgeTTS Online Pronunciation & Japanese Definition Toggle (v1.42.0+43)
+
+### 变更文件
+- `lib/services/vocabulary_service.dart`:
+  - 彻底纠正动词词性规范映射：五段动词/四段动词映射为 `他動1` / `自動1` / `自他動1`（1类动词）；一段动词（上一段/下一段）映射为 `他動2` / `自動2` / `自他動2`（2类动词）；サ行変格映射为 `他動3` / `自動3` / `自他動3` / `動サ変`（3类动词）；カ行変格映射为 `動カ変`；
+  - 纠正历史遗留及旧数据中的 `他動5` / `自動5` / `自他動5` 自动自愈纠偏为 `他動1` / `自動1` / `自他動1`；
+  - 更新 LLM 翻译与兜底生成提示词中的词性约束与示例，彻底杜绝输出传统国语文法生僻标记与「他動5」错误。
+- `正面.html`:
+  - 在 `setEdgeTTS()` 中扩充支持 `.VocabAudio`，自动提取纯正读音并通过微软 EdgeTTS 在线接口（`ja-JP-NanamiNeural`, `ja-JP-KeitaNeural`）注入音频播放与喇叭图标；
+  - 正面调用 `setEdgeTTS()` 使正面单词支持点击直接发音，免下载任何音频文件，零等待开箱即用。
+- `背面.html`:
+  - 在 `.VocabPoS` 释义区域新增 `.VocabDefWrap` 与 `.DefSwitchBtn` 交互按钮；
+  - 默认展示日文原版释义（适合深度沉浸式日语学习），点击 `[译] / [原]` 按钮可在日文原文与中文翻译之间瞬间动态切换；无日文原版时智能降级显示中文并隐藏切换按钮；
+  - 移除多余的重复 `VocabPlus` 显示块，避免日文释义重复呈现。
+- `lib/services/anki_export_service.dart`:
+  - 默认导出牌组名称更新为用户指定的 `'gal'`；
+  - 默认卡片模板模型更新为独立无冲突的 `'日语生词本-AI'`；
+  - `mapFieldValue` 中支持将日日释义 `entry.vocabDefJa` 正确映射至 `_vocabPlusAliases` 与 `_vocabDefJaAliases`；
+  - 更新 `defaultQfmt`、`defaultAfmt` 与 `defaultCss`，内置中日释义切换按钮与 EdgeTTS 单词发音支持。
+- `lib/providers/anki_config_provider.dart`:
+  - 默认牌组名称更新为 `'gal'`。
+- `pubspec.yaml`, `.agents/AGENTS.md`, `.agents/context.md`:
+  - 版本号递增至 `1.42.0+43`。
+- `test/services/vocabulary_service_test.dart`:
+  - 更新动词词性断言（五段对应 `他動1`，一段对应 `他動2`，サ変对应 `他動3`），全量通过。
+- `test/services/anki_export_service_test.dart`:
+  - 更新 `VocabPlus` 字段映射断言为 `vocabDefJa` 原文，全量 30 个用例全部通过。
+- `test/providers/anki_config_provider_test.dart`:
+  - 更新默认卡组断言为 `'gal'`，全量通过。
+
 ## 2026-09-14 Fix: Compound Word Boundary Highlighting, Multi-Pitch Extraction, Foreign Word Parsing & Anki Export SharedPreferences Fallback (v1.41.0+42)
 
 ### 变更文件

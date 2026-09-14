@@ -15,7 +15,7 @@ void main() {
       // 等待异步 _loadConfig 完成
       await Future.delayed(const Duration(milliseconds: 50));
 
-      expect(notifier.state.deckName, '日语生词本');
+      expect(notifier.state.deckName, 'gal');
       expect(notifier.state.modelName, '日语生词本-AI');
       expect(notifier.state.isLoaded, isTrue);
     });

@@ -191,7 +191,7 @@ class NativeAnkidroidBridge implements AnkidroidBridge {
 
 /// AnkiDroid 导出生词服务核心实现类
 class AnkiExportService implements AnkiExportServiceInterface {
-  static const String defaultDeckName = '日语生词本';
+  static const String defaultDeckName = 'gal';
   static const String defaultModelName = '日语生词本-AI';
 
   /// 13 个标准 Anki 卡片字段（首字段为唯一主键 VocabKanji，确保 AnkiDroid 重复检测与卡片标题精准匹配）
@@ -220,6 +220,7 @@ class AnkiExportService implements AnkiExportServiceInterface {
     <h1 class="VocabKanji">
       <span lang="ja">{{furigana:VocabKanji}}</span>
     </h1>
+    <div class="VocabAudio"></div>
   </header>
   <ul class="SentenceList">
     {{#SentKanji1}}
@@ -251,11 +252,15 @@ class AnkiExportService implements AnkiExportServiceInterface {
       <span lang="ja">{{kana:VocabFurigana}}</span>
     </h2>
     <h3 class="VocabPoS">
-      <span class="VocabDef">{{#VocabPoS}}[{{VocabPoS}}] {{/VocabPoS}}{{VocabDefSC}}</span>
+      <div class="VocabDefWrap">
+        <span class="VocabDef" id="VocabDefDisplay" lang="ja">{{#VocabDefJa}}{{VocabDefJa}}{{/VocabDefJa}}{{^VocabDefJa}}{{#VocabPoS}}[{{VocabPoS}}] {{/VocabPoS}}{{VocabDefSC}}{{/VocabDefJa}}</span>
+        {{#VocabDefJa}}
+        <button type="button" class="DefSwitchBtn" id="DefSwitchBtn" onclick="toggleDefLang()">译</button>
+        {{/VocabDefJa}}
+      </div>
+      <div id="DefStoreSc" style="display:none;">{{#VocabPoS}}[{{VocabPoS}}] {{/VocabPoS}}{{VocabDefSC}}</div>
+      <div id="DefStoreJa" style="display:none;">{{#VocabDefJa}}{{#VocabPoS}}[{{VocabPoS}}] {{/VocabPoS}}{{VocabDefJa}}{{/VocabDefJa}}</div>
     </h3>
-    {{#VocabDefJa}}
-    <p class="VocabDefJa" style="color: #666; font-size: 0.9em; margin: 4px 0;">{{VocabDefJa}}</p>
-    {{/VocabDefJa}}
   </section>
   <ul class="SentenceList">
     {{#SentKanji1}}
@@ -282,6 +287,25 @@ class AnkiExportService implements AnkiExportServiceInterface {
     {{/SentKanji2}}
   </ul>
 </main>
+
+<script>
+  function toggleDefLang() {
+    var display = document.getElementById('VocabDefDisplay');
+    var btn = document.getElementById('DefSwitchBtn');
+    var sc = document.getElementById('DefStoreSc');
+    var ja = document.getElementById('DefStoreJa');
+    if (!display || !btn || !sc || !ja) return;
+    if (display.getAttribute('lang') === 'ja') {
+      display.innerHTML = sc.innerHTML;
+      display.setAttribute('lang', 'zh-Hans');
+      btn.textContent = '原';
+    } else {
+      display.innerHTML = ja.innerHTML;
+      display.setAttribute('lang', 'ja');
+      btn.textContent = '译';
+    }
+  }
+</script>
 ''';
 
   static const String defaultCss = '''
@@ -308,6 +332,19 @@ ruby rt { font-size: 0.55em; color: #64748b; }
 .VocabFurigana { font-size: 1.2em; color: #0284c7; margin: 8px 0; }
 .VocabPoS { font-size: 1em; color: #334155; margin: 6px 0; }
 .VocabDef, .VocabDefJa { white-space: pre-line; }
+.VocabDefWrap { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.DefSwitchBtn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+  color: #0284c7;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.DefSwitchBtn:active { background: #0284c7; color: #ffffff; }
 .SentenceList { list-style: none; padding: 0; margin: 16px 0; text-align: left; }
 .Sentence { margin-bottom: 12px; padding: 8px 12px; background: #f8fafc; border-radius: 8px; }
 .SentKanji, .SentFurigana { font-size: 0.95em; margin: 0 0 4px 0; font-weight: normal; color: #0f172a; }
@@ -792,7 +829,7 @@ ruby rt { font-size: 0.55em; color: #64748b; }
       return '';
     }
     if (_vocabPlusAliases.contains(norm)) {
-      return '';
+      return entry.vocabDefJa;
     }
     if (_vocabAudioAliases.contains(norm)) {
       return '';

@@ -587,7 +587,7 @@ class VocabularyService {
 要求：
 1. furigana：普通词输出纯平假名；片假名外来语单词（如「スリル」）必须输出其英文/原语原词（如「thrill」），严禁转写为平假名（如「すりる」）！
 2. foreignOrigin：若当前单词是外来语/借词，必须提供其英文或原语原词拼写（如 thrill），非外来语则留空字符串。
-3. partOfSpeech：严格输出日本语学习者规范词性（如：他動1、他動5、自動1、自動5、自他動1、自他動5、動サ変、名、副、形、形動、接続、感等），严禁输出“動サ五（四）”、“動バ下一”等日日传统文法标记！
+3. partOfSpeech：严格输出日本语学习者规范词性（五段动词输出 他動1/自動1/自他動1；一段动词输出 他動2/自動2/自他動2；サ変输出 他動3/自動3/自他動3/動サ変；カ変输出 動カ変；名、副、形、形動、接続、感等），严禁输出“他動5”、“自動5”、“動サ五（四）”、“動バ下一”等错误或日日生僻标记！
 4. pitch：日语标准音调圆圈数字（如：⓪、①、②、③等）。
 5. definitionJa：使用严谨地道的日语撰写清晰的释义，多义项请使用数字编号（如：１ ... ２ ...）。
 6. definitionSc：翻译为简体中文释义，保留对应的数字编号（如：1. ... 2. ...）。
@@ -739,7 +739,7 @@ class VocabularyService {
 要求：
 1. definitionJa：使用严谨地道的日语撰写清晰的释义，多义项请使用数字编号（如：１ ... ２ ...）。
 2. definitionSc：翻译为简体中文释义，保留对应的数字编号（如：1. ... 2. ...）。请直接翻译具体的词义含义，严禁仅输出“是…的活用”等元语言说明！
-3. partOfSpeech：严格输出日本语学习者规范词性（如：他動1、他動5、自動1、自動5、自他動1、自他動5、動サ変、名、副、形、形動、接続、感等），严禁输出“動サ五（四）”、“動バ下一”等日日传统文法标记！
+3. partOfSpeech：严格输出日本语学习者规范词性（五段动词输出 他動1/自動1/自他動1；一段动词输出 他動2/自動2/自他動2；サ変输出 他動3/自動3/自他動3/動サ変；カ変输出 動カ変；名、副、形、形動、接続、感等），严禁输出“他動5”、“自動5”、“動サ五（四）”、“動バ下一”等错误或日日生僻标记！
 4. pitch：日语标准音调圆圈数字（如：⓪、①、②、③等）。
 5. furigana：普通词输出纯平假名；片假名外来语单词（如「スリル」）必须输出其英文/原语原词（如「thrill」），严禁转写为平假名（如「すりる」）！
 6. foreignOrigin：若当前单词是外来语/借词，必须提供其英文或原语原词拼写（如 thrill），非外来语留空。
@@ -769,7 +769,7 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
 你是一位专业的日语翻译助手。请将以下日语单词的释义和例句翻译为简体中文，并规范词性与音调。
 要求：
 1. definitionSc：简明扼要翻译为简体中文释义，保留原有的数字编号格式（如 1. 2. 或 １ ２）。直接翻译具体实质的中文词义，严禁输出“是…的活用形”等废话！
-2. partOfSpeech：严格输出日本语学习者规范词性（如：他動1、他動5、自動1、自動5、自他動1、自他動5、動サ変、名、副、形、形動、接続、感等），严禁输出“動サ五（四）”、“動バ下一”等日日传统文法标记！
+2. partOfSpeech：严格输出日本语学习者规范词性（五段动词输出 他動1/自動1/自他動1；一段动词输出 他動2/自動2/自他動2；サ変输出 他動3/自動3/自他動3/動サ変；カ変输出 動カ変；名、副、形、形動、接続、感等），严禁输出“他動5”、“自動5”、“動サ五（四）”、“動バ下一”等错误或日日生僻标记！
 3. pitch：日语标准音调圆圈数字（如：⓪、①、②、③等）。
 4. furigana：普通词输出纯平假名；片假名外来语单词（如「スリル」）必须输出其英文/原语原词（如「thrill」），严禁转写为平假名（如「すりる」）！
 5. foreignOrigin：若当前单词是外来语/借词，必须提供其英文或原语原词拼写（如 thrill），非外来语留空。
@@ -937,15 +937,23 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
         p.contains('四段');
   }
 
-  /// 规范化词性为日本语学习者标准词性（如 他動1、自動5、名、副、形、形動）
+  /// 规范化词性为日本语学习者标准词性（如 他動1、他動2、他動3、自動1、自動2、自動3、名、副、形、形動）
   static String normalizePartOfSpeech(String rawPos) {
     final p = rawPos.trim().replaceAll(RegExp(r'[\s\[\]［］]'), '');
     if (p.isEmpty) return '';
 
-    // 若已经包含标准学习者词性前缀，直接规范返回
-    if (p.startsWith('他動') || p.startsWith('自動') || p.startsWith('自他動')) {
+    // 纠正错误或历史遗留的“他動5 / 自動5”
+    if (p == '他動5' || p == '他動五') return '他動1';
+    if (p == '自動5' || p == '自動五') return '自動1';
+    if (p == '自他動5' || p == '自他動五') return '自他動1';
+
+    // 若已经是标准学习者词性，直接规范返回
+    if (p == '他動1' || p == '自動1' || p == '自他動1' ||
+        p == '他動2' || p == '自動2' || p == '自他動2' ||
+        p == '他動3' || p == '自動3' || p == '自他動3') {
       return p;
     }
+
     if (p.startsWith('名') || p == '名詞') return '名';
     if (p.startsWith('副') || p == '副詞') return '副';
     if (p.startsWith('形動') || p == '形容動詞') return '形動';
@@ -955,24 +963,38 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
     if (p.startsWith('連体') || p == '連体詞') return '連体';
     if (p.startsWith('助') || p == '助詞') return '助';
 
-    // 传统动词语法映射
-    if (p.contains('下一') || p.contains('上一')) {
+    // 1类动词（五段活用、四段活用）：他動1、自動1、自他動1
+    if (p.contains('五') || p.contains('四') || p.contains('1类') || p.contains('１类') || p.contains('I类') || p.contains('Ⅰ类')) {
       if (p.contains('自他')) return '自他動1';
       if (p.contains('自')) return '自動1';
       return '他動1';
     }
-    if (p.contains('五') || p.contains('四')) {
-      if (p.contains('自他')) return '自他動5';
-      if (p.contains('自')) return '自動5';
-      return '他動5';
+
+    // 2类动词（一段活用、上一段、下一段）：他動2、自動2、自他動2
+    if (p.contains('下一') || p.contains('上一') || p.contains('一段') || p.contains('2类') || p.contains('２类') || p.contains('II类') || p.contains('Ⅱ类')) {
+      if (p.contains('自他')) return '自他動2';
+      if (p.contains('自')) return '自動2';
+      return '他動2';
     }
-    if (p.contains('サ変')) {
-      if (p.contains('自')) return '自動サ変';
+
+    // 3类动词（サ行変格活用、サ変）：他動3、自動3、自他動3、動サ変
+    if (p.contains('サ変') || p.contains('サ行') || p.contains('3类') || p.contains('３类') || p.contains('III类') || p.contains('Ⅲ类')) {
+      if (p.contains('自他')) return '自他動3';
+      if (p.contains('自')) return '自動3';
+      if (p.contains('他')) return '他動3';
       return '動サ変';
     }
-    if (p.contains('カ変')) {
-      if (p.contains('自')) return '自動カ変';
+
+    // カ行変格活用
+    if (p.contains('カ変') || p.contains('カ行')) {
+      if (p.contains('自他')) return '自他動3';
+      if (p.contains('自')) return '自動3';
+      if (p.contains('他')) return '他動3';
       return '動カ変';
+    }
+
+    if (p.startsWith('他動') || p.startsWith('自動') || p.startsWith('自他動')) {
+      return p;
     }
 
     return p;

@@ -537,6 +537,34 @@
       const voices = params.voiceName.split(',').map(v => v.trim())
       return voices.length === 1 ? voices[0] : voices[Math.floor(Math.random() * voices.length)]
     }
+
+    // --- 单词在线发音 (VocabAudio) ---
+    document.querySelectorAll('.VocabAudio').forEach(el => {
+      if (enable === 'fallback' && (el.childNodes.length > 0 || el.querySelector('audio, .soundLink, a'))) return
+      const text = cleanWord('{{text:kanji:VocabKanji}}') || '{{text:VocabFurigana}}'.trim()
+      if (!text) return
+      const queryString = new URLSearchParams({ ...params, text, voiceName: getVoice() })
+      const audio = document.createElement('audio')
+      audio.preload = 'none'
+      domain.forEach(url => {
+        const source = document.createElement('source')
+        source.src = `${url}api/aiyue?${queryString}`
+        source.type = 'audio/mpeg'
+        audio.appendChild(source)
+      })
+      el.appendChild(audio)
+      el.insertAdjacentHTML(
+        'beforeend',
+        '<a class="tts replay-button soundLink"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="29"/><path d="M56.502,32.301l-37.502,20.101l0.329,-40.804l37.173,20.703Z"/></svg></a>',
+      )
+      el.querySelector('.tts.replay-button')?.addEventListener('click', e => {
+        e.preventDefault()
+        document.querySelectorAll('audio').forEach(a => a !== audio && !a.paused && a.pause())
+        audio.currentTime = 0
+        audio.play()
+      })
+    })
+
     const getSentKanji = (index) => {
       const SentKanji = [
         '{{text:kanji:SentKanji1}}',
@@ -628,6 +656,7 @@
 
 <script>
   setupCard()
+  setEdgeTTS()
   hideFurigana()
   setAnkiWebAudio()
 </script>
