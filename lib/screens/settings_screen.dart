@@ -5,6 +5,8 @@ import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/persistent_notification_provider.dart';
 import '../providers/vocabulary_config_provider.dart';
+import '../providers/anki_config_provider.dart';
+import '../providers/vocabulary_provider.dart';
 import '../widgets/vocabulary_model_selector_dialog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -569,6 +571,134 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   showVocabularyModelSelectorDialog(context);
                 },
               );
+            },
+          ),
+          Consumer(
+            builder: (context, ref, _) {
+              final ankiConfig = ref.watch(ankiConfigProvider);
+              return ListTile(
+                leading: const Icon(Icons.style_outlined, color: Colors.blue),
+                title: const Text('Anki 牌组名称'),
+                subtitle: Text('当前：${ankiConfig.deckName}'),
+                trailing: const Icon(Icons.edit_outlined),
+                onTap: () async {
+                  final controller =
+                      TextEditingController(text: ankiConfig.deckName);
+                  final newDeck = await showDialog<String>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('设置 Anki 牌组名称'),
+                      content: TextField(
+                        controller: controller,
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: '牌组名称',
+                          hintText: '如：日语生词本',
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('取消'),
+                        ),
+                        FilledButton(
+                          onPressed: () =>
+                              Navigator.pop(ctx, controller.text.trim()),
+                          child: const Text('保存'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (newDeck != null && newDeck.isNotEmpty) {
+                    await ref
+                        .read(ankiConfigProvider.notifier)
+                        .updateDeckName(newDeck);
+                  }
+                },
+              );
+            },
+          ),
+          Consumer(
+            builder: (context, ref, _) {
+              final ankiConfig = ref.watch(ankiConfigProvider);
+              return ListTile(
+                leading:
+                    const Icon(Icons.view_carousel_outlined, color: Colors.teal),
+                title: const Text('Anki 卡片模板名称'),
+                subtitle: Text('当前：${ankiConfig.modelName}'),
+                trailing: const Icon(Icons.edit_outlined),
+                onTap: () async {
+                  final controller =
+                      TextEditingController(text: ankiConfig.modelName);
+                  final newModel = await showDialog<String>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('设置 Anki 卡片模板名称'),
+                      content: TextField(
+                        controller: controller,
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: '模板名称',
+                          hintText: '如：日语生词本-AI',
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('取消'),
+                        ),
+                        FilledButton(
+                          onPressed: () =>
+                              Navigator.pop(ctx, controller.text.trim()),
+                          child: const Text('保存'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (newModel != null && newModel.isNotEmpty) {
+                    await ref
+                        .read(ankiConfigProvider.notifier)
+                        .updateModelName(newModel);
+                  }
+                },
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.restart_alt, color: Colors.orange),
+            title: const Text('重置单词导出状态'),
+            subtitle: const Text('将所有生词的导出状态标记为未导出，以便重新导出'),
+            onTap: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('重置导出状态'),
+                  content: const Text(
+                    '确定要将所有生词重置为「未导出」状态吗？重置后可在生词本界面重新批量导出到 AnkiDroid。',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('取消'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('确认重置'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed == true && context.mounted) {
+                await ref.read(vocabularyProvider.notifier).resetExportStatus();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('已重置所有单词的导出状态'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
             },
           ),
         ],

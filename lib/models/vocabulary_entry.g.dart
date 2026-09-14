@@ -22,6 +22,7 @@ VocabularyEntry _$VocabularyEntryFromJson(Map<String, dynamic> json) =>
       sentDefSc2: json['sentDefSc2'] as String?,
       sourceDict: json['sourceDict'] as String? ?? '',
       sourceUrl: json['sourceUrl'] as String? ?? '',
+      exportedToAnki: json['exportedToAnki'] as bool? ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
 
@@ -41,5 +42,6 @@ Map<String, dynamic> _$VocabularyEntryToJson(VocabularyEntry instance) =>
       'sentDefSc2': instance.sentDefSc2,
       'sourceDict': instance.sourceDict,
       'sourceUrl': instance.sourceUrl,
+      'exportedToAnki': instance.exportedToAnki,
       'createdAt': instance.createdAt.toIso8601String(),
     };

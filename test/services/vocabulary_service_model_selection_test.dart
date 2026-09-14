@@ -109,37 +109,9 @@ void main() {
     db = await databaseFactoryFfi.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 6,
         onCreate: (db, version) async {
-          await db.execute('''
-            CREATE TABLE vocabulary (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              vocabKanji TEXT NOT NULL UNIQUE,
-              vocabFurigana TEXT NOT NULL,
-              vocabDefJa TEXT NOT NULL,
-              vocabDefSc TEXT NOT NULL,
-              vocabPoS TEXT NOT NULL,
-              sentKanji1 TEXT,
-              sentFurigana1 TEXT,
-              sentDefSc1 TEXT,
-              sentKanji2 TEXT,
-              sentFurigana2 TEXT,
-              sentDefSc2 TEXT,
-              sourceDict TEXT NOT NULL,
-              sourceUrl TEXT NOT NULL,
-              createdAt INTEGER NOT NULL
-            )
-          ''');
-          await db.execute('''
-            CREATE TABLE api_configs (
-              id TEXT PRIMARY KEY,
-              name TEXT NOT NULL,
-              baseUrl TEXT NOT NULL,
-              apiKeyRef TEXT NOT NULL,
-              isDefault INTEGER NOT NULL DEFAULT 0,
-              createdAt INTEGER NOT NULL
-            )
-          ''');
+          await DatabaseHelper.instance.testOnCreate(db, version);
         },
       ),
     );

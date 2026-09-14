@@ -21,7 +21,7 @@ void main() {
 
     db = await openDatabase(
       dbPath,
-      version: 5,
+      version: 6,
       onCreate: (db, version) async {
         await DatabaseHelper.instance.testOnCreate(db, version);
       },
@@ -275,6 +275,110 @@ void main() {
       await upgradedDb.close();
       if (upgradeTempDir.existsSync()) {
         upgradeTempDir.deleteSync(recursive: true);
+      }
+    });
+
+    test('getUnexported, markAsExported, markAllAsExported, unexportedCount, and resetExportStatus', () async {
+      final now = DateTime.now();
+      final id1 = await dao.insert(VocabularyEntry(vocabKanji: '青空', createdAt: now));
+      final id2 = await dao.insert(VocabularyEntry(vocabKanji: '星空', createdAt: now));
+      final id3 = await dao.insert(VocabularyEntry(vocabKanji: '夜空', createdAt: now));
+
+      // 初始全部为未导出
+      expect(await dao.unexportedCount(), 3);
+      var unexported = await dao.getUnexported();
+      expect(unexported.length, 3);
+      expect(unexported.map((e) => e.vocabKanji), containsAll(['青空', '星空', '夜空']));
+
+      // 标记单个已导出
+      final markRes = await dao.markAsExported(id1);
+      expect(markRes, 1);
+      expect(await dao.unexportedCount(), 2);
+      unexported = await dao.getUnexported();
+      expect(unexported.length, 2);
+      expect(unexported.any((e) => e.id == id1), isFalse);
+
+      // 批量标记已导出
+      final batchRes = await dao.markAllAsExported([id2, id3]);
+      expect(batchRes, 2);
+      expect(await dao.unexportedCount(), 0);
+      expect((await dao.getUnexported()).isEmpty, isTrue);
+
+      // 验证已导出的记录单独查询时 exportedToAnki == true
+      final entry1 = await dao.getById(id1);
+      expect(entry1?.exportedToAnki, isTrue);
+
+      // 重置导出状态
+      final resetCount = await dao.resetExportStatus();
+      expect(resetCount, 3);
+      expect(await dao.unexportedCount(), 3);
+      unexported = await dao.getUnexported();
+      expect(unexported.length, 3);
+      for (final e in unexported) {
+        expect(e.exportedToAnki, isFalse);
+      }
+    });
+
+    test('database migration v5 to v6 adds exportedToAnki column with default 0', () async {
+      final migrationTempDir = Directory.systemTemp.createTempSync('migration_v5_v6_');
+      final migrationDbPath = p.join(migrationTempDir.path, 'migration_v5_v6.db');
+
+      // 1. 创建 v5 数据库（不含 exportedToAnki 列）
+      final v5Db = await openDatabase(
+        migrationDbPath,
+        version: 5,
+        onCreate: (db, version) async {
+          await db.execute('''
+            CREATE TABLE vocabulary (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              vocabKanji TEXT NOT NULL,
+              vocabFurigana TEXT NOT NULL DEFAULT '',
+              vocabDefJa TEXT NOT NULL DEFAULT '',
+              vocabDefSc TEXT NOT NULL DEFAULT '',
+              vocabPoS TEXT NOT NULL DEFAULT '',
+              sentKanji1 TEXT,
+              sentFurigana1 TEXT,
+              sentDefSc1 TEXT,
+              sentKanji2 TEXT,
+              sentFurigana2 TEXT,
+              sentDefSc2 TEXT,
+              sourceDict TEXT NOT NULL DEFAULT '',
+              sourceUrl TEXT NOT NULL DEFAULT '',
+              createdAt TEXT NOT NULL
+            );
+          ''');
+        },
+      );
+
+      // 插入一条旧数据
+      await v5Db.insert('vocabulary', {
+        'vocabKanji': '桜',
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+      await v5Db.close();
+
+      // 2. 升级到 v6
+      final v6Db = await openDatabase(
+        migrationDbPath,
+        version: 6,
+        onUpgrade: (db, oldV, newV) async {
+          await DatabaseHelper.instance.testOnUpgrade(db, oldV, newV);
+        },
+      );
+
+      // 验证旧记录默认 exportedToAnki 为 0
+      final rows = await v6Db.query('vocabulary', where: 'vocabKanji = ?', whereArgs: ['桜']);
+      expect(rows.length, 1);
+      expect(rows.first['exportedToAnki'], 0);
+
+      // 验证可以在升级后的表中更新 exportedToAnki
+      await v6Db.update('vocabulary', {'exportedToAnki': 1}, where: 'vocabKanji = ?', whereArgs: ['桜']);
+      final updatedRows = await v6Db.query('vocabulary', where: 'vocabKanji = ?', whereArgs: ['桜']);
+      expect(updatedRows.first['exportedToAnki'], 1);
+
+      await v6Db.close();
+      if (migrationTempDir.existsSync()) {
+        migrationTempDir.deleteSync(recursive: true);
       }
     });
   });

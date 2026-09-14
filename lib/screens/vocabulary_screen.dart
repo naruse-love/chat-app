@@ -7,6 +7,7 @@ import '../models/word_candidate.dart';
 import '../providers/vocabulary_provider.dart';
 import '../providers/persistent_notification_provider.dart';
 import '../providers/vocabulary_config_provider.dart';
+import '../providers/anki_config_provider.dart';
 import '../widgets/vocabulary_model_selector_dialog.dart';
 import '../services/native/native_services.dart';
 
@@ -77,6 +78,77 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
     }
   }
 
+  Future<void> _handleExportToAnki() async {
+    final vocabState = ref.read(vocabularyProvider);
+    final count = vocabState.unexportedCount;
+
+    if (count == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('暂无未导出的新词'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final ankiConfig = ref.read(ankiConfigProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('导出新词到 AnkiDroid'),
+        content: Text(
+          '即将导出 $count 个新词到 AnkiDroid 牌组「${ankiConfig.deckName}」，是否继续？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('确认导出'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final result = await ref.read(vocabularyProvider.notifier).exportToAnki(
+          deckName: ankiConfig.deckName,
+          modelName: ankiConfig.modelName,
+        );
+
+    if (!mounted) return;
+
+    if (result.errors.isNotEmpty &&
+        result.successCount == 0 &&
+        result.skipCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('导出失败: ${result.errors.join("; ")}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } else {
+      final skipMsg =
+          result.skipCount > 0 ? '（${result.skipCount} 个已跳过）' : '';
+      final failMsg = result.failedEntries.isNotEmpty
+          ? '，${result.failedEntries.length} 个失败'
+          : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '已成功导出 ${result.successCount} 个新词到 Anki$skipMsg$failMsg',
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(vocabularyProvider);
@@ -127,6 +199,42 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                     );
                   }
                 },
+              );
+            },
+          ),
+          Consumer(
+            builder: (context, ref, _) {
+              final vocabState = ref.watch(vocabularyProvider);
+              final isExporting = vocabState.isExporting;
+              final unexportedCount = vocabState.unexportedCount;
+
+              if (isExporting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                );
+              }
+
+              return Badge(
+                isLabelVisible: unexportedCount > 0,
+                label: Text(
+                  '$unexportedCount',
+                  style: const TextStyle(fontSize: 10),
+                ),
+                offset: const Offset(-4, 4),
+                child: IconButton(
+                  tooltip: unexportedCount > 0
+                      ? '导出 $unexportedCount 个新词到 Anki'
+                      : '导出新词到 Anki（当前无新词）',
+                  icon: const Icon(Icons.send_to_mobile),
+                  onPressed: _handleExportToAnki,
+                ),
               );
             },
           ),
@@ -506,11 +614,25 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall,
                           ),
-                          trailing: Text(
-                            _formatDate(entry.createdAt),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colorScheme.outline,
-                            ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (entry.exportedToAnki)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: Icon(
+                                    Icons.check_circle_outline,
+                                    size: 16,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                              Text(
+                                _formatDate(entry.createdAt),
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.outline,
+                                ),
+                              ),
+                            ],
                           ),
                           onTap: () {
                             ref

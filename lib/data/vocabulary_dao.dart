@@ -16,14 +16,21 @@ class VocabularyDao {
     if (!db.isOpen) return -1;
 
     int? effectiveId = entry.id;
+    bool effectiveExported = entry.exportedToAnki;
     if (effectiveId == null) {
       final existing = await findByKanji(entry.vocabKanji);
       if (existing != null) {
         effectiveId = existing.id;
+        if (!effectiveExported && existing.exportedToAnki) {
+          effectiveExported = true;
+        }
       }
     }
 
-    final entryToSave = effectiveId != null ? entry.copyWith(id: effectiveId) : entry;
+    final entryToSave = entry.copyWith(
+      id: effectiveId,
+      exportedToAnki: effectiveExported,
+    );
     final map = entryToSave.toMap();
 
     final resultId = await db.insert(
@@ -129,6 +136,68 @@ class VocabularyDao {
     final db = await _dbHelper.database;
     if (!db.isOpen) return 0;
     final result = await db.rawQuery('SELECT COUNT(*) as c FROM vocabulary');
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  /// 获取所有未导出到 Anki 的单词列表（按创建时间倒序）
+  Future<List<VocabularyEntry>> getUnexported() async {
+    final db = await _dbHelper.database;
+    if (!db.isOpen) return [];
+    final List<Map<String, dynamic>> maps = await db.query(
+      'vocabulary',
+      where: 'exportedToAnki = 0',
+      orderBy: 'createdAt DESC',
+    );
+    return maps.map((m) => VocabularyEntry.fromMap(m)).toList();
+  }
+
+  /// 标记指定 ID 的单词为已导出
+  Future<int> markAsExported(int id) async {
+    final db = await _dbHelper.database;
+    if (!db.isOpen) return 0;
+    return await db.update(
+      'vocabulary',
+      {'exportedToAnki': 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// 批量标记单词为已导出
+  Future<int> markAllAsExported(List<int> ids) async {
+    if (ids.isEmpty) return 0;
+    final db = await _dbHelper.database;
+    if (!db.isOpen) return 0;
+    final batch = db.batch();
+    for (final id in ids) {
+      batch.update(
+        'vocabulary',
+        {'exportedToAnki': 1},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+    final results = await batch.commit(noResult: false);
+    return results.length;
+  }
+
+  /// 重置所有单词的导出状态为未导出
+  Future<int> resetExportStatus() async {
+    final db = await _dbHelper.database;
+    if (!db.isOpen) return 0;
+    return await db.update(
+      'vocabulary',
+      {'exportedToAnki': 0},
+    );
+  }
+
+  /// 获取未导出的单词数量
+  Future<int> unexportedCount() async {
+    final db = await _dbHelper.database;
+    if (!db.isOpen) return 0;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as c FROM vocabulary WHERE exportedToAnki = 0',
+    );
     return Sqflite.firstIntValue(result) ?? 0;
   }
 }

@@ -1,3 +1,50 @@
+## 2026-09-14 Feat: AnkiDroid Incremental Export, SQLite Schema v6 Migration, Deduplication & Settings Integration (v1.36.0+37)
+
+### 变更文件
+- `pubspec.yaml`:
+  - 引入 `ankidroid_for_flutter: ^1.0.3` 插件；版本号递增至 `1.36.0+37`；
+- `android/build.gradle.kts` & `android/app/build.gradle.kts`:
+  - 添加 JitPack 仓库配置（`maven { url = uri("https://jitpack.io") }`），支持 AnkiDroid Java API 依赖拉取；
+- `android/app/src/main/AndroidManifest.xml`:
+  - 添加 `xmlns:tools="http://schemas.android.com/tools"` 与 `tools:replace="android:label"`，消除插件 Manifest 合并冲突；
+- `lib/models/vocabulary_entry.dart` & `lib/models/vocabulary_entry.g.dart`:
+  - 新增 `exportedToAnki: bool` 字段（默认 `false`），更新 `toMap` / `fromMap` / `toJson` / `fromJson` / `copyWith`；
+- `lib/data/database_helper.dart`:
+  - 数据库版本升级至 `6`；`_createVocabularyTable` 新增 `exportedToAnki INTEGER NOT NULL DEFAULT 0`；
+  - `_onUpgrade` 安全迁移：针对 `oldVersion >= 5 && oldVersion < 6` 执行 `ALTER TABLE vocabulary ADD COLUMN exportedToAnki INTEGER NOT NULL DEFAULT 0`，防止跨版本升级重复建列；
+- `lib/data/vocabulary_dao.dart`:
+  - 插入去重时保留已有导出状态；
+  - 新增 `getUnexported()`、`markAsExported(int id)`、`markAllAsExported(List<int> ids)`、`resetExportStatus()`、`unexportedCount()` 接口；
+- `lib/services/anki_export_service_interface.dart` & `lib/services/anki_export_service.dart`:
+  - 定义 `AnkiExportResult` 与 `AnkiExportServiceInterface` 接口；
+  - 实现 `AnkiExportService`：14 字段映射（`NoteID`, `VocabKanji`, `VocabFurigana`, `VocabPoS`, `VocabDefSC`, `VocabDefJa`, `SentKanji1`, `SentFurigana1`, `SentDefSC1`, `SentKanji2`, `SentFurigana2`, `SentDefSC2`, `SourceDict`, `Tags`）；
+  - 支持 `getOrCreateDeck` 与 `getOrCreateModel` 动态发现/自动创建；
+  - 支持 `findDuplicateNotesWithKey` 双重去重；
+  - 实现 `AnkidroidBridge` 原生/模拟网桥抽象，确保桌面 Headless 测试环境 100% 隔离；
+- `lib/providers/anki_config_provider.dart`:
+  - 管理 Anki 牌组名称（默认「日语生词本」）与模板名称（默认「日语生词本-AI」），支持 `SharedPreferences` 本地持久化；
+- `lib/providers/vocabulary_provider.dart`:
+  - `VocabularyState` 新增 `isExporting` 与 `unexportedCount`；
+  - `VocabularyNotifier` 新增 `exportToAnki()`、`resetExportStatus()`、`loadUnexportedCount()`，支持原子状态更新与未导出计数维护；
+  - 注册 `ankiExportServiceProvider`；
+- `lib/screens/vocabulary_screen.dart`:
+  - AppBar 新增「导出新词到 Anki」图标按钮，带未导出数量 Badge 徽章与导出 Loading 指示器；
+  - 导出二次确认对话框与全中文 SnackBar 结果反馈（成功/跳过/失败计数）；
+  - 列表项 Trailing 区域增加已导出勾选图标（`Icons.check_circle_outline`）；
+- `lib/screens/settings_screen.dart`:
+  - 生词本设置区域新增 Anki 目标牌组名称配置、卡片模板名称配置与重置导出状态入口；
+- `test/models/vocabulary_entry_test.dart`, `test/data/vocabulary_dao_test.dart`, `test/providers/vocabulary_provider_test.dart`, `test/screens/vocabulary_screen_test.dart`, `test/providers/anki_config_provider_test.dart`, `test/services/anki_export_service_test.dart`, `test/services/vocabulary_service_model_selection_test.dart`:
+  - 新增及更新全套自动化测试用例，全量测试套件扩充至 846/846 全部通过。
+- `.agents/AGENTS.md` & `.agents/context.md`:
+  - 版本号与测试基线同步递增至 v1.36.0+37，全量测试 846+。
+
+### 核心技术指标与决策
+- **全量测试基线**：846 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.36.0+37`
+
+---
+
 ## 2026-09-12 Fix: Robust Weblio Multi-Sense Extraction, Person Name Cache Penetration, Flexible Candidate Card & Notification Hint Deduplication (v1.35.0+36)
 
 ### 变更文件

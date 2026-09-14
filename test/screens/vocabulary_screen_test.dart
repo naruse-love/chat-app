@@ -12,6 +12,7 @@ import 'package:chat/models/api_config.dart';
 import 'package:chat/models/model_info.dart';
 import 'package:chat/providers/vocabulary_config_provider.dart';
 import 'package:chat/services/native/native_services.dart';
+import 'package:chat/services/anki_export_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MockVocabularyNotifier extends StateNotifier<VocabularyState>
@@ -32,7 +33,13 @@ class MockVocabularyNotifier extends StateNotifier<VocabularyState>
   VocabularyDao get vocabularyDao => throw UnimplementedError();
 
   @override
+  AnkiExportServiceInterface get ankiExportService => throw UnimplementedError();
+
+  @override
   Future<void> loadEntries() async {}
+
+  @override
+  Future<void> loadUnexportedCount() async {}
 
   @override
   Future<void> lookupWord(
@@ -148,6 +155,22 @@ class MockVocabularyNotifier extends StateNotifier<VocabularyState>
   @override
   void clearError() {
     state = state.copyWith(clearError: true);
+  }
+
+  bool exportToAnkiCalled = false;
+  @override
+  Future<AnkiExportResult> exportToAnki({
+    String? deckName,
+    String? modelName,
+  }) async {
+    exportToAnkiCalled = true;
+    return const AnkiExportResult(successCount: 1);
+  }
+
+  bool resetExportStatusCalled = false;
+  @override
+  Future<void> resetExportStatus() async {
+    resetExportStatusCalled = true;
   }
 }
 
@@ -622,6 +645,87 @@ void main() {
     await tester.drag(find.byType(ListView).first, const Offset(0, -120));
     await tester.pumpAndSettle();
     expect(find.text('アクセル (フィギュアスケート)'), findsOneWidget);
+  });
+
+  testWidgets('VocabularyScreen export button shows confirmation and exports to Anki', (tester) async {
+    final mockNotifier = MockVocabularyNotifier(
+      VocabularyState(
+        unexportedCount: 3,
+        entries: [
+          VocabularyEntry(
+            id: 1,
+            vocabKanji: '青空',
+            exportedToAnki: false,
+            createdAt: DateTime.now(),
+          ),
+          VocabularyEntry(
+            id: 2,
+            vocabKanji: '星空',
+            exportedToAnki: true,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Check that checkmark icon is displayed for exported word
+    expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+
+    // Tap export to Anki button
+    final exportBtn = find.byIcon(Icons.send_to_mobile);
+    expect(exportBtn, findsOneWidget);
+    await tester.tap(exportBtn);
+    await tester.pumpAndSettle();
+
+    // Verify confirmation dialog
+    expect(find.text('导出新词到 AnkiDroid'), findsOneWidget);
+    expect(find.textContaining('即将导出 3 个新词到 AnkiDroid 牌组'), findsOneWidget);
+
+    // Tap confirm
+    await tester.tap(find.text('确认导出'));
+    await tester.pumpAndSettle();
+
+    expect(mockNotifier.exportToAnkiCalled, isTrue);
+    expect(find.textContaining('已成功导出 1 个新词到 Anki'), findsOneWidget);
+  });
+
+  testWidgets('VocabularyScreen export button with 0 unexported words shows SnackBar', (tester) async {
+    final mockNotifier = MockVocabularyNotifier(
+      const VocabularyState(
+        unexportedCount: 0,
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final exportBtn = find.byIcon(Icons.send_to_mobile);
+    await tester.tap(exportBtn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('暂无未导出的新词'), findsOneWidget);
+    expect(mockNotifier.exportToAnkiCalled, isFalse);
   });
 }
 

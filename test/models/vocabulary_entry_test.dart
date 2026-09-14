@@ -122,6 +122,47 @@ void main() {
       final withoutId = entry.copyWith(clearId: true);
       expect(withoutId.id, isNull);
       expect(withoutId.vocabKanji, '本');
+
+      final withExported = entry.copyWith(exportedToAnki: true);
+      expect(withExported.exportedToAnki, isTrue);
+      expect(entry.exportedToAnki, isFalse);
+    });
+
+    test('exportedToAnki default, toMap, fromMap, and JSON serialization', () {
+      final now = DateTime.now();
+      final defaultEntry = VocabularyEntry(
+        vocabKanji: '猫',
+        createdAt: now,
+      );
+      expect(defaultEntry.exportedToAnki, isFalse);
+
+      final exportedEntry = defaultEntry.copyWith(exportedToAnki: true);
+      expect(exportedEntry.exportedToAnki, isTrue);
+
+      // toMap / fromMap
+      final map = exportedEntry.toMap();
+      expect(map['exportedToAnki'], 1);
+      final fromMap = VocabularyEntry.fromMap(map);
+      expect(fromMap.exportedToAnki, isTrue);
+
+      final unexportedMap = defaultEntry.toMap();
+      expect(unexportedMap['exportedToAnki'], 0);
+      final fromUnexportedMap = VocabularyEntry.fromMap(unexportedMap);
+      expect(fromUnexportedMap.exportedToAnki, isFalse);
+
+      // fromMap with missing key defaults to false
+      final legacyMap = <String, dynamic>{
+        'vocabKanji': '犬',
+        'createdAt': now.toIso8601String(),
+      };
+      final fromLegacy = VocabularyEntry.fromMap(legacyMap);
+      expect(fromLegacy.exportedToAnki, isFalse);
+
+      // toJson / fromJson
+      final json = exportedEntry.toJson();
+      expect(json['exportedToAnki'], isTrue);
+      final fromJson = VocabularyEntry.fromJson(json);
+      expect(fromJson.exportedToAnki, isTrue);
     });
   });
 }

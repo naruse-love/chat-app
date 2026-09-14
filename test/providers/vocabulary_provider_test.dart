@@ -12,6 +12,7 @@ import 'package:chat/services/chat_service.dart';
 import 'package:chat/services/secure_storage_service.dart';
 import 'package:chat/services/weblio_service.dart';
 import 'package:chat/services/vocabulary_service.dart';
+import 'package:chat/services/anki_export_service.dart';
 import 'package:chat/providers/vocabulary_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -45,6 +46,35 @@ class FakeWeblioService extends WeblioService {
   }
 }
 
+class FakeAnkiExportService implements AnkiExportServiceInterface {
+  bool available = true;
+  bool permission = true;
+  List<VocabularyEntry> lastExported = [];
+  bool throwError = false;
+
+  @override
+  Future<bool> isAnkiDroidAvailable() async => available;
+
+  @override
+  Future<bool> requestPermission() async => permission;
+
+  @override
+  Future<AnkiExportResult> exportEntries(
+    List<VocabularyEntry> entries, {
+    String? deckName,
+    String? modelName,
+  }) async {
+    if (throwError) {
+      throw Exception('导出异常');
+    }
+    lastExported = List.from(entries);
+    return AnkiExportResult(
+      successCount: entries.length,
+      skipCount: 0,
+    );
+  }
+}
+
 void main() {
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfi;
@@ -56,6 +86,7 @@ void main() {
   late FakeWeblioService fakeWeblio;
   late ChatService chatService;
   late VocabularyService vocabService;
+  late FakeAnkiExportService fakeAnkiExport;
   late Directory tempDir;
   late ProviderContainer container;
 
@@ -65,7 +96,7 @@ void main() {
 
     db = await openDatabase(
       dbPath,
-      version: 5,
+      version: 6,
       onCreate: (db, version) async {
         await DatabaseHelper.instance.testOnCreate(db, version);
       },
@@ -80,6 +111,7 @@ void main() {
     apiConfigDao = ApiConfigDao(dbHelper, secService);
 
     fakeWeblio = FakeWeblioService();
+    fakeAnkiExport = FakeAnkiExportService();
     chatService = ChatService(dio: Dio());
 
     vocabService = VocabularyService(
@@ -95,6 +127,7 @@ void main() {
         vocabularyDaoProvider.overrideWithValue(vocabDao),
         weblioServiceProvider.overrideWithValue(fakeWeblio),
         vocabularyServiceProvider.overrideWithValue(vocabService),
+        ankiExportServiceProvider.overrideWithValue(fakeAnkiExport),
       ],
     );
 
@@ -197,6 +230,53 @@ void main() {
       expect(filteredState.searchQuery, '跑步');
       expect(filteredState.entries.length, 1);
       expect(filteredState.entries.first.vocabKanji, '走る');
+    });
+
+    test('unexportedCount tracks new words and exportToAnki marks them exported', () async {
+      final notifier = container.read(vocabularyProvider.notifier);
+      expect(container.read(vocabularyProvider).unexportedCount, 0);
+
+      // 查询单词入库
+      await notifier.lookupWord('美しい');
+      expect(container.read(vocabularyProvider).unexportedCount, 1);
+      expect(container.read(vocabularyProvider).entries.first.exportedToAnki, isFalse);
+
+      // 执行导出到 Anki
+      final result = await notifier.exportToAnki(deckName: '测试牌组', modelName: '测试模型');
+      expect(result.successCount, 1);
+      expect(result.skipCount, 0);
+      expect(result.failedEntries, isEmpty);
+
+      // 导出后未导出计数归零且列表项被标记为已导出
+      final stateAfter = container.read(vocabularyProvider);
+      expect(stateAfter.unexportedCount, 0);
+      expect(stateAfter.isExporting, isFalse);
+      expect(stateAfter.entries.first.exportedToAnki, isTrue);
+
+      // 重置导出状态
+      await notifier.resetExportStatus();
+      final stateReset = container.read(vocabularyProvider);
+      expect(stateReset.unexportedCount, 1);
+      expect(stateReset.entries.first.exportedToAnki, isFalse);
+    });
+
+    test('exportToAnki handles empty unexported list without calling service', () async {
+      final notifier = container.read(vocabularyProvider.notifier);
+      final result = await notifier.exportToAnki();
+      expect(result.totalProcessed, 0);
+      expect(fakeAnkiExport.lastExported, isEmpty);
+    });
+
+    test('exportToAnki handles service failure gracefully and sets error', () async {
+      fakeAnkiExport.throwError = true;
+      final notifier = container.read(vocabularyProvider.notifier);
+      await notifier.lookupWord('美しい');
+
+      final result = await notifier.exportToAnki();
+      expect(result.isSuccess, isFalse);
+      expect(result.errors.first, contains('导出异常'));
+      expect(container.read(vocabularyProvider).isExporting, isFalse);
+      expect(container.read(vocabularyProvider).error, contains('导出异常'));
     });
   });
 }

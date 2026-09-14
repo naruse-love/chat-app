@@ -43,3 +43,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+repositories {
+    maven { url = uri("https://jitpack.io") }
+}
+

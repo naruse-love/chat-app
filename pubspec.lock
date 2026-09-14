@@ -17,6 +17,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "13.0.0"
+  ankidroid_for_flutter:
+    dependency: "direct main"
+    description:
+      name: ankidroid_for_flutter
+      sha256: fd56fd269b5c4f1f6de740530bfccc8fbdeed0daeb622eb814740afe68454734
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.3"
   args:
     dependency: transitive
     description:

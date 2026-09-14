@@ -26,7 +26,7 @@ class DatabaseHelper {
     try {
       return await openDatabase(
         path,
-        version: 5,
+        version: 6,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -41,7 +41,7 @@ class DatabaseHelper {
       } catch (_) {}
       return await openDatabase(
         path,
-        version: 5,
+        version: 6,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -165,6 +165,7 @@ class DatabaseHelper {
         sentDefSc2 TEXT,
         sourceDict TEXT NOT NULL DEFAULT '',
         sourceUrl TEXT NOT NULL DEFAULT '',
+        exportedToAnki INTEGER NOT NULL DEFAULT 0,
         createdAt TEXT NOT NULL
       );
     ''');
@@ -195,6 +196,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 5) {
       await _createVocabularyTable(db);
+    }
+    if (oldVersion >= 5 && oldVersion < 6) {
+      await db.execute('ALTER TABLE vocabulary ADD COLUMN exportedToAnki INTEGER NOT NULL DEFAULT 0');
     }
   }
 

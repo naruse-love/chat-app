@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/vocabulary_dao.dart';
 import '../models/vocabulary_entry.dart';
 import '../models/word_candidate.dart';
+import '../services/anki_export_service.dart';
 import '../services/vocabulary_service.dart';
 import '../services/weblio_service.dart';
 import 'api_config_provider.dart';
@@ -24,6 +25,12 @@ class VocabularyState {
   /// 触发候选确认的原因类型
   final CandidateReason? candidateReason;
 
+  /// AnkiDroid 导出中状态
+  final bool isExporting;
+
+  /// 未导出到 Anki 的单词数量
+  final int unexportedCount;
+
   const VocabularyState({
     this.entries = const [],
     this.currentResult,
@@ -33,6 +40,8 @@ class VocabularyState {
     this.candidates,
     this.pendingCandidateWord,
     this.candidateReason,
+    this.isExporting = false,
+    this.unexportedCount = 0,
   });
 
   VocabularyState copyWith({
@@ -49,6 +58,8 @@ class VocabularyState {
     bool clearPendingCandidateWord = false,
     CandidateReason? candidateReason,
     bool clearCandidateReason = false,
+    bool? isExporting,
+    int? unexportedCount,
   }) {
     return VocabularyState(
       entries: entries ?? this.entries,
@@ -64,6 +75,8 @@ class VocabularyState {
       candidateReason: clearCandidateReason
           ? null
           : (candidateReason ?? this.candidateReason),
+      isExporting: isExporting ?? this.isExporting,
+      unexportedCount: unexportedCount ?? this.unexportedCount,
     );
   }
 }
@@ -72,18 +85,34 @@ class VocabularyState {
 class VocabularyNotifier extends StateNotifier<VocabularyState> {
   final VocabularyService vocabularyService;
   final VocabularyDao vocabularyDao;
+  final AnkiExportServiceInterface ankiExportService;
 
-  VocabularyNotifier(this.vocabularyService, this.vocabularyDao)
-      : super(const VocabularyState()) {
+  VocabularyNotifier(
+    this.vocabularyService,
+    this.vocabularyDao, [
+    AnkiExportServiceInterface? ankiExportService,
+  ])  : ankiExportService = ankiExportService ?? AnkiExportService(),
+        super(const VocabularyState()) {
     loadEntries();
+    loadUnexportedCount();
   }
 
   /// 加载生词列表（带可选搜索过滤）
   Future<void> loadEntries() async {
     try {
       final list = await vocabularyDao.getAll(searchQuery: state.searchQuery);
+      final count = await vocabularyDao.unexportedCount();
       if (!mounted) return;
-      state = state.copyWith(entries: list);
+      state = state.copyWith(entries: list, unexportedCount: count);
+    } catch (_) {}
+  }
+
+  /// 加载未导出计数
+  Future<void> loadUnexportedCount() async {
+    try {
+      final count = await vocabularyDao.unexportedCount();
+      if (!mounted) return;
+      state = state.copyWith(unexportedCount: count);
     } catch (_) {}
   }
 
@@ -141,12 +170,14 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
 
       final freshList =
           await vocabularyDao.getAll(searchQuery: state.searchQuery);
+      final count = await vocabularyDao.unexportedCount();
       if (!mounted) return;
 
       state = state.copyWith(
         isLoading: false,
         currentResult: result,
         entries: freshList,
+        unexportedCount: count,
         clearCandidates: true,
         clearPendingCandidateWord: true,
         clearCandidateReason: true,
@@ -239,10 +270,12 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
     if (!mounted) return;
     final freshList =
         await vocabularyDao.getAll(searchQuery: state.searchQuery);
+    final count = await vocabularyDao.unexportedCount();
     if (!mounted) return;
 
     state = state.copyWith(
       entries: freshList,
+      unexportedCount: count,
       clearCurrentResult: shouldClear,
     );
   }
@@ -277,11 +310,13 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
       if (!mounted) return;
       final freshList =
           await vocabularyDao.getAll(searchQuery: state.searchQuery);
+      final count = await vocabularyDao.unexportedCount();
       if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         currentResult: updated,
         entries: freshList,
+        unexportedCount: count,
       );
     } catch (e) {
       if (!mounted) return;
@@ -296,9 +331,88 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
   void clearError() {
     state = state.copyWith(clearError: true);
   }
+
+  /// 导出所有未导出的生词到 AnkiDroid
+  Future<AnkiExportResult> exportToAnki({
+    String? deckName,
+    String? modelName,
+  }) async {
+    state = state.copyWith(isExporting: true, clearError: true);
+    try {
+      final unexported = await vocabularyDao.getUnexported();
+      if (unexported.isEmpty) {
+        if (!mounted) return const AnkiExportResult();
+        state = state.copyWith(isExporting: false);
+        return const AnkiExportResult();
+      }
+
+      final result = await ankiExportService.exportEntries(
+        unexported,
+        deckName: deckName,
+        modelName: modelName,
+      );
+
+      final failedIds =
+          result.failedEntries.map((e) => e.id).whereType<int>().toSet();
+      final idsToMark = unexported
+          .where((e) => e.id != null && !failedIds.contains(e.id))
+          .map((e) => e.id!)
+          .toList();
+
+      if (idsToMark.isNotEmpty) {
+        await vocabularyDao.markAllAsExported(idsToMark);
+      }
+
+      if (!mounted) return result;
+      final freshList =
+          await vocabularyDao.getAll(searchQuery: state.searchQuery);
+      final count = await vocabularyDao.unexportedCount();
+      if (!mounted) return result;
+      state = state.copyWith(
+        isExporting: false,
+        entries: freshList,
+        unexportedCount: count,
+      );
+      return result;
+    } catch (e) {
+      if (!mounted) {
+        return AnkiExportResult(
+          failedEntries: const [],
+          errors: [e.toString()],
+        );
+      }
+      state = state.copyWith(isExporting: false, error: e.toString());
+      return AnkiExportResult(
+        failedEntries: const [],
+        errors: [e.toString()],
+      );
+    }
+  }
+
+  /// 重置所有生词的 Anki 导出状态
+  Future<void> resetExportStatus() async {
+    try {
+      await vocabularyDao.resetExportStatus();
+      if (!mounted) return;
+      final freshList =
+          await vocabularyDao.getAll(searchQuery: state.searchQuery);
+      final count = await vocabularyDao.unexportedCount();
+      if (!mounted) return;
+      state = state.copyWith(
+        entries: freshList,
+        unexportedCount: count,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      state = state.copyWith(error: e.toString());
+    }
+  }
 }
 
 // === Riverpod Providers ===
+
+final ankiExportServiceProvider =
+    Provider<AnkiExportServiceInterface>((ref) => AnkiExportService());
 
 final vocabularyDaoProvider = Provider<VocabularyDao>((ref) {
   final dbHelper = ref.watch(dbHelperProvider);
@@ -325,5 +439,6 @@ final vocabularyProvider =
     StateNotifierProvider<VocabularyNotifier, VocabularyState>((ref) {
   final service = ref.watch(vocabularyServiceProvider);
   final dao = ref.watch(vocabularyDaoProvider);
-  return VocabularyNotifier(service, dao);
+  final ankiExport = ref.watch(ankiExportServiceProvider);
+  return VocabularyNotifier(service, dao, ankiExport);
 });

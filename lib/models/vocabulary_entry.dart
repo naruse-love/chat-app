@@ -20,6 +20,7 @@ class VocabularyEntry {
   final String? sentDefSc2;
   final String sourceDict;
   final String sourceUrl;
+  final bool exportedToAnki;
   final DateTime createdAt;
 
   const VocabularyEntry({
@@ -37,6 +38,7 @@ class VocabularyEntry {
     this.sentDefSc2,
     this.sourceDict = '',
     this.sourceUrl = '',
+    this.exportedToAnki = false,
     required this.createdAt,
   });
 
@@ -62,6 +64,7 @@ class VocabularyEntry {
       sentDefSc2: map['sentDefSc2'] as String?,
       sourceDict: map['sourceDict'] as String? ?? '',
       sourceUrl: map['sourceUrl'] as String? ?? '',
+      exportedToAnki: (map['exportedToAnki'] as int? ?? 0) == 1,
       createdAt: DateTime.parse(map['createdAt'] as String),
     );
   }
@@ -82,6 +85,7 @@ class VocabularyEntry {
       'sentDefSc2': sentDefSc2,
       'sourceDict': sourceDict,
       'sourceUrl': sourceUrl,
+      'exportedToAnki': exportedToAnki ? 1 : 0,
       'createdAt': createdAt.toIso8601String(),
     };
     if (id != null) {
@@ -106,6 +110,7 @@ class VocabularyEntry {
     String? sentDefSc2,
     String? sourceDict,
     String? sourceUrl,
+    bool? exportedToAnki,
     DateTime? createdAt,
   }) {
     return VocabularyEntry(
@@ -123,6 +128,7 @@ class VocabularyEntry {
       sentDefSc2: sentDefSc2 ?? this.sentDefSc2,
       sourceDict: sourceDict ?? this.sourceDict,
       sourceUrl: sourceUrl ?? this.sourceUrl,
+      exportedToAnki: exportedToAnki ?? this.exportedToAnki,
       createdAt: createdAt ?? this.createdAt,
     );
   }
