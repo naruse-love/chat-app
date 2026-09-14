@@ -1,3 +1,34 @@
+## 2026-09-14 Fix: AnkiDroid Duplicate Detection Alignment, Android 11+ Package Visibility & Export UX (v1.37.0+38)
+
+### 变更文件
+- `android/app/src/main/AndroidManifest.xml`:
+  - 声明 `com.ichi2.anki.permission.READ_WRITE_DATABASE` 权限，防止 Android OS 拒绝权限弹窗；
+  - `<queries>` 块中新增 `<package android:name="com.ichi2.anki" />` 与 `<provider android:authorities="com.ichi2.anki.flashcards" />`，彻底解决 Android 11+（API 30+）Package Visibility 限制导致的 ContentProvider 访问受阻与 SecurityException；
+- `lib/services/anki_export_service.dart`:
+  - 修复 AnkiDroid 原生去重检测主键对齐缺陷：调整 `ankiFields` 与 `entryToFields`，将 `VocabKanji` 作为首字段（Index 0），`NoteID` 移至 Index 12，`sortf` 设为 0。AnkiDroid 底层 `findDuplicateNotes` 强依赖 `fieldNames[0]` 作为去重比对列，旧版本以 `NoteID` 为首字段导致比对条件为 `NoteID = '单词汉字'` 永远返回 0 条匹配、去重彻底失效；调整后使去重检测 100% 准确生效，且 AnkiDroid 卡片浏览器中卡片标题准确显示为单词汉字；
+  - 增加批次内去重防线（`seenWordsInBatch`）与 `cleanKanji` 首尾空白清洗；
+  - 优化背面卡片模板 `defaultAfmt`：采用 `{{#VocabPoS}}[{{VocabPoS}}] {{/VocabPoS}}{{VocabDefSC}}`，杜绝无词性单词渲染出空括号 `[]`；
+  - 优化 `defaultCss`：为 `.VocabDef, .VocabDefJa` 增加 `white-space: pre-line`，保证多义项数字换行清晰展示；
+- `lib/data/vocabulary_dao.dart`:
+  - 强化 `insert` 状态保护：当传入已有 `id` 时二次校验数据库现有状态，杜绝覆盖重写丢失 `exportedToAnki = 1` 标记；
+  - 优化 `markAllAsExported`：去重处理传入的 `ids` 集合；
+- `lib/screens/vocabulary_screen.dart`:
+  - 优化全跳过反馈：当新词在 AnkiDroid 中全部已存在（`successCount == 0 && skipCount > 0`）时，弹出清晰提示「全部 X 个新词在 AnkiDroid 中已存在，已自动跳过」，避免展示歧义信息；
+- `docs/ANKI_CARD_SPEC.md`:
+  - 同步更新 Section 4 TSV 首列为 `VocabKanji`，与 Anki 标准去重机制保持一致；
+- `test/services/anki_export_service_test.dart` & `test/screens/vocabulary_screen_test.dart`:
+  - 增强 `MockAnkidroidBridge`，真实仿真首字段匹配机制；
+  - 增加首字段语义对齐、批次内同词去重与全跳过 SnackBar 交互的自动化测试；
+- `pubspec.yaml`, `.agents/AGENTS.md`, `.agents/context.md`:
+  - 递增版本号至 `1.37.0+38`，全量测试基线扩充至 848/848 全部通过。
+
+### 核心技术指标与决策
+- **全量测试基线**：848 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.37.0+38`
+
+---
+
 ## 2026-09-14 Feat: AnkiDroid Incremental Export, SQLite Schema v6 Migration, Deduplication & Settings Integration (v1.36.0+37)
 
 ### 变更文件

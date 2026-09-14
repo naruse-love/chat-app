@@ -25,6 +25,11 @@ class VocabularyDao {
           effectiveExported = true;
         }
       }
+    } else if (!effectiveExported) {
+      final existing = await getById(effectiveId);
+      if (existing != null && existing.exportedToAnki) {
+        effectiveExported = true;
+      }
     }
 
     final entryToSave = entry.copyWith(
@@ -168,8 +173,9 @@ class VocabularyDao {
     if (ids.isEmpty) return 0;
     final db = await _dbHelper.database;
     if (!db.isOpen) return 0;
+    final uniqueIds = ids.toSet().toList();
     final batch = db.batch();
-    for (final id in ids) {
+    for (final id in uniqueIds) {
       batch.update(
         'vocabulary',
         {'exportedToAnki': 1},

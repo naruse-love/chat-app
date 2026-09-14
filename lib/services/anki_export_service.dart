@@ -177,9 +177,8 @@ class AnkiExportService implements AnkiExportServiceInterface {
   static const String defaultDeckName = '日语生词本';
   static const String defaultModelName = '日语生词本-AI';
 
-  /// 14 个标准 Anki 卡片字段
+  /// 14 个标准 Anki 卡片字段（首字段为唯一主键 VocabKanji，确保 AnkiDroid 重复检测与卡片标题精准匹配）
   static const List<String> ankiFields = [
-    'NoteID',
     'VocabKanji',
     'VocabFurigana',
     'VocabPoS',
@@ -192,6 +191,7 @@ class AnkiExportService implements AnkiExportServiceInterface {
     'SentFurigana2',
     'SentDefSC2',
     'SourceDict',
+    'NoteID',
     'Tags',
   ];
 
@@ -235,7 +235,7 @@ class AnkiExportService implements AnkiExportServiceInterface {
       <span lang="ja">{{kana:VocabFurigana}}</span>
     </h2>
     <h3 class="VocabPoS">
-      <span class="VocabDef">[{{VocabPoS}}] {{VocabDefSC}}</span>
+      <span class="VocabDef">{{#VocabPoS}}[{{VocabPoS}}] {{/VocabPoS}}{{VocabDefSC}}</span>
     </h3>
     {{#VocabDefJa}}
     <p class="VocabDefJa" style="color: #666; font-size: 0.9em; margin: 4px 0;">{{VocabDefJa}}</p>
@@ -291,6 +291,7 @@ class AnkiExportService implements AnkiExportServiceInterface {
 ruby rt { font-size: 0.55em; color: #64748b; }
 .VocabFurigana { font-size: 1.2em; color: #0284c7; margin: 8px 0; }
 .VocabPoS { font-size: 1em; color: #334155; margin: 6px 0; }
+.VocabDef, .VocabDefJa { white-space: pre-line; }
 .SentenceList { list-style: none; padding: 0; margin: 16px 0; text-align: left; }
 .Sentence { margin-bottom: 12px; padding: 8px 12px; background: #f8fafc; border-radius: 8px; }
 .SentKanji, .SentFurigana { font-size: 0.95em; margin: 0 0 4px 0; font-weight: normal; color: #0f172a; }
@@ -325,8 +326,7 @@ ruby rt { font-size: 0.55em; color: #64748b; }
   /// 将单词实体转换为 14 个字段列表
   static List<String> entryToFields(VocabularyEntry entry) {
     return [
-      entry.id?.toString() ?? '',
-      entry.vocabKanji,
+      entry.vocabKanji.trim(),
       entry.vocabFurigana,
       entry.vocabPoS,
       entry.vocabDefSc,
@@ -338,6 +338,7 @@ ruby rt { font-size: 0.55em; color: #64748b; }
       entry.sentFurigana2 ?? '',
       entry.sentDefSc2 ?? '',
       entry.sourceDict,
+      entry.id?.toString() ?? '',
       entry.sourceDict.isNotEmpty ? entry.sourceDict : 'AI生词本',
     ];
   }
@@ -368,7 +369,7 @@ ruby rt { font-size: 0.55em; color: #64748b; }
       qfmt: const [defaultQfmt],
       afmt: const [defaultAfmt],
       css: defaultCss,
-      sortf: 1,
+      sortf: 0,
     );
   }
 
@@ -412,15 +413,25 @@ ruby rt { font-size: 0.55em; color: #64748b; }
       int skipCount = 0;
       final failedEntries = <VocabularyEntry>[];
       final errors = <String>[];
+      final seenWordsInBatch = <String>{};
 
       for (final entry in entries) {
+        final cleanKanji = entry.vocabKanji.trim();
+        if (cleanKanji.isEmpty) continue;
+
         try {
-          // 重复检测
+          // 批次内去重（避免单次导出列表中含有同名词）
+          if (seenWordsInBatch.contains(cleanKanji)) {
+            skipCount++;
+            continue;
+          }
+
+          // AnkiDroid 原生去重检测（以首字段 VocabKanji 为主键，查询 AnkiDroid 是否已有同名卡片）
           bool isDuplicate = false;
           try {
             final dupes = await _bridge.findDuplicateNotesWithKey(
               modelId,
-              entry.vocabKanji,
+              cleanKanji,
             );
             if (dupes.isNotEmpty) {
               isDuplicate = true;
@@ -430,6 +441,7 @@ ruby rt { font-size: 0.55em; color: #64748b; }
           }
 
           if (isDuplicate) {
+            seenWordsInBatch.add(cleanKanji);
             skipCount++;
             continue;
           }
@@ -446,6 +458,7 @@ ruby rt { font-size: 0.55em; color: #64748b; }
             fields: fields,
             tags: tags,
           );
+          seenWordsInBatch.add(cleanKanji);
           successCount++;
         } catch (e) {
           failedEntries.add(entry);

@@ -132,6 +132,15 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
           duration: const Duration(seconds: 3),
         ),
       );
+    } else if (result.successCount == 0 && result.skipCount > 0 && result.failedEntries.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '全部 ${result.skipCount} 个新词在 AnkiDroid 中已存在，已自动跳过',
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
     } else {
       final skipMsg =
           result.skipCount > 0 ? '（${result.skipCount} 个已跳过）' : '';

@@ -41,6 +41,9 @@ class MockAnkidroidBridge implements AnkidroidBridge {
     return id;
   }
 
+  Map<int, List<String>> modelFields = {};
+  int? lastSortf;
+
   @override
   Future<Map<int, String>> getModelList() async => Map.from(models);
 
@@ -57,12 +60,17 @@ class MockAnkidroidBridge implements AnkidroidBridge {
   }) async {
     final id = nextModelId++;
     models[id] = name;
+    modelFields[id] = List.from(fields);
+    lastSortf = sortf;
     return id;
   }
 
   @override
   Future<List<dynamic>> findDuplicateNotesWithKey(int mid, String key) async {
-    if (duplicateKeys.contains(key)) {
+    // 模拟真实 AnkiDroid 底层：严格检查首字段（fieldNames[0]）是否与 key 字段语义对齐
+    final fields = modelFields[mid] ?? AnkiExportService.ankiFields;
+    final firstFieldName = fields.isNotEmpty ? fields.first : '';
+    if (firstFieldName == 'VocabKanji' && duplicateKeys.contains(key)) {
       return [
         {'id': 999, 'key': key}
       ];
@@ -119,22 +127,29 @@ void main() {
       createdAt: now,
     );
 
-    test('entryToFields maps VocabularyEntry to exact 14 fields correctly', () {
+    test('ankiFields has VocabKanji as first field for AnkiDroid duplicate key alignment', () {
+      expect(AnkiExportService.ankiFields.first, 'VocabKanji');
+      expect(AnkiExportService.ankiFields.length, 14);
+      expect(AnkiExportService.ankiFields, contains('NoteID'));
+      expect(AnkiExportService.ankiFields, contains('Tags'));
+    });
+
+    test('entryToFields maps VocabularyEntry to exact 14 fields correctly with VocabKanji first', () {
       final fields = AnkiExportService.entryToFields(sampleEntry);
       expect(fields.length, 14);
-      expect(fields[0], '7'); // NoteID
-      expect(fields[1], '青空'); // VocabKanji
-      expect(fields[2], 'あおぞら'); // VocabFurigana
-      expect(fields[3], '名'); // VocabPoS
-      expect(fields[4], '蔚蓝的天空；晴空。'); // VocabDefSC
-      expect(fields[5], '晴れ渡った青い空。'); // VocabDefJa
-      expect(fields[6], '青空が広がる'); // SentKanji1
-      expect(fields[7], '青空[あおぞら]が 広[ひろ]がる'); // SentFurigana1
-      expect(fields[8], '晴空万里'); // SentDefSC1
-      expect(fields[9], '青空の下で'); // SentKanji2
-      expect(fields[10], '青空[あおぞら]の 下[した]で'); // SentFurigana2
-      expect(fields[11], '在蓝天下'); // SentDefSC2
-      expect(fields[12], 'デジタル大辞泉'); // SourceDict
+      expect(fields[0], '青空'); // VocabKanji (first field for Anki duplicate key)
+      expect(fields[1], 'あおぞら'); // VocabFurigana
+      expect(fields[2], '名'); // VocabPoS
+      expect(fields[3], '蔚蓝的天空；晴空。'); // VocabDefSC
+      expect(fields[4], '晴れ渡った青い空。'); // VocabDefJa
+      expect(fields[5], '青空が広がる'); // SentKanji1
+      expect(fields[6], '青空[あおぞら]が 広[ひろ]がる'); // SentFurigana1
+      expect(fields[7], '晴空万里'); // SentDefSC1
+      expect(fields[8], '青空の下で'); // SentKanji2
+      expect(fields[9], '青空[あおぞら]の 下[した]で'); // SentFurigana2
+      expect(fields[10], '在蓝天下'); // SentDefSC2
+      expect(fields[11], 'デジタル大辞泉'); // SourceDict
+      expect(fields[12], '7'); // NoteID
       expect(fields[13], 'デジタル大辞泉'); // Tags
     });
 
@@ -145,9 +160,9 @@ void main() {
       );
       final fields = AnkiExportService.entryToFields(minimalEntry);
       expect(fields.length, 14);
-      expect(fields[0], ''); // NoteID empty
-      expect(fields[1], '猫');
-      expect(fields[6], ''); // SentKanji1 empty
+      expect(fields[0], '猫'); // VocabKanji
+      expect(fields[5], ''); // SentKanji1 empty
+      expect(fields[12], ''); // NoteID empty
       expect(fields[13], 'AI生词本'); // Fallback tag
     });
 
@@ -199,7 +214,8 @@ void main() {
 
       expect(bridge.decks.values, contains('新日语牌组'));
       expect(bridge.models.values, contains('新日语模型'));
-      expect(bridge.lastAddedNote['fields'][1], '青空');
+      expect(bridge.lastSortf, 0); // sortf: 0 for VocabKanji primary sorting
+      expect(bridge.lastAddedNote['fields'][0], '青空'); // VocabKanji is field 0
       expect(bridge.disposed, isTrue);
     });
 
@@ -220,13 +236,28 @@ void main() {
       expect(bridge.lastAddedNote['mid'], 6);
     });
 
-    test('exportEntries skips duplicate notes', () async {
+    test('exportEntries skips duplicate notes existing in AnkiDroid', () async {
       final bridge = MockAnkidroidBridge()..duplicateKeys = ['青空'];
       final service = AnkiExportService(bridge: bridge);
 
       final result = await service.exportEntries([sampleEntry]);
       expect(result.successCount, 0);
       expect(result.skipCount, 1);
+      expect(result.failedEntries.isEmpty, isTrue);
+      expect(result.isSuccess, isTrue);
+    });
+
+    test('exportEntries performs in-batch deduplication for duplicate words in same batch', () async {
+      final bridge = MockAnkidroidBridge();
+      final service = AnkiExportService(bridge: bridge);
+
+      final duplicateEntry1 = sampleEntry.copyWith(id: 1, vocabKanji: '青空');
+      final duplicateEntry2 = sampleEntry.copyWith(id: 2, vocabKanji: '青空');
+      final uniqueEntry = sampleEntry.copyWith(id: 3, vocabKanji: '星空');
+
+      final result = await service.exportEntries([duplicateEntry1, duplicateEntry2, uniqueEntry]);
+      expect(result.successCount, 2); // 1 青空 + 1 星空
+      expect(result.skipCount, 1); // 1 duplicate 青空 skipped
       expect(result.failedEntries.isEmpty, isTrue);
       expect(result.isSuccess, isTrue);
     });

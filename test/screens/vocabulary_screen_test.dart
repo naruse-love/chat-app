@@ -158,13 +158,14 @@ class MockVocabularyNotifier extends StateNotifier<VocabularyState>
   }
 
   bool exportToAnkiCalled = false;
+  AnkiExportResult exportResultToReturn = const AnkiExportResult(successCount: 1);
   @override
   Future<AnkiExportResult> exportToAnki({
     String? deckName,
     String? modelName,
   }) async {
     exportToAnkiCalled = true;
-    return const AnkiExportResult(successCount: 1);
+    return exportResultToReturn;
   }
 
   bool resetExportStatusCalled = false;
@@ -726,6 +727,40 @@ void main() {
 
     expect(find.text('暂无未导出的新词'), findsOneWidget);
     expect(mockNotifier.exportToAnkiCalled, isFalse);
+  });
+
+  testWidgets('VocabularyScreen export button shows all-skipped SnackBar when cards already exist', (tester) async {
+    final mockNotifier = MockVocabularyNotifier(
+      const VocabularyState(
+        unexportedCount: 2,
+      ),
+    );
+    mockNotifier.exportResultToReturn = const AnkiExportResult(
+      successCount: 0,
+      skipCount: 2,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final exportBtn = find.byIcon(Icons.send_to_mobile);
+    await tester.tap(exportBtn);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('确认导出'));
+    await tester.pumpAndSettle();
+
+    expect(mockNotifier.exportToAnkiCalled, isTrue);
+    expect(find.text('全部 2 个新词在 AnkiDroid 中已存在，已自动跳过'), findsOneWidget);
   });
 }
 

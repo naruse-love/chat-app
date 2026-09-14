@@ -105,7 +105,7 @@
    #separator:tab
    #html:true
    #tags column:14
-   NoteID	VocabKanji	VocabFurigana	VocabPoS	VocabDefSC	VocabDefJa	SentKanji1	SentFurigana1	SentDefSC1	SentKanji2	SentFurigana2	SentDefSC2	SourceDict	Tags
+   VocabKanji	VocabFurigana	VocabPoS	VocabDefSC	VocabDefJa	SentKanji1	SentFurigana1	SentDefSC1	SentKanji2	SentFurigana2	SentDefSC2	SourceDict	NoteID	Tags
    ```
 3. **使用方式**：用户在手机或电脑端 Anki 点击「文件」→「导入」，选择该文件，字段将自动 1:1 完美映射至用户的卡组模板中。
 

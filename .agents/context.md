@@ -11,7 +11,7 @@
 - **Flutter SDK**：`D:\work\flutter-sdk\flutter\bin\flutter.bat`
 - **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支）
 - **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过，`flutter analyze` 必须 0 issues
-- **当前版本**：`1.36.0+37`
+- **当前版本**：`1.37.0+38`
 
 ---
 
@@ -273,7 +273,7 @@ test/
 # 静态分析（必须 0 issues）
 D:\work\flutter-sdk\flutter\bin\flutter.bat analyze
 
-# 运行全部测试（必须 811/811 通过）
+# 运行全部测试（必须 848/848 通过）
 D:\work\flutter-sdk\flutter\bin\flutter.bat test --no-pub
 
 # 编译 Debug APK
