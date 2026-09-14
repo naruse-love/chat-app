@@ -9,6 +9,7 @@ class VocabularyEntry {
   final int? id;
   final String vocabKanji;
   final String vocabFurigana;
+  final String vocabPitch;
   final String vocabDefJa;
   final String vocabDefSc;
   final String vocabPoS;
@@ -27,6 +28,7 @@ class VocabularyEntry {
     this.id,
     required this.vocabKanji,
     this.vocabFurigana = '',
+    this.vocabPitch = '',
     this.vocabDefJa = '',
     this.vocabDefSc = '',
     this.vocabPoS = '',
@@ -53,6 +55,7 @@ class VocabularyEntry {
       id: map['id'] as int?,
       vocabKanji: map['vocabKanji'] as String,
       vocabFurigana: map['vocabFurigana'] as String? ?? '',
+      vocabPitch: map['vocabPitch'] as String? ?? '',
       vocabDefJa: map['vocabDefJa'] as String? ?? '',
       vocabDefSc: map['vocabDefSc'] as String? ?? '',
       vocabPoS: map['vocabPoS'] as String? ?? '',
@@ -74,6 +77,7 @@ class VocabularyEntry {
     final map = <String, dynamic>{
       'vocabKanji': vocabKanji,
       'vocabFurigana': vocabFurigana,
+      'vocabPitch': vocabPitch,
       'vocabDefJa': vocabDefJa,
       'vocabDefSc': vocabDefSc,
       'vocabPoS': vocabPoS,
@@ -99,6 +103,7 @@ class VocabularyEntry {
     bool clearId = false,
     String? vocabKanji,
     String? vocabFurigana,
+    String? vocabPitch,
     String? vocabDefJa,
     String? vocabDefSc,
     String? vocabPoS,
@@ -117,6 +122,7 @@ class VocabularyEntry {
       id: clearId ? null : (id ?? this.id),
       vocabKanji: vocabKanji ?? this.vocabKanji,
       vocabFurigana: vocabFurigana ?? this.vocabFurigana,
+      vocabPitch: vocabPitch ?? this.vocabPitch,
       vocabDefJa: vocabDefJa ?? this.vocabDefJa,
       vocabDefSc: vocabDefSc ?? this.vocabDefSc,
       vocabPoS: vocabPoS ?? this.vocabPoS,

@@ -164,5 +164,38 @@ void main() {
       final fromJson = VocabularyEntry.fromJson(json);
       expect(fromJson.exportedToAnki, isTrue);
     });
+
+    test('vocabPitch default value, copyWith, toMap/fromMap and toJson/fromJson', () {
+      final now = DateTime.now();
+      final defaultEntry = VocabularyEntry(
+        vocabKanji: 'いとも',
+        createdAt: now,
+      );
+      expect(defaultEntry.vocabPitch, '');
+
+      final withPitch = defaultEntry.copyWith(vocabPitch: '①');
+      expect(withPitch.vocabPitch, '①');
+      expect(defaultEntry.vocabPitch, '');
+
+      // toMap / fromMap
+      final map = withPitch.toMap();
+      expect(map['vocabPitch'], '①');
+      final fromMap = VocabularyEntry.fromMap(map);
+      expect(fromMap.vocabPitch, '①');
+
+      // fromMap legacy row without vocabPitch defaults to empty string
+      final legacyMap = <String, dynamic>{
+        'vocabKanji': 'いとも',
+        'createdAt': now.toIso8601String(),
+      };
+      final fromLegacy = VocabularyEntry.fromMap(legacyMap);
+      expect(fromLegacy.vocabPitch, '');
+
+      // toJson / fromJson
+      final json = withPitch.toJson();
+      expect(json['vocabPitch'], '①');
+      final fromJson = VocabularyEntry.fromJson(json);
+      expect(fromJson.vocabPitch, '①');
+    });
   });
 }

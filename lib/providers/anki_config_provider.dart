@@ -34,8 +34,16 @@ class AnkiConfigNotifier extends StateNotifier<AnkiConfig> {
   static const String _prefKeyDeckName = 'anki_deck_name';
   static const String _prefKeyModelName = 'anki_model_name';
 
+  late final Future<void> initialization;
+
   AnkiConfigNotifier() : super(const AnkiConfig()) {
-    _loadConfig();
+    initialization = _loadConfig();
+  }
+
+  /// 确保本地持久化配置已完全加载完毕（防止重进应用时的时序竞争回退）
+  Future<AnkiConfig> ensureLoaded() async {
+    await initialization;
+    return state;
   }
 
   Future<void> _loadConfig() async {

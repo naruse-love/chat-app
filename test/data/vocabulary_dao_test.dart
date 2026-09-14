@@ -21,7 +21,7 @@ void main() {
 
     db = await openDatabase(
       dbPath,
-      version: 6,
+      version: 7,
       onCreate: (db, version) async {
         await DatabaseHelper.instance.testOnCreate(db, version);
       },
@@ -377,6 +377,70 @@ void main() {
       expect(updatedRows.first['exportedToAnki'], 1);
 
       await v6Db.close();
+      if (migrationTempDir.existsSync()) {
+        migrationTempDir.deleteSync(recursive: true);
+      }
+    });
+
+    test('database migration v6 to v7 adds vocabPitch column with default empty string', () async {
+      final migrationTempDir = Directory.systemTemp.createTempSync('migration_v6_v7_');
+      final migrationDbPath = p.join(migrationTempDir.path, 'migration_v6_v7.db');
+
+      // 1. 创建 v6 数据库（不含 vocabPitch 列）
+      final v6Db = await openDatabase(
+        migrationDbPath,
+        version: 6,
+        onCreate: (db, version) async {
+          await db.execute('''
+            CREATE TABLE vocabulary (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              vocabKanji TEXT NOT NULL,
+              vocabFurigana TEXT NOT NULL DEFAULT '',
+              vocabDefJa TEXT NOT NULL DEFAULT '',
+              vocabDefSc TEXT NOT NULL DEFAULT '',
+              vocabPoS TEXT NOT NULL DEFAULT '',
+              sentKanji1 TEXT,
+              sentFurigana1 TEXT,
+              sentDefSc1 TEXT,
+              sentKanji2 TEXT,
+              sentFurigana2 TEXT,
+              sentDefSc2 TEXT,
+              sourceDict TEXT NOT NULL DEFAULT '',
+              sourceUrl TEXT NOT NULL DEFAULT '',
+              createdAt TEXT NOT NULL,
+              exportedToAnki INTEGER NOT NULL DEFAULT 0
+            );
+          ''');
+        },
+      );
+
+      // 插入一条旧数据
+      await v6Db.insert('vocabulary', {
+        'vocabKanji': 'いとも',
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+      await v6Db.close();
+
+      // 2. 升级到 v7
+      final v7Db = await openDatabase(
+        migrationDbPath,
+        version: 7,
+        onUpgrade: (db, oldV, newV) async {
+          await DatabaseHelper.instance.testOnUpgrade(db, oldV, newV);
+        },
+      );
+
+      // 验证旧记录默认 vocabPitch 为 ''
+      final rows = await v7Db.query('vocabulary', where: 'vocabKanji = ?', whereArgs: ['いとも']);
+      expect(rows.length, 1);
+      expect(rows.first['vocabPitch'], '');
+
+      // 验证可以在升级后的表中更新 vocabPitch
+      await v7Db.update('vocabulary', {'vocabPitch': '①'}, where: 'vocabKanji = ?', whereArgs: ['いとも']);
+      final updatedRows = await v7Db.query('vocabulary', where: 'vocabKanji = ?', whereArgs: ['いとも']);
+      expect(updatedRows.first['vocabPitch'], '①');
+
+      await v7Db.close();
       if (migrationTempDir.existsSync()) {
         migrationTempDir.deleteSync(recursive: true);
       }

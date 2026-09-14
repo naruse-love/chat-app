@@ -491,5 +491,56 @@ void main() {
       expect(result.word, 'wordA');
       expect(result.definition, contains('wordB'));
     });
+
+    test('cleanReading strips morpheme hyphens and dots while preserving Katakana long vowel mark', () {
+      expect(WeblioService.cleanReading('いと‐も'), 'いとも');
+      expect(WeblioService.cleanReading('とって‐かわる'), 'とってかわる');
+      expect(WeblioService.cleanReading('うつく・しい'), 'うつくしい');
+      expect(WeblioService.cleanReading('ス・リ・ル'), 'スリル');
+      expect(WeblioService.cleanReading('コーヒー'), 'コーヒー');
+      expect(WeblioService.cleanReading('パーティー'), 'パーティー');
+    });
+
+    test('formatPitchCircle converts numbers and bracketed numbers to circle numerals', () {
+      expect(WeblioService.formatPitchCircle('0'), '⓪');
+      expect(WeblioService.formatPitchCircle('1'), '①');
+      expect(WeblioService.formatPitchCircle('2'), '②');
+      expect(WeblioService.formatPitchCircle('〔0〕'), '⓪');
+      expect(WeblioService.formatPitchCircle('〔1〕'), '①');
+      expect(WeblioService.formatPitchCircle('①'), '①');
+      expect(WeblioService.formatPitchCircle(''), '');
+      expect(WeblioService.formatPitchCircle('副'), '');
+    });
+
+    test('isKatakana correctly identifies pure Katakana words', () {
+      expect(WeblioService.isKatakana('スリル'), isTrue);
+      expect(WeblioService.isKatakana('コーヒー'), isTrue);
+      expect(WeblioService.isKatakana('いとも'), isFalse);
+      expect(WeblioService.isKatakana('食べる'), isFalse);
+      expect(WeblioService.isKatakana('青空'), isFalse);
+    });
+
+    test('extractForeignOriginWord extracts foreign word from various bracket formats', () {
+      expect(WeblioService.extractForeignOriginWord('スリル【thrill】'), 'thrill');
+      expect(WeblioService.extractForeignOriginWord('スリル［英語: thrill］'), 'thrill');
+      expect(WeblioService.extractForeignOriginWord('【thrill】'), 'thrill');
+      expect(WeblioService.extractForeignOriginWord('［(英) thrill］'), 'thrill');
+      expect(WeblioService.extractForeignOriginWord('純和語'), isEmpty);
+    });
+
+    test('highlightKeywordInFurigana wraps target keyword and ruby correctly with bold tags', () {
+      expect(
+        WeblioService.highlightKeywordInFurigana('いとも 簡単[かんたん]にやってのけた', 'いとも'),
+        '<b>いとも</b> 簡単[かんたん]にやってのけた',
+      );
+      expect(
+        WeblioService.highlightKeywordInFurigana('青空[あおぞら]が 広[ひろ]がる', '青空'),
+        '<b>青空[あおぞら]</b>が 広[ひろ]がる',
+      );
+      expect(
+        WeblioService.highlightKeywordInFurigana('取[と]って 代[か]わる', '取って代わる'),
+        '<b>取[と]って 代[か]わる</b>',
+      );
+    });
   });
 }

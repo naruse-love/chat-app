@@ -154,10 +154,10 @@ void main() {
       expect(fields[3], '蔚蓝的天空；晴空。'); // VocabDefSC
       expect(fields[4], '晴れ渡った青い空。'); // VocabDefJa
       expect(fields[5], '青空が広がる'); // SentKanji1
-      expect(fields[6], '青空[あおぞら]が 広[ひろ]がる'); // SentFurigana1
+      expect(fields[6], '<b>青空[あおぞら]</b>が 広[ひろ]がる'); // SentFurigana1 (keyword bolded)
       expect(fields[7], '晴空万里'); // SentDefSC1
       expect(fields[8], '青空の下で'); // SentKanji2
-      expect(fields[9], '青空[あおぞら]の 下[した]で'); // SentFurigana2
+      expect(fields[9], '<b>青空[あおぞら]</b>の 下[した]で'); // SentFurigana2 (keyword bolded)
       expect(fields[10], '在蓝天下'); // SentDefSC2
       expect(fields[11], 'デジタル大辞泉'); // SourceDict
       expect(fields[12], '7'); // NoteID
@@ -336,7 +336,7 @@ void main() {
       expect(fields[1], '蔚蓝的天空；晴空。');
     });
 
-    test('entryToModelFields handles case-insensitive aliases and positional fallback', () {
+    test('entryToModelFields handles case-insensitive aliases and unknown fields map to empty string without misalignment', () {
       final mixedFields = [
         'kanji',
         'READING',
@@ -358,10 +358,59 @@ void main() {
       expect(fields[2], '名'); // pos alias
       expect(fields[3], '蔚蓝的天空；晴空。'); // meaning alias
       expect(fields[4], '青空が広がる'); // example1 alias
-      expect(fields[5], '青空[あおぞら]が 広[ひろ]がる'); // sentencefurigana1 alias
+      expect(fields[5], '<b>青空[あおぞら]</b>が 広[ひろ]がる'); // sentencefurigana1 alias (keyword bolded)
       expect(fields[6], '晴空万里'); // senttrans1 alias
-      expect(fields[7], '晴空万里'); // UNKNOWN_POS_7 fallback to ankiFields[7] (SentDefSC1)
-      expect(fields[8], '青空の下で'); // UNKNOWN_POS_8 fallback to ankiFields[8] (SentKanji2)
+      expect(fields[7], ''); // Zero misalignment: UNKNOWN_POS_7 safely maps to empty string
+      expect(fields[8], ''); // Zero misalignment: UNKNOWN_POS_8 safely maps to empty string
+    });
+
+    test('entryToModelFields accurately aligns with user custom template fields without misalignments', () {
+      final itomoEntry = VocabularyEntry(
+        id: 1,
+        vocabKanji: 'いとも',
+        vocabFurigana: 'いとも',
+        vocabPitch: '①',
+        vocabPoS: '副',
+        vocabDefSc: '非常，十分，很',
+        vocabDefJa: '非常に。たいそう。まったく。',
+        sentKanji1: 'いとも簡単にやってのけた',
+        sentFurigana1: 'いとも 簡単[かんたん]にやってのけた',
+        sentDefSc1: '轻而易举地完成',
+        createdAt: now,
+      );
+
+      final userTemplateFields = [
+        'VocabKanji',
+        'VocabPitch',
+        'VocabPoS',
+        'VocabFurigana',
+        'VocabDefSC',
+        'VocabDefTC',
+        'VocabPlus',
+        'VocabAudio',
+        'SentType1',
+        'SentKanji1',
+        'SentFurigana1',
+        'SentDefSC1',
+        'SentDefTC1',
+      ];
+
+      final mapped = AnkiExportService.entryToModelFields(itomoEntry, userTemplateFields);
+
+      expect(mapped.length, 13);
+      expect(mapped[0], 'いとも'); // VocabKanji
+      expect(mapped[1], '①'); // VocabPitch correctly extracted and preserved!
+      expect(mapped[2], '副'); // VocabPoS
+      expect(mapped[3], 'いとも'); // VocabFurigana (cleaned)
+      expect(mapped[4], '非常，十分，很'); // VocabDefSC
+      expect(mapped[5], ''); // VocabDefTC: empty, NOT poisoned with SentKanji1!
+      expect(mapped[6], ''); // VocabPlus: empty, NOT poisoned with SentDefSC1!
+      expect(mapped[7], ''); // VocabAudio: empty, NOT poisoned with SentKanji2!
+      expect(mapped[8], ''); // SentType1: empty, NOT poisoned!
+      expect(mapped[9], 'いとも簡単にやってのけた'); // SentKanji1
+      expect(mapped[10], '<b>いとも</b> 簡単[かんたん]にやってのけた'); // SentFurigana1 (keyword bolded)
+      expect(mapped[11], '轻而易举地完成'); // SentDefSC1
+      expect(mapped[12], ''); // SentDefTC1: empty, NOT poisoned!
     });
 
     test('exportEntries dynamically queries getFieldList and exports 2-field Basic model without error', () async {
@@ -427,7 +476,7 @@ void main() {
       );
       expect(fields.length, 3);
       expect(fields[0], '青空が広がる');
-      expect(fields[1], '青空[あおぞら]が 広[ひろ]がる');
+      expect(fields[1], '<b>青空[あおぞら]</b>が 広[ひろ]がる');
       expect(fields[2], '晴空万里'); // Must be SentDefSC1, NOT VocabPoS
 
       final fields2 = AnkiExportService.entryToModelFields(
@@ -436,7 +485,7 @@ void main() {
       );
       expect(fields2.length, 4);
       expect(fields2[0], '青空が広がる');
-      expect(fields2[1], '青空[あおぞら]が 広[ひろ]がる');
+      expect(fields2[1], '<b>青空[あおぞら]</b>が 広[ひろ]がる');
       expect(fields2[2], '晴空万里');
       expect(fields2[3], '晴空万里');
     });
@@ -480,7 +529,7 @@ void main() {
       expect(yomitanValues[1], 'あおぞら');
       expect(yomitanValues[2], '蔚蓝的天空；晴空。');
       expect(yomitanValues[3], '青空が広がる');
-      expect(yomitanValues[4], '青空[あおぞら]が 広[ひろ]がる');
+      expect(yomitanValues[4], '<b>青空[あおぞら]</b>が 広[ひろ]がる');
       expect(yomitanValues[5], '晴空万里');
 
       final jaFields = [
@@ -536,7 +585,7 @@ void main() {
       expect(bridge.lastAddedNote['mid'], 80);
       expect(bridge.lastAddedNote['fields'].length, 3);
       expect(bridge.lastAddedNote['fields'][0], '青空が広がる');
-      expect(bridge.lastAddedNote['fields'][1], '青空[あおぞら]が 広[ひろ]がる');
+      expect(bridge.lastAddedNote['fields'][1], '<b>青空[あおぞら]</b>が 広[ひろ]がる');
       expect(bridge.lastAddedNote['fields'][2], '晴空万里');
     });
 
@@ -547,14 +596,13 @@ void main() {
       expect(fields[12], '7');
     });
 
-    test('entryToModelFields safely handles unknown fields beyond 13 items without throwing OutOfBounds', () {
+    test('entryToModelFields safely handles unknown fields beyond 13 items without throwing OutOfBounds or misaligning', () {
       final extraFields = List<String>.generate(20, (i) => 'UNKNOWN_EXTRA_$i');
       final fields = AnkiExportService.entryToModelFields(sampleEntry, extraFields);
       expect(fields.length, 20);
-      expect(fields[0], '青空'); // Index 0 fallback to ankiFields[0]
-      expect(fields[12], '7'); // Index 12 fallback to ankiFields[12]
-      expect(fields[13], ''); // Index 13 out of ankiFields bounds -> safely returns ''
-      expect(fields[19], ''); // Index 19 safely returns ''
+      for (final val in fields) {
+        expect(val, ''); // All unknown fields safely return empty string to prevent field misalignment
+      }
     });
 
     test('entryToModelFields handles single-field model correctly', () {

@@ -32,6 +32,9 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
   @override
   void initState() {
     super.initState();
+    // 预热持久化 Anki 配置加载
+    ref.read(ankiConfigProvider.notifier).ensureLoaded();
+
     final notificationService =
         ref.read(persistentNotificationServiceProvider);
     _notificationSub =
@@ -79,6 +82,10 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
   }
 
   Future<void> _handleExportToAnki() async {
+    // 强制等待持久化配置就绪，避免重进应用后时序竞争回退默认牌组/模板
+    await ref.read(ankiConfigProvider.notifier).ensureLoaded();
+    if (!mounted) return;
+
     final vocabState = ref.read(vocabularyProvider);
     final count = vocabState.unexportedCount;
 
@@ -596,6 +603,26 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                                   ),
                                 ),
                               ],
+                              if (entry.vocabPitch.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    entry.vocabPitch,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: colorScheme.onPrimaryContainer,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
                               if (entry.vocabPoS.isNotEmpty) ...[
                                 const SizedBox(width: 8),
                                 Container(
@@ -709,6 +736,19 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: colorScheme.secondary,
                           ),
+                        ),
+                       if (entry.vocabPitch.isNotEmpty)
+                        Chip(
+                          label: Text(
+                            entry.vocabPitch,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          backgroundColor: colorScheme.primaryContainer,
                         ),
                       if (entry.vocabPoS.isNotEmpty)
                         Chip(

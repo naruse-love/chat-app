@@ -63,5 +63,20 @@ void main() {
       await notifier.updateModelName('   ');
       expect(notifier.state.modelName, 'JLPT卡片模板');
     });
+
+    test('ensureLoaded awaits initialization and returns fully loaded state without race condition', () async {
+      SharedPreferences.setMockInitialValues({
+        'anki_deck_name': '异步无竞争牌组',
+        'anki_model_name': '异步无竞争模型',
+      });
+
+      final notifier = AnkiConfigNotifier();
+      // Immediately call ensureLoaded() without relying on arbitrary delays
+      final state = await notifier.ensureLoaded();
+
+      expect(state.deckName, '异步无竞争牌组');
+      expect(state.modelName, '异步无竞争模型');
+      expect(state.isLoaded, isTrue);
+    });
   });
 }

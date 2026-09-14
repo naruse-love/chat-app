@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:ankidroid_for_flutter/ankidroid_for_flutter.dart';
 import '../models/vocabulary_entry.dart';
 import 'anki_export_service_interface.dart';
+import 'weblio_service.dart';
 
 export 'anki_export_service_interface.dart';
 
@@ -629,7 +630,136 @@ ruby rt { font-size: 0.55em; color: #64748b; }
     '链接',
   };
 
-  /// 根据字段名和索引，将 VocabularyEntry 属性映射为对应字段值
+  static const Set<String> _vocabPitchAliases = {
+    'vocabpitch',
+    'vocabularypitch',
+    'pitch',
+    'pitchaccent',
+    'accent',
+    'vocabaccent',
+    '声调',
+    '音调',
+    '音调核',
+    '音調',
+    'アクセント',
+    'アクセント核',
+  };
+
+  static const Set<String> _vocabDefTcAliases = {
+    'vocabdeftc',
+    'vocabularydeftc',
+    'deftc',
+    'meaningtc',
+    'tcmeaning',
+    'definitiontc',
+    'tcdef',
+    'glossarytc',
+    'traditionalchinese',
+    '繁体',
+    '繁体释义',
+    '繁体中文',
+    '繁體',
+    '繁體釋義',
+    '繁體中文',
+  };
+
+  static const Set<String> _vocabPlusAliases = {
+    'vocabplus',
+    'vocabularyplus',
+    'plus',
+    'supplement',
+    'addition',
+    '补充',
+    '补充说明',
+    '追記',
+  };
+
+  static const Set<String> _vocabAudioAliases = {
+    'vocabaudio',
+    'vocabularyaudio',
+    'audio',
+    'sound',
+    'sound1',
+    'vocabsound',
+    'pronunciationsound',
+    'wordaudio',
+    'wordsound',
+    '音频',
+    '单词音频',
+    '发音音频',
+    '音声',
+    '発音',
+  };
+
+  static const Set<String> _sentType1Aliases = {
+    'senttype1',
+    'senttype',
+    'sentencetype1',
+    'sentencetype',
+    'type1',
+    '例句类型1',
+    '例句类型',
+  };
+
+  static const Set<String> _sentType2Aliases = {
+    'senttype2',
+    'sentencetype2',
+    'type2',
+    '例句类型2',
+  };
+
+  static const Set<String> _sentAudio1Aliases = {
+    'sentaudio1',
+    'sentaudio',
+    'sentenceaudio1',
+    'sentenceaudio',
+    'sentsound1',
+    'sentsound',
+    'sentencesound1',
+    'sentencesound',
+    '例句音频1',
+    '例句音频',
+  };
+
+  static const Set<String> _sentAudio2Aliases = {
+    'sentaudio2',
+    'sentenceaudio2',
+    'sentsound2',
+    'sentencesound2',
+    '例句音频2',
+  };
+
+  static const Set<String> _sentDefTc1Aliases = {
+    'sentdeftc1',
+    'sent1deftc',
+    'sentdeftc',
+    'sentencedeftc1',
+    'sentence1deftc',
+    'senttranstc1',
+    'sent1transtc',
+    'sentencetranstc1',
+    'sentence1transtc',
+    '例句繁体1',
+    '例句繁体翻译1',
+    '例句繁体',
+    '例句繁体翻译',
+  };
+
+  static const Set<String> _sentDefTc2Aliases = {
+    'sentdeftc2',
+    'sent2deftc',
+    'sentencedeftc2',
+    'sentence2deftc',
+    'senttranstc2',
+    'sent2transtc',
+    'sentencetranstc2',
+    'sentence2transtc',
+    '例句繁体2',
+    '例句繁体翻译2',
+  };
+
+  /// 根据字段名将 VocabularyEntry 属性精准映射为对应字段值
+  /// 彻底废除索引盲目回退，未识别的扩展字段统一安全填充空字符串，防止错位
   static String mapFieldValue(
     String fieldName,
     VocabularyEntry entry, [
@@ -640,6 +770,9 @@ ruby rt { font-size: 0.55em; color: #64748b; }
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9\u4e00-\u9fa5\u3040-\u30ff\u3400-\u4dbf]'), '');
 
+    if (_vocabPitchAliases.contains(norm)) {
+      return entry.vocabPitch;
+    }
     if (_vocabKanjiAliases.contains(norm)) {
       return entry.vocabKanji.trim();
     }
@@ -652,14 +785,35 @@ ruby rt { font-size: 0.55em; color: #64748b; }
     if (_vocabDefScAliases.contains(norm)) {
       return entry.vocabDefSc;
     }
+    if (_vocabDefTcAliases.contains(norm)) {
+      return '';
+    }
+    if (_vocabPlusAliases.contains(norm)) {
+      return '';
+    }
+    if (_vocabAudioAliases.contains(norm)) {
+      return '';
+    }
     if (_vocabDefJaAliases.contains(norm)) {
       return entry.vocabDefJa;
+    }
+    if (_sentType1Aliases.contains(norm) || _sentType2Aliases.contains(norm)) {
+      return '';
+    }
+    if (_sentAudio1Aliases.contains(norm) || _sentAudio2Aliases.contains(norm)) {
+      return '';
+    }
+    if (_sentDefTc1Aliases.contains(norm) || _sentDefTc2Aliases.contains(norm)) {
+      return '';
     }
     if (_sentKanji1Aliases.contains(norm)) {
       return entry.sentKanji1 ?? '';
     }
     if (_sentFurigana1Aliases.contains(norm)) {
-      return entry.sentFurigana1 ?? '';
+      return WeblioService.highlightKeywordInFurigana(
+        entry.sentFurigana1 ?? '',
+        entry.vocabKanji,
+      );
     }
     if (_sentDefSc1Aliases.contains(norm)) {
       return entry.sentDefSc1 ?? '';
@@ -668,7 +822,10 @@ ruby rt { font-size: 0.55em; color: #64748b; }
       return entry.sentKanji2 ?? '';
     }
     if (_sentFurigana2Aliases.contains(norm)) {
-      return entry.sentFurigana2 ?? '';
+      return WeblioService.highlightKeywordInFurigana(
+        entry.sentFurigana2 ?? '',
+        entry.vocabKanji,
+      );
     }
     if (_sentDefSc2Aliases.contains(norm)) {
       return entry.sentDefSc2 ?? '';
@@ -686,13 +843,7 @@ ruby rt { font-size: 0.55em; color: #64748b; }
       return entry.sourceDict.isNotEmpty ? entry.sourceDict : 'AI生词本';
     }
 
-    // 若名称未匹配且提供了位置索引，在 13 个标准字段范围内按位置回退
-    if (fallbackIndex != null &&
-        fallbackIndex >= 0 &&
-        fallbackIndex < ankiFields.length) {
-      return mapFieldValue(ankiFields[fallbackIndex], entry);
-    }
-
+    // 彻底废除 fallbackIndex 盲目回退！未识别字段一律安全返回空字符串，杜绝错位污染
     return '';
   }
 
@@ -705,10 +856,16 @@ ruby rt { font-size: 0.55em; color: #64748b; }
       entry.vocabDefSc,
       entry.vocabDefJa,
       entry.sentKanji1 ?? '',
-      entry.sentFurigana1 ?? '',
+      WeblioService.highlightKeywordInFurigana(
+        entry.sentFurigana1 ?? '',
+        entry.vocabKanji,
+      ),
       entry.sentDefSc1 ?? '',
       entry.sentKanji2 ?? '',
-      entry.sentFurigana2 ?? '',
+      WeblioService.highlightKeywordInFurigana(
+        entry.sentFurigana2 ?? '',
+        entry.vocabKanji,
+      ),
       entry.sentDefSc2 ?? '',
       entry.sourceDict,
       entry.id?.toString() ?? '',
@@ -725,7 +882,7 @@ ruby rt { font-size: 0.55em; color: #64748b; }
     }
     return List<String>.generate(
       modelFields.length,
-      (index) => mapFieldValue(modelFields[index], entry, index),
+      (index) => mapFieldValue(modelFields[index], entry),
     );
   }
 

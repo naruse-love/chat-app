@@ -1,3 +1,53 @@
+## 2026-09-14 Feat: Japanese Vocab Tag Alignment, Pitch Accent Extraction, Foreign Word Origin & Anki Config Persistence (v1.40.0+41)
+
+### 变更文件
+- `lib/models/vocabulary_entry.dart`, `lib/models/vocabulary_entry.g.dart`:
+  - 增加 `vocabPitch: String` 字段（默认 `''`），支持标准圆圈声调标记（`⓪`、`①` 等）；
+  - 同步更新 `fromMap`、`toMap`、`copyWith`、`toJson` 与 `fromJson`。
+- `lib/data/database_helper.dart`:
+  - SQLite 数据库架构版本从 6 升级至 7；
+  - `_createVocabularyTable` 与 `_onUpgrade` 中增加 `vocabPitch TEXT NOT NULL DEFAULT ''` 字段平滑迁移。
+- `lib/services/weblio_service.dart`:
+  - `WeblioResult` 增加 `pitch` 与 `foreignOrigin` 字段；
+  - 新增 `cleanReading()`：清洗平假名/片假名中形态素连字符（`‐`、`-`）与间隔号（`・`、`･`），同时保留片假名长音符 `ー`；
+  - 新增 `formatPitchCircle()`：将词典原生数字 `0`-`10` / `〔0〕` 自动转换为规范圆圈数字 `⓪`-`⑩`；
+  - 新增 `isKatakana()` 与 `extractForeignOriginWord()`：从词典见出语或括号中智能提取外来语英文/原语原词（如 `スリル【thrill】` 提取出 `thrill`）；
+  - 新增 `highlightKeywordInFurigana()`：在例句注音标注中对目标关键词自动包裹 `<b>...</b>` 加粗渲染（包含其振假名注音结构，如 `<b>いとも</b> 簡単[かんたん]にやってのけた`）；
+  - 更新 HTML 解析器（`_parseSgkdj`、`_parseSingleKiji`、`mergeRedirectResult`）全面提取音调、清洗读音与外来语原词。
+- `lib/services/vocabulary_service.dart`:
+  - 规范化动词词性为日本语学习者标准（`他動1`、`自動5`、`自他動1`、`動サ変`、`名`、`副`、`形`、`形動`），消除传统日日辞书生僻文法标记（如 `動サ五（四）`、`動バ下一`）；
+  - 强化 LLM 提示词与兜底生成，要求外来语必须输出英文原词（严禁平假名转写）并输出圆圈音调；
+  - 在未配置 LLM 或离线测试降级时保持词典原生文本完好无损。
+- `lib/services/anki_export_service.dart`:
+  - 扩充别名集合覆盖 `VocabPitch`、`VocabDefTC`、`VocabPlus`、`VocabAudio`、`SentType1`、`SentType2`、`SentAudio1`、`SentAudio2`、`SentDefTC1`、`SentDefTC2`；
+  - 彻底废除盲目位置回退（`fallbackIndex`），未知字段安全返回空字符串 `""`，杜绝例句/翻译串位污染卡片；
+  - 在 `SentFurigana1` 与 `SentFurigana2` 中自动调用 `highlightKeywordInFurigana` 加粗关键词。
+- `lib/providers/anki_config_provider.dart`:
+  - 暴露 `initialization` Future 并新增 `Future<AnkiConfig> ensureLoaded()`，彻底解决重新进入应用时因异步 `SharedPreferences` 加载未完成导致自定义牌组/模板名称被默认值覆盖的时序竞争 Bug。
+- `lib/screens/vocabulary_screen.dart`:
+  - 在 `initState` 与 `_handleExportToAnki` 导出前等待 `ensureLoaded()`；
+  - 词条卡片列表与详情页中增加音调徽章 Chip 显示。
+- `test/models/vocabulary_entry_test.dart`:
+  - 增加 `vocabPitch` 默认值、`copyWith`、SQLite `toMap/fromMap` 与 JSON 序列化往返测试。
+- `test/data/vocabulary_dao_test.dart`:
+  - 增加 SQLite 数据库 v6 到 v7 迁移测试，验证 `vocabPitch` 列成功添加与默认值。
+- `test/services/weblio_service_test.dart`:
+  - 增加 `cleanReading`、`formatPitchCircle`、`isKatakana`、`extractForeignOriginWord` 与 `highlightKeywordInFurigana` 单元测试。
+- `test/services/anki_export_service_test.dart`:
+  - 增加用户自定义模板（`いとも` 13 字段对齐）单元测试，验证零串位与关键词加粗；
+  - 更新注音加粗断言与未知字段安全返回测试。
+- `test/providers/anki_config_provider_test.dart`:
+  - 增加 `ensureLoaded()` 无需任意延迟的可靠加载测试。
+- `pubspec.yaml`, `.agents/AGENTS.md`, `.agents/context.md`:
+  - 版本号同步递增至 `1.40.0+41`，全量测试基线升至 874/874 全部通过。
+
+### 核心技术指标与决策
+- **全量测试基线**：874 个测试用例全部通过（0 failures, 100% pass）
+- **静态分析基线**：`flutter analyze` 输出 `No issues found!`（0 errors, 0 warnings, 0 lints）
+- **版本号**：递增至 `1.40.0+41`
+
+---
+
 ## 2026-09-14 Fix: AnkiDroid Field Alias Completeness, Punctuation Normalization & Bridge Null-Safety (v1.39.0+40)
 
 ### 变更文件

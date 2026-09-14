@@ -26,7 +26,7 @@ class DatabaseHelper {
     try {
       return await openDatabase(
         path,
-        version: 6,
+        version: 7,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -41,7 +41,7 @@ class DatabaseHelper {
       } catch (_) {}
       return await openDatabase(
         path,
-        version: 6,
+        version: 7,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -154,6 +154,7 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         vocabKanji TEXT NOT NULL,
         vocabFurigana TEXT NOT NULL DEFAULT '',
+        vocabPitch TEXT NOT NULL DEFAULT '',
         vocabDefJa TEXT NOT NULL DEFAULT '',
         vocabDefSc TEXT NOT NULL DEFAULT '',
         vocabPoS TEXT NOT NULL DEFAULT '',
@@ -199,6 +200,9 @@ class DatabaseHelper {
     }
     if (oldVersion >= 5 && oldVersion < 6) {
       await db.execute('ALTER TABLE vocabulary ADD COLUMN exportedToAnki INTEGER NOT NULL DEFAULT 0');
+    }
+    if (oldVersion >= 5 && oldVersion < 7) {
+      await db.execute("ALTER TABLE vocabulary ADD COLUMN vocabPitch TEXT NOT NULL DEFAULT ''");
     }
   }
 

@@ -29,6 +29,8 @@ class WeblioResult {
   final String reading;
   final String definition;
   final String partOfSpeech;
+  final String pitch;
+  final String foreignOrigin;
   final List<WeblioExample> examples;
   final String sourceDict;
   final String sourceUrl;
@@ -38,6 +40,8 @@ class WeblioResult {
     required this.reading,
     required this.definition,
     required this.partOfSpeech,
+    this.pitch = '',
+    this.foreignOrigin = '',
     this.examples = const [],
     required this.sourceDict,
     required this.sourceUrl,
@@ -430,6 +434,10 @@ class WeblioService {
         ? original.reading
         : (target.reading.isNotEmpty ? target.reading : original.reading);
     final pos = original.partOfSpeech.isNotEmpty ? original.partOfSpeech : target.partOfSpeech;
+    final pitch = original.pitch.isNotEmpty ? original.pitch : target.pitch;
+    final foreignOrigin = original.foreignOrigin.isNotEmpty
+        ? original.foreignOrigin
+        : target.foreignOrigin;
 
     // 合并释义：保留语法说明原文，并追加目标词的实质释义（去重防止重复追加）
     final String combinedDef;
@@ -453,6 +461,8 @@ class WeblioService {
       reading: reading,
       definition: combinedDef,
       partOfSpeech: pos,
+      pitch: pitch,
+      foreignOrigin: foreignOrigin,
       examples: mergedExamples,
       sourceDict: original.sourceDict,
       sourceUrl: original.sourceUrl,
@@ -712,6 +722,150 @@ class WeblioService {
     return text.replaceAll(RegExp(r'[\(（][^\)）]+[\)）]'), '').trim();
   }
 
+  static const Map<String, String> _pitchCircleMap = {
+    '0': '⓪', '1': '①', '2': '②', '3': '③', '4': '④',
+    '5': '⑤', '6': '⑥', '7': '⑦', '8': '⑧', '9': '⑨',
+    '10': '⑩',
+    '０': '⓪', '１': '①', '２': '②', '３': '③', '４': '④',
+    '５': '⑤', '６': '⑥', '７': '⑦', '８': '⑧', '９': '⑨',
+    '１０': '⑩',
+  };
+
+  /// 将原生数字音调（如 0、1、2、〔0〕）转换为标准圆圈数字（⓪、①、② 等）
+  static String formatPitchCircle(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    if (_pitchCircleMap.containsKey(trimmed)) {
+      return _pitchCircleMap[trimmed]!;
+    }
+    if (RegExp(r'^[⓪①②③④⑤⑥⑦⑧⑨⑩]$').hasMatch(trimmed)) {
+      return trimmed;
+    }
+    final numMatch = RegExp(r'[0-9０-９]+').firstMatch(trimmed);
+    if (numMatch != null) {
+      final n = numMatch.group(0)!;
+      return _pitchCircleMap[n] ?? '⓪';
+    }
+    return '';
+  }
+
+  /// 清洗平假名/片假名读音中的连字符与词素分界符（如「いと‐も」->「いとも」）
+  /// 保留片假名长音符号「ー」(U+30FC)
+  static String cleanReading(String rawReading) {
+    var r = rawReading.trim();
+    if (r.isEmpty) return r;
+    r = r.replaceAll(RegExp(r'〔[^〕]*〕'), '');
+    r = r.replaceAll(RegExp(r'\[[0-9０-９]+\]'), '');
+    r = r.replaceAll(RegExp(r'[\u2010-\u2015\uFF0D\-]'), '');
+    r = r.replaceAll(RegExp(r'[\u30FB\uFF65]'), '');
+    return r.trim();
+  }
+
+  /// 判断词条是否为纯片假名外来语
+  static bool isKatakana(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+    return RegExp(r'^[\u30A0-\u30FF\u30FC\u30FB\s]+$').hasMatch(trimmed);
+  }
+
+  /// 从词典条目或释义中提取外来语英文/原语原词（如 ［英語: thrill］ -> thrill）
+  static String extractForeignOriginWord(String text) {
+    if (text.isEmpty) return '';
+
+    // 1. 【thrill】
+    final bracketEnMatch = RegExp(r'【([a-zA-Z\s\-]+)】').firstMatch(text);
+    if (bracketEnMatch != null) {
+      final w = bracketEnMatch.group(1)!.trim();
+      if (w.isNotEmpty) return w;
+    }
+
+    // 2. ［英語: thrill］ / [英語: thrill] / ［英: thrill］
+    final langMatch = RegExp(
+      r'[［\[（(〔](?:英語|英|米|フランス語|仏|ドイツ語|独|オランダ語|蘭|イタリア語|伊|ラテン語|拉)[:：\s]+([a-zA-Z\s\-]+?)(?:[;/／，,\s］\]）)〕])',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (langMatch != null) {
+      final w = langMatch.group(1)!.trim();
+      if (w.isNotEmpty) return w;
+    }
+
+    // 3. （英）thrill / [英] thrill
+    final shortLangMatch = RegExp(
+      r'[［\[（(](?:英語|英|米)[］\]）)]\s*([a-zA-Z\s\-]{2,30})',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (shortLangMatch != null) {
+      final w = shortLangMatch.group(1)!.trim();
+      if (w.isNotEmpty) return w;
+    }
+
+    return '';
+  }
+
+  /// 在例句振假名文本中，将目标生词关键词包裹在 <b>...</b> 中高亮显示
+  static String highlightKeywordInFurigana(String sentence, String keyword) {
+    final sent = sentence.trim();
+    final word = keyword.trim();
+    if (sent.isEmpty || word.isEmpty) return sent;
+    if (sent.contains('<b>') || sent.contains('<strong>')) return sent;
+
+    // 1. 纯假名或词条直接精准匹配（且确保不在 ruby 方括号 [...] 内部，且后方不是 [ 注音）
+    final exactPattern = RegExp(RegExp.escape(word));
+    for (final m in exactPattern.allMatches(sent)) {
+      final beforeMatch = sent.substring(0, m.start);
+      final openCount = '['.allMatches(beforeMatch).length;
+      final closeCount = ']'.allMatches(beforeMatch).length;
+      if (openCount == closeCount && !sent.substring(m.end).startsWith('[')) {
+        return '${sent.substring(0, m.start)}<b>$word</b>${sent.substring(m.end)}';
+      }
+    }
+
+    // 2. 带振假名注音的汉字生词匹配（如 講[こう]じる 或 青空[あおぞら]）
+    final buffer = StringBuffer();
+    for (int i = 0; i < word.length; i++) {
+      final char = word[i];
+      final isKanji = RegExp(r'[\u4e00-\u9faf\u3400-\u4dbfヶ々]').hasMatch(char);
+      if (isKanji) {
+        buffer.write(RegExp.escape(char));
+        buffer.write(r'(?:\s*\[[^\]]+\])?\s*');
+      } else {
+        buffer.write(RegExp.escape(char));
+        buffer.write(r'\s*');
+      }
+    }
+    final rubyPattern = RegExp(buffer.toString().trim());
+    final rubyMatch = rubyPattern.firstMatch(sent);
+    if (rubyMatch != null && rubyMatch.group(0)!.isNotEmpty) {
+      final matchedText = rubyMatch.group(0)!;
+      return '${sent.substring(0, rubyMatch.start)}<b>$matchedText</b>${sent.substring(rubyMatch.end)}';
+    }
+
+    // 3. 活用动词/形容词词干匹配（如 食べた / 食べて 匹配 食べる）
+    final stem = word.replaceAll(RegExp(r'[\u3040-\u309f]+$'), '');
+    if (stem.isNotEmpty) {
+      final stemBuffer = StringBuffer();
+      for (int i = 0; i < stem.length; i++) {
+        final char = stem[i];
+        final isKanji = RegExp(r'[\u4e00-\u9faf\u3400-\u4dbfヶ々]').hasMatch(char);
+        if (isKanji) {
+          stemBuffer.write(RegExp.escape(char));
+          stemBuffer.write(r'(?:\s*\[[^\]]+\])?\s*');
+        } else {
+          stemBuffer.write(RegExp.escape(char));
+          stemBuffer.write(r'\s*');
+        }
+      }
+      final inflectionPattern = RegExp('${stemBuffer.toString().trim()}[\\u3040-\\u309f]{0,4}');
+      final infMatch = inflectionPattern.firstMatch(sent);
+      if (infMatch != null && infMatch.group(0)!.isNotEmpty) {
+        final matchedText = infMatch.group(0)!;
+        return '${sent.substring(0, infMatch.start)}<b>$matchedText</b>${sent.substring(infMatch.end)}';
+      }
+    }
+
+    return sent;
+  }
+
   /// 解析小学馆《デジタル大辞泉》
   WeblioResult? _parseSgkdj(dom.Document doc, String word, String sourceUrl) {
     dom.Element? sgkdjDiv = doc.querySelector('.Sgkdj');
@@ -801,11 +955,27 @@ class WeblioService {
 
     if (reading.isEmpty && midashigoText.isNotEmpty) {
       final kanaPart = midashigoText.split('【').first.trim();
-      reading = kanaPart.replaceAll('・', '').replaceAll(RegExp(r'〔[^〕]*〕'), '').trim();
+      reading = kanaPart;
     }
 
+    reading = cleanReading(reading);
     if (reading.isEmpty) {
       reading = word;
+    }
+
+    // 1.1 声调 (Pitch)
+    String pitch = '';
+    final pitchMatch = RegExp(r'〔([0-9０-９]+)〕').firstMatch(midashigoText) ??
+        RegExp(r'〔([0-9０-９]+)〕').firstMatch(kijiParent?.text ?? sgkdjDiv.text) ??
+        RegExp(r'\[([0-9０-９]+)\]').firstMatch(midashigoText);
+    if (pitchMatch != null) {
+      pitch = formatPitchCircle(pitchMatch.group(1)!);
+    }
+
+    // 1.2 外来语英文/原语原词 (Foreign Origin Word)
+    String foreignOrigin = extractForeignOriginWord(midashigoText);
+    if (foreignOrigin.isEmpty) {
+      foreignOrigin = extractForeignOriginWord(kijiParent?.text ?? sgkdjDiv.text);
     }
 
     // 2. 词性 (PoS)
@@ -939,6 +1109,8 @@ class WeblioService {
       reading: reading,
       definition: definition,
       partOfSpeech: pos,
+      pitch: pitch,
+      foreignOrigin: foreignOrigin,
       examples: examples.take(2).toList(),
       sourceDict: 'デジタル大辞泉',
       sourceUrl: sourceUrl,
@@ -1097,7 +1269,7 @@ class WeblioService {
     String reading = '';
     final midashigo = kiji.querySelector('.midashigo')?.text.trim() ?? '';
     if (midashigo.isNotEmpty) {
-      reading = midashigo.split('【').first.replaceAll('・', '').trim();
+      reading = midashigo.split('【').first.trim();
     }
     if (reading.isEmpty) {
       final readingMatch = RegExp(r'読み方：([^\s\n\r<]+)').firstMatch(kiji.text);
@@ -1105,8 +1277,24 @@ class WeblioService {
         reading = readingMatch.group(1)!.trim();
       }
     }
+    reading = cleanReading(reading);
     if (reading.isEmpty) {
       reading = word;
+    }
+
+    // 1.1 声调 (Pitch)
+    String pitch = '';
+    final pitchMatch = RegExp(r'〔([0-9０-９]+)〕').firstMatch(midashigo) ??
+        RegExp(r'〔([0-9０-９]+)〕').firstMatch(kiji.text) ??
+        RegExp(r'\[([0-9０-９]+)\]').firstMatch(midashigo);
+    if (pitchMatch != null) {
+      pitch = formatPitchCircle(pitchMatch.group(1)!);
+    }
+
+    // 1.2 外来语英文/原语原词 (Foreign Origin Word)
+    String foreignOrigin = extractForeignOriginWord(midashigo);
+    if (foreignOrigin.isEmpty) {
+      foreignOrigin = extractForeignOriginWord(kiji.text);
     }
 
     // 2. 词性
@@ -1202,6 +1390,8 @@ class WeblioService {
       reading: reading,
       definition: definition,
       partOfSpeech: pos,
+      pitch: pitch,
+      foreignOrigin: foreignOrigin,
       examples: examples.take(2).toList(),
       sourceDict: sourceDict,
       sourceUrl: sourceUrl,
