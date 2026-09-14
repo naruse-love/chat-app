@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:ankidroid_for_flutter/ankidroid_for_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/vocabulary_entry.dart';
 import 'anki_export_service_interface.dart';
 import 'weblio_service.dart';
@@ -407,6 +408,8 @@ ruby rt { font-size: 0.55em; color: #64748b; }
   };
 
   static const Set<String> _vocabDefScAliases = {
+    'vocabdef',
+    'vocabularydef',
     'vocabdefsc',
     'vocabularydefsc',
     'defsc',
@@ -942,12 +945,27 @@ ruby rt { font-size: 0.55em; color: #64748b; }
     }
 
     try {
-      final targetDeck = (deckName != null && deckName.trim().isNotEmpty)
+      String targetDeck = (deckName != null && deckName.trim().isNotEmpty)
           ? deckName.trim()
-          : defaultDeckName;
-      final targetModel = (modelName != null && modelName.trim().isNotEmpty)
+          : '';
+      String targetModel = (modelName != null && modelName.trim().isNotEmpty)
           ? modelName.trim()
-          : defaultModelName;
+          : '';
+
+      if (targetDeck.isEmpty || targetModel.isEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          if (targetDeck.isEmpty) {
+            targetDeck = prefs.getString('anki_deck_name') ?? defaultDeckName;
+          }
+          if (targetModel.isEmpty) {
+            targetModel = prefs.getString('anki_model_name') ?? defaultModelName;
+          }
+        } catch (_) {
+          if (targetDeck.isEmpty) targetDeck = defaultDeckName;
+          if (targetModel.isEmpty) targetModel = defaultModelName;
+        }
+      }
 
       final deckId = await getOrCreateDeck(targetDeck);
       final modelId = await getOrCreateModel(targetModel);

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chat/models/vocabulary_entry.dart';
 import 'package:chat/services/anki_export_service.dart';
 
@@ -621,6 +622,23 @@ void main() {
       expect(fields[1], 'あおぞら');
       expect(fields[2], 'あおぞら');
       expect(fields[3], 'あおぞら');
+    });
+
+    test('exportEntries falls back to SharedPreferences custom deck and model name when not provided', () async {
+      SharedPreferences.setMockInitialValues({
+        'anki_deck_name': '自定义收藏牌组',
+        'anki_model_name': '自定义卡片模板',
+      });
+
+      final bridge = MockAnkidroidBridge();
+      final service = AnkiExportService(bridge: bridge);
+
+      final result = await service.exportEntries([sampleEntry]);
+      expect(result.isSuccess, isTrue);
+      expect(result.successCount, 1);
+      // Verify deck was created or looked up using custom deck name from SharedPreferences
+      expect(bridge.decks.values, contains('自定义收藏牌组'));
+      expect(bridge.models.values, contains('自定义卡片模板'));
     });
   });
 }

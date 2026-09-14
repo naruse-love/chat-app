@@ -305,7 +305,7 @@ void main() {
 
       expect(result.vocabKanji, '講じる');
       expect(result.vocabFurigana, 'こうじる');
-      expect(result.vocabPoS, '動ザ上一');
+      expect(result.vocabPoS, '他動1');
       expect(result.sourceDict, 'デジタル大辞泉');
       // Must preserve the grammatical note from dictionary
       expect(result.vocabDefJa, contains('「こう（講）ずる」（サ変）の上一段化。'));
@@ -363,7 +363,7 @@ void main() {
       final entry = vocabService.parseFallbackEntryJson(fallbackJson, '新造語');
       expect(entry.vocabKanji, '新造語');
       expect(entry.vocabFurigana, 'しんぞうご');
-      expect(entry.vocabPoS, '［名］');
+      expect(entry.vocabPoS, '名');
       expect(entry.vocabDefJa, '新しく作られた言葉。新語。');
       expect(entry.vocabDefSc, '新造的词语，新词。');
       expect(entry.sentKanji1, '若者が新造語を使う');
@@ -544,6 +544,20 @@ void main() {
       final inDb = await vocabDao.findByKanji('講じる');
       expect(inDb, isNotNull);
       expect(inDb!.vocabDefJa, contains('１ 講義をする。'));
+    });
+
+    test('normalizePartOfSpeech accurately maps traditional dictionary POS to learner POS', () {
+      expect(VocabularyService.normalizePartOfSpeech('動サ五（四）'), '他動5');
+      expect(VocabularyService.normalizePartOfSpeech('動ザ上一'), '他動1');
+      expect(VocabularyService.normalizePartOfSpeech('動バ下一'), '他動1');
+      expect(VocabularyService.normalizePartOfSpeech('動カ変'), '動カ変');
+      expect(VocabularyService.normalizePartOfSpeech('［名］'), '名');
+      expect(VocabularyService.normalizePartOfSpeech('［名］(スル)'), '名');
+      expect(VocabularyService.normalizePartOfSpeech('［副］'), '副');
+      expect(VocabularyService.normalizePartOfSpeech('［形動］'), '形動');
+      expect(VocabularyService.normalizePartOfSpeech('［形］'), '形');
+      expect(VocabularyService.normalizePartOfSpeech('自動5'), '自動5');
+      expect(VocabularyService.normalizePartOfSpeech('他動1'), '他動1');
     });
   });
 }

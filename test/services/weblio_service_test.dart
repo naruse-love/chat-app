@@ -499,6 +499,8 @@ void main() {
       expect(WeblioService.cleanReading('ス・リ・ル'), 'スリル');
       expect(WeblioService.cleanReading('コーヒー'), 'コーヒー');
       expect(WeblioService.cleanReading('パーティー'), 'パーティー');
+      expect(WeblioService.cleanReading('いと‐も［0］'), 'いとも');
+      expect(WeblioService.cleanReading('ス・リ・ル(1)'), 'スリル');
     });
 
     test('formatPitchCircle converts numbers and bracketed numbers to circle numerals', () {
@@ -507,6 +509,8 @@ void main() {
       expect(WeblioService.formatPitchCircle('2'), '②');
       expect(WeblioService.formatPitchCircle('〔0〕'), '⓪');
       expect(WeblioService.formatPitchCircle('〔1〕'), '①');
+      expect(WeblioService.formatPitchCircle('〔1・0〕'), '①');
+      expect(WeblioService.formatPitchCircle('〔0・1〕'), '⓪');
       expect(WeblioService.formatPitchCircle('①'), '①');
       expect(WeblioService.formatPitchCircle(''), '');
       expect(WeblioService.formatPitchCircle('副'), '');
@@ -525,6 +529,9 @@ void main() {
       expect(WeblioService.extractForeignOriginWord('スリル［英語: thrill］'), 'thrill');
       expect(WeblioService.extractForeignOriginWord('【thrill】'), 'thrill');
       expect(WeblioService.extractForeignOriginWord('［(英) thrill］'), 'thrill');
+      expect(WeblioService.extractForeignOriginWord('スリル（thrill）'), 'thrill');
+      expect(WeblioService.extractForeignOriginWord('スリル[thrill]'), 'thrill');
+      expect(WeblioService.extractForeignOriginWord('ロックンロール【rock \'n\' roll】'), 'rock \'n\' roll');
       expect(WeblioService.extractForeignOriginWord('純和語'), isEmpty);
     });
 
@@ -540,6 +547,20 @@ void main() {
       expect(
         WeblioService.highlightKeywordInFurigana('取[と]って 代[か]わる', '取って代わる'),
         '<b>取[と]って 代[か]わる</b>',
+      );
+      // Adversarial test: compound words containing the verb stem must NOT be falsely highlighted
+      expect(
+        WeblioService.highlightKeywordInFurigana('銀行に行きました', '行く'),
+        '銀行に<b>行きました</b>',
+      );
+      expect(
+        WeblioService.highlightKeywordInFurigana('銀[ぎん]行[こう]へ 行[い]きました', '行く'),
+        '銀[ぎん]行[こう]へ <b>行[い]きました</b>',
+      );
+      // Hiragana verb stem inflection
+      expect(
+        WeblioService.highlightKeywordInFurigana('ご飯をたべた', 'たべる'),
+        'ご飯を<b>たべた</b>',
       );
     });
   });

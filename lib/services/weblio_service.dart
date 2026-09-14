@@ -755,9 +755,10 @@ class WeblioService {
     var r = rawReading.trim();
     if (r.isEmpty) return r;
     r = r.replaceAll(RegExp(r'〔[^〕]*〕'), '');
-    r = r.replaceAll(RegExp(r'\[[0-9０-９]+\]'), '');
+    r = r.replaceAll(RegExp(r'[\[［][0-9０-９]+(?:[・,、/][0-9０-９]+)*[\]］]'), '');
+    r = r.replaceAll(RegExp(r'[\(（][0-9０-９]+(?:[・,、/][0-9０-９]+)*[\)）]'), '');
     r = r.replaceAll(RegExp(r'[\u2010-\u2015\uFF0D\-]'), '');
-    r = r.replaceAll(RegExp(r'[\u30FB\uFF65]'), '');
+    r = r.replaceAll(RegExp(r'[\u30FB\uFF65\u00B7\u2022]'), '');
     return r.trim();
   }
 
@@ -768,34 +769,41 @@ class WeblioService {
     return RegExp(r'^[\u30A0-\u30FF\u30FC\u30FB\s]+$').hasMatch(trimmed);
   }
 
-  /// 从词典条目或释义中提取外来语英文/原语原词（如 ［英語: thrill］ -> thrill）
+  /// 从词典条目或释义中提取外来语英文/原语原词（如 ［英語: thrill］ -> thrill, 【thrill】 -> thrill）
   static String extractForeignOriginWord(String text) {
     if (text.isEmpty) return '';
 
-    // 1. 【thrill】
-    final bracketEnMatch = RegExp(r'【([a-zA-Z\s\-]+)】').firstMatch(text);
+    // 1. 【thrill】 / ［thrill］ / [thrill] / 《thrill》
+    final bracketEnMatch = RegExp(r"[【［\[《]([a-zA-Z\s\-'\.]+)[】］\]》]").firstMatch(text);
     if (bracketEnMatch != null) {
       final w = bracketEnMatch.group(1)!.trim();
-      if (w.isNotEmpty) return w;
+      if (w.isNotEmpty && w.length >= 2) return w;
     }
 
-    // 2. ［英語: thrill］ / [英語: thrill] / ［英: thrill］
+    // 2. ［英語: thrill］ / [英語: thrill] / ［英: thrill］ / 【英語: thrill】 / ［(英) thrill］ / [(英) thrill]
     final langMatch = RegExp(
-      r'[［\[（(〔](?:英語|英|米|フランス語|仏|ドイツ語|独|オランダ語|蘭|イタリア語|伊|ラテン語|拉)[:：\s]+([a-zA-Z\s\-]+?)(?:[;/／，,\s］\]）)〕])',
+      r"[［\[（(〔【]*\s*(?:英語|英|米|フランス語|仏|ドイツ語|独|オランダ語|蘭|イタリア語|伊|ラテン語|拉)[］\]）)〕】]*[:：\s]+([a-zA-Z\s\-'\.]+?)(?:[;/／，,\s］\]）)〕】]|$)",
       caseSensitive: false,
     ).firstMatch(text);
     if (langMatch != null) {
       final w = langMatch.group(1)!.trim();
-      if (w.isNotEmpty) return w;
+      if (w.isNotEmpty && w.length >= 2) return w;
     }
 
-    // 3. （英）thrill / [英] thrill
+    // 3. （英）thrill / [英] thrill / (英) thrill
     final shortLangMatch = RegExp(
-      r'[［\[（(](?:英語|英|米)[］\]）)]\s*([a-zA-Z\s\-]{2,30})',
+      r"[［\[（(](?:英語|英|米)[］\]）)]\s*([a-zA-Z\s\-'\.]{2,40})",
       caseSensitive: false,
     ).firstMatch(text);
     if (shortLangMatch != null) {
       final w = shortLangMatch.group(1)!.trim();
+      if (w.isNotEmpty) return w;
+    }
+
+    // 4. 片假名后直接跟圆括号英文：(thrill) / （thrill）
+    final parenEnMatch = RegExp(r"[（\(]([a-zA-Z\s\-'\.]{2,40})[）\)]").firstMatch(text);
+    if (parenEnMatch != null) {
+      final w = parenEnMatch.group(1)!.trim();
       if (w.isNotEmpty) return w;
     }
 
@@ -816,6 +824,13 @@ class WeblioService {
       final openCount = '['.allMatches(beforeMatch).length;
       final closeCount = ']'.allMatches(beforeMatch).length;
       if (openCount == closeCount && !sent.substring(m.end).startsWith('[')) {
+        // 若词首为汉字，前驱不能紧贴汉字（防止如 "行く" 误匹配 compound 中的 "銀行"）
+        if (m.start > 0 && RegExp(r'[\u4e00-\u9faf\u3400-\u4dbfヶ々]').hasMatch(word[0])) {
+          final prevChar = sent[m.start - 1];
+          if (RegExp(r'[\u4e00-\u9faf\u3400-\u4dbfヶ々]').hasMatch(prevChar)) {
+            continue;
+          }
+        }
         return '${sent.substring(0, m.start)}<b>$word</b>${sent.substring(m.end)}';
       }
     }
@@ -834,14 +849,30 @@ class WeblioService {
       }
     }
     final rubyPattern = RegExp(buffer.toString().trim());
-    final rubyMatch = rubyPattern.firstMatch(sent);
-    if (rubyMatch != null && rubyMatch.group(0)!.isNotEmpty) {
+    for (final rubyMatch in rubyPattern.allMatches(sent)) {
+      final start = rubyMatch.start;
+      final beforeMatch = sent.substring(0, start);
+      final openCount = '['.allMatches(beforeMatch).length;
+      final closeCount = ']'.allMatches(beforeMatch).length;
+      if (openCount != closeCount) continue;
+
+      if (start > 0) {
+        final prevChar = sent[start - 1];
+        if (RegExp(r'[\u4e00-\u9faf\u3400-\u4dbfヶ々]').hasMatch(prevChar)) {
+          continue;
+        }
+      }
       final matchedText = rubyMatch.group(0)!;
-      return '${sent.substring(0, rubyMatch.start)}<b>$matchedText</b>${sent.substring(rubyMatch.end)}';
+      if (matchedText.isNotEmpty) {
+        return '${sent.substring(0, start)}<b>$matchedText</b>${sent.substring(rubyMatch.end)}';
+      }
     }
 
-    // 3. 活用动词/形容词词干匹配（如 食べた / 食べて 匹配 食べる）
-    final stem = word.replaceAll(RegExp(r'[\u3040-\u309f]+$'), '');
+    // 3. 活用动词/形容词词干匹配（如 食べた / 食べて 匹配 食べる；行きました 匹配 行く；たべた 匹配 たべる）
+    String stem = word.replaceAll(RegExp(r'[\u3040-\u309f]+$'), '');
+    if (stem.isEmpty && word.length > 1) {
+      stem = word.substring(0, word.length - 1);
+    }
     if (stem.isNotEmpty) {
       final stemBuffer = StringBuffer();
       for (int i = 0; i < stem.length; i++) {
@@ -856,10 +887,29 @@ class WeblioService {
         }
       }
       final inflectionPattern = RegExp('${stemBuffer.toString().trim()}[\\u3040-\\u309f]{0,4}');
-      final infMatch = inflectionPattern.firstMatch(sent);
-      if (infMatch != null && infMatch.group(0)!.isNotEmpty) {
+      for (final infMatch in inflectionPattern.allMatches(sent)) {
+        if (infMatch.group(0)!.isEmpty) continue;
+        final start = infMatch.start;
+        final beforeMatch = sent.substring(0, start);
+        final openCount = '['.allMatches(beforeMatch).length;
+        final closeCount = ']'.allMatches(beforeMatch).length;
+        if (openCount != closeCount) continue;
+
+        if (start > 0) {
+          final prevChar = sent[start - 1];
+          if (RegExp(r'[\u4e00-\u9faf\u3400-\u4dbfヶ々]').hasMatch(prevChar)) {
+            continue; // 前方是汉字，跳过复合词
+          }
+          if (prevChar == ']') {
+            final lastOpen = beforeMatch.lastIndexOf('[');
+            if (lastOpen > 0 && RegExp(r'[\u4e00-\u9faf\u3400-\u4dbfヶ々]').hasMatch(beforeMatch[lastOpen - 1])) {
+              continue; // 是前置汉字的注音，属于复合词，跳过
+            }
+          }
+        }
+
         final matchedText = infMatch.group(0)!;
-        return '${sent.substring(0, infMatch.start)}<b>$matchedText</b>${sent.substring(infMatch.end)}';
+        return '${sent.substring(0, start)}<b>$matchedText</b>${sent.substring(infMatch.end)}';
       }
     }
 
@@ -965,9 +1015,8 @@ class WeblioService {
 
     // 1.1 声调 (Pitch)
     String pitch = '';
-    final pitchMatch = RegExp(r'〔([0-9０-９]+)〕').firstMatch(midashigoText) ??
-        RegExp(r'〔([0-9０-９]+)〕').firstMatch(kijiParent?.text ?? sgkdjDiv.text) ??
-        RegExp(r'\[([0-9０-９]+)\]').firstMatch(midashigoText);
+    final pitchMatch = RegExp(r'[〔\[［\(（]([0-9０-９]+(?:[・,、/][0-9０-９]+)*)[〕\]］\)）]').firstMatch(midashigoText) ??
+        RegExp(r'[〔\[［\(（]([0-9０-９]+(?:[・,、/][0-9０-９]+)*)[〕\]］\)）]').firstMatch(kijiParent?.text ?? sgkdjDiv.text);
     if (pitchMatch != null) {
       pitch = formatPitchCircle(pitchMatch.group(1)!);
     }
@@ -984,9 +1033,10 @@ class WeblioService {
     if (hinshiSpan != null) {
       pos = hinshiSpan.text.trim().replaceAll(RegExp(r'[\s\[\]［］]'), '');
     } else {
-      final posMatch = RegExp(r'［([^］]+)］').firstMatch(sgkdjDiv.text);
+      final posMatch = RegExp(r'［([名副形動接続感動詞・スル自他上一下一五段四段サ変カ変]+(?:[（\(][^）\)]+[）\)])?)］')
+          .firstMatch(kijiParent?.text ?? sgkdjDiv.text);
       if (posMatch != null) {
-        pos = posMatch.group(1)!.trim();
+        pos = posMatch.group(1)!.trim().replaceAll(RegExp(r'[\s\[\]［］]'), '');
       }
     }
 
@@ -1284,9 +1334,8 @@ class WeblioService {
 
     // 1.1 声调 (Pitch)
     String pitch = '';
-    final pitchMatch = RegExp(r'〔([0-9０-９]+)〕').firstMatch(midashigo) ??
-        RegExp(r'〔([0-9０-９]+)〕').firstMatch(kiji.text) ??
-        RegExp(r'\[([0-9０-９]+)\]').firstMatch(midashigo);
+    final pitchMatch = RegExp(r'[〔\[［\(（]([0-9０-９]+(?:[・,、/][0-9０-９]+)*)[〕\]］\)）]').firstMatch(midashigo) ??
+        RegExp(r'[〔\[［\(（]([0-9０-９]+(?:[・,、/][0-9０-９]+)*)[〕\]］\)）]').firstMatch(kiji.text);
     if (pitchMatch != null) {
       pitch = formatPitchCircle(pitchMatch.group(1)!);
     }
@@ -1303,9 +1352,9 @@ class WeblioService {
     if (hinshi != null && hinshi.isNotEmpty) {
       pos = hinshi.replaceAll(RegExp(r'[\s\[\]［］]'), '');
     } else {
-      final posMatch = RegExp(r'［([^］]+)］').firstMatch(kiji.text);
+      final posMatch = RegExp(r'［([名副形動接続感動詞・スル自他上一下一五段四段サ変カ変]+(?:[（\(][^）\)]+[）\)])?)］').firstMatch(kiji.text);
       if (posMatch != null) {
-        pos = posMatch.group(1)!.trim();
+        pos = posMatch.group(1)!.trim().replaceAll(RegExp(r'[\s\[\]［］]'), '');
       }
     }
 

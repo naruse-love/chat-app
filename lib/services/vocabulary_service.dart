@@ -461,7 +461,7 @@ class VocabularyService {
 
     String finalDefJa = weblioResult.definition;
     String finalReading = weblioResult.reading;
-    String finalPos = weblioResult.partOfSpeech;
+    String finalPos = normalizePartOfSpeech(weblioResult.partOfSpeech);
     String finalPitch = weblioResult.pitch;
     final isKata = WeblioService.isKatakana(word);
     if (isKata && weblioResult.foreignOrigin.isNotEmpty) {
@@ -493,8 +493,13 @@ class VocabularyService {
 
       // 词性：优先采纳 LLM 学习者规范词性
       final aiPos = translation['partOfSpeech'] ?? '';
-      if (aiPos.isNotEmpty && (finalPos.isEmpty || isTraditionalVerbPoS(finalPos))) {
+      if (aiPos.isNotEmpty) {
         finalPos = normalizePartOfSpeech(aiPos);
+      } else {
+        finalPos = normalizePartOfSpeech(finalPos);
+      }
+      if (finalPos.isEmpty && isKata) {
+        finalPos = '名';
       }
 
       // 音调：词典原生优先，缺失时由 AI 补全
@@ -504,11 +509,14 @@ class VocabularyService {
       }
 
       // 读音/外来语原词：片假名外来语单词优先采纳英文原语，普通词清洗平假名
+      final aiForeign = translation['foreignOrigin'] ?? '';
       final aiReading = translation['furigana'] ?? '';
       if (isKata) {
-        if (finalReading == word || finalReading.isEmpty || !RegExp(r'[a-zA-Z]').hasMatch(finalReading)) {
+        if (aiForeign.isNotEmpty && RegExp(r'[a-zA-Z]').hasMatch(aiForeign)) {
+          finalReading = aiForeign.trim();
+        } else if (finalReading == word || finalReading.isEmpty || !RegExp(r'[a-zA-Z]').hasMatch(finalReading)) {
           if (aiReading.isNotEmpty && RegExp(r'[a-zA-Z]').hasMatch(aiReading)) {
-            finalReading = aiReading;
+            finalReading = aiReading.trim();
           }
         }
       } else {
@@ -526,6 +534,11 @@ class VocabularyService {
       }
     } catch (_) {
       // 优雅降级：LLM 异常或未配置时不中断查词主流程，仅中文留空
+    }
+    // 兜底保障规范词性与外来语词性
+    finalPos = normalizePartOfSpeech(finalPos);
+    if (finalPos.isEmpty && isKata) {
+      finalPos = '名';
     }
 
     // 5. 构建并持久化
@@ -573,20 +586,22 @@ class VocabularyService {
 
 要求：
 1. furigana：普通词输出纯平假名；片假名外来语单词（如「スリル」）必须输出其英文/原语原词（如「thrill」），严禁转写为平假名（如「すりる」）！
-2. partOfSpeech：严格输出日本语学习者规范词性（如：他動1、他動5、自動1、自動5、自他動1、自他動5、動サ変、名、副、形、形動、接続、感等），严禁输出“動サ五（四）”、“動バ下一”等日日传统文法标记！
-3. pitch：日语标准音调圆圈数字（如：⓪、①、②、③等）。
-4. definitionJa：使用严谨地道的日语撰写清晰的释义，多义项请使用数字编号（如：１ ... ２ ...）。
-5. definitionSc：翻译为简体中文释义，保留对应的数字编号（如：1. ... 2. ...）。
-6. 例句（1-2条实用地道的日文例句）：
+2. foreignOrigin：若当前单词是外来语/借词，必须提供其英文或原语原词拼写（如 thrill），非外来语则留空字符串。
+3. partOfSpeech：严格输出日本语学习者规范词性（如：他動1、他動5、自動1、自動5、自他動1、自他動5、動サ変、名、副、形、形動、接続、感等），严禁输出“動サ五（四）”、“動バ下一”等日日传统文法标记！
+4. pitch：日语标准音调圆圈数字（如：⓪、①、②、③等）。
+5. definitionJa：使用严谨地道的日语撰写清晰的释义，多义项请使用数字编号（如：１ ... ２ ...）。
+6. definitionSc：翻译为简体中文释义，保留对应的数字编号（如：1. ... 2. ...）。
+7. 例句（1-2条实用地道的日文例句）：
    - sentKanji1：例句1日文汉字文本
    - sentFurigana1：例句1假名注音（严格采用 Anki ruby 格式，如：策[さく]を 講[こう]じる）
    - sentDefSc1：例句1的简体中文翻译
    - sentKanji2：例句2日文汉字文本（若无可留空字符串）
    - sentFurigana2：例句2假名注音（Anki ruby 格式，若无可留空字符串）
    - sentDefSc2：例句2的简体中文翻译（若无可留空字符串）
-7. 请严格输出以下 JSON，不要包含任何 markdown 代码块或解释说明：
+8. 请严格输出以下 JSON，不要包含任何 markdown 代码块或解释说明：
 {
   "furigana": "读音（普通词平假名，外来语输出英文原词如 thrill）",
+  "foreignOrigin": "外来语原语英文拼写（如 thrill，非外来语留空）",
   "partOfSpeech": "规范词性（如 他動1、名、副、形等）",
   "pitch": "标准音调圆圈数字（如 ⓪、①、②等）",
   "definitionJa": "地道日文释义",
@@ -638,8 +653,22 @@ class VocabularyService {
     try {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
       final furigana = decoded['furigana']?.toString().trim() ?? word;
+      final foreignOrigin = decoded['foreignOrigin']?.toString().trim() ?? '';
+      String finalFurigana = furigana;
+      if (WeblioService.isKatakana(word)) {
+        if (foreignOrigin.isNotEmpty && RegExp(r'[a-zA-Z]').hasMatch(foreignOrigin)) {
+          finalFurigana = foreignOrigin;
+        } else if (furigana.isNotEmpty && RegExp(r'[a-zA-Z]').hasMatch(furigana)) {
+          finalFurigana = furigana;
+        }
+      }
+
       final rawPos = decoded['partOfSpeech']?.toString().trim() ?? '';
-      final partOfSpeech = isTraditionalVerbPoS(rawPos) ? normalizePartOfSpeech(rawPos) : rawPos;
+      var partOfSpeech = normalizePartOfSpeech(rawPos);
+      if (partOfSpeech.isEmpty && WeblioService.isKatakana(word)) {
+        partOfSpeech = '名';
+      }
+
       final pitch = WeblioService.formatPitchCircle(decoded['pitch']?.toString().trim() ?? '');
       final definitionJa = decoded['definitionJa']?.toString().trim() ?? '';
       final definitionSc = decoded['definitionSc']?.toString().trim() ?? '';
@@ -655,7 +684,7 @@ class VocabularyService {
 
       return VocabularyEntry(
         vocabKanji: word,
-        vocabFurigana: furigana.isNotEmpty ? furigana : word,
+        vocabFurigana: finalFurigana.isNotEmpty ? finalFurigana : word,
         vocabPitch: pitch,
         vocabDefJa: definitionJa,
         vocabDefSc: definitionSc,
@@ -713,14 +742,16 @@ class VocabularyService {
 3. partOfSpeech：严格输出日本语学习者规范词性（如：他動1、他動5、自動1、自動5、自他動1、自他動5、動サ変、名、副、形、形動、接続、感等），严禁输出“動サ五（四）”、“動バ下一”等日日传统文法标记！
 4. pitch：日语标准音调圆圈数字（如：⓪、①、②、③等）。
 5. furigana：普通词输出纯平假名；片假名外来语单词（如「スリル」）必须输出其英文/原语原词（如「thrill」），严禁转写为平假名（如「すりる」）！
-6. ${needsExamples ? 'supplementSentKanji1 / supplementSentFurigana1（Anki ruby 格式，如 策[さく]を 講[こう]じる） / supplementDefSc1：补充一条地道日文例句及其中文翻译' : 'exampleSc1 / exampleSc2：将给出的例句翻译为简体中文'}
-7. 请严格输出以下 JSON，不要包含任何 markdown 代码块或解释说明：
+6. foreignOrigin：若当前单词是外来语/借词，必须提供其英文或原语原词拼写（如 thrill），非外来语留空。
+7. ${needsExamples ? 'supplementSentKanji1 / supplementSentFurigana1（Anki ruby 格式，如 策[さく]を 講[こう]じる） / supplementDefSc1：补充一条地道日文例句及其中文翻译' : 'exampleSc1 / exampleSc2：将给出的例句翻译为简体中文'}
+8. 请严格输出以下 JSON，不要包含任何 markdown 代码块或解释说明：
 {
   "definitionJa": "地道日文释义",
   "definitionSc": "简体中文释义",
   "partOfSpeech": "规范词性（如 他動1、名、副、形等）",
   "pitch": "标准音调圆圈数字（如 ⓪、①、②等）",
   "furigana": "读音（普通词平假名，外来语输出英文原词如 thrill）",
+  "foreignOrigin": "外来语原语英文拼写（如 thrill，非外来语留空）",
   "exampleSc1": "例句1中文翻译（若无例句留空字符串）",
   "exampleSc2": "例句2中文翻译（若无例句留空字符串）"${needsExamples ? ',\n  "supplementSentKanji1": "例句1日文汉字",\n  "supplementSentFurigana1": "例句1假名注音（如 策[さく]を 講[こう]じる）",\n  "supplementDefSc1": "例句1中文翻译"' : ''}
 }
@@ -741,13 +772,15 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
 2. partOfSpeech：严格输出日本语学习者规范词性（如：他動1、他動5、自動1、自動5、自他動1、自他動5、動サ変、名、副、形、形動、接続、感等），严禁输出“動サ五（四）”、“動バ下一”等日日传统文法标记！
 3. pitch：日语标准音调圆圈数字（如：⓪、①、②、③等）。
 4. furigana：普通词输出纯平假名；片假名外来语单词（如「スリル」）必须输出其英文/原语原词（如「thrill」），严禁转写为平假名（如「すりる」）！
-5. ${needsExamples ? 'supplementSentKanji1 / supplementSentFurigana1 (Anki ruby 格式) / supplementDefSc1：原词典无例句，请补充一条实用例句及翻译。\n6. ' : ''}exampleSc1 / exampleSc2：例句翻译为简体中文，通顺自然。
-${needsExamples ? '7' : '6'}. 请严格按照以下 JSON 格式输出，不要包含任何 markdown 代码块或解释说明：
+5. foreignOrigin：若当前单词是外来语/借词，必须提供其英文或原语原词拼写（如 thrill），非外来语留空。
+6. ${needsExamples ? 'supplementSentKanji1 / supplementSentFurigana1 (Anki ruby 格式) / supplementDefSc1：原词典无例句，请补充一条实用例句及翻译。\n7. ' : ''}exampleSc1 / exampleSc2：例句翻译为简体中文，通顺自然。
+${needsExamples ? '8' : '7'}. 请严格按照以下 JSON 格式输出，不要包含任何 markdown 代码块或解释说明：
 {
   "definitionSc": "中文释义",
   "partOfSpeech": "规范词性（如 他動1、名、副、形等）",
   "pitch": "标准音调圆圈数字（如 ⓪、①、②等）",
   "furigana": "读音（普通词平假名，外来语输出英文原词如 thrill）",
+  "foreignOrigin": "外来语原语英文拼写（如 thrill，非外来语留空）",
   "exampleSc1": "例句1中文翻译（若无例句留空字符串）",
   "exampleSc2": "例句2中文翻译（若无例句留空字符串）"${needsExamples ? ',\n  "supplementSentKanji1": "例句1日文汉字",\n  "supplementSentFurigana1": "例句1假名注音（如 策[さく]を 講[こう]じる）",\n  "supplementDefSc1": "例句1中文翻译"' : ''}
 }
@@ -830,21 +863,28 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
       finalDefJa = aiDefJa;
     }
     final aiPos = translation['partOfSpeech'] ?? '';
-    if (aiPos.isNotEmpty && (finalPos.isEmpty || isTraditionalVerbPoS(finalPos))) {
-      finalPos = aiPos;
+    if (aiPos.isNotEmpty) {
+      finalPos = normalizePartOfSpeech(aiPos);
+    } else {
+      finalPos = normalizePartOfSpeech(finalPos);
     }
-    finalPos = normalizePartOfSpeech(finalPos);
+    if (finalPos.isEmpty && WeblioService.isKatakana(entry.vocabKanji)) {
+      finalPos = '名';
+    }
 
     final aiPitch = WeblioService.formatPitchCircle(translation['pitch'] ?? '');
     if (finalPitch.isEmpty && aiPitch.isNotEmpty) {
       finalPitch = aiPitch;
     }
 
+    final aiForeign = translation['foreignOrigin'] ?? '';
     final aiReading = translation['furigana'] ?? '';
     if (WeblioService.isKatakana(entry.vocabKanji)) {
-      if (finalReading == entry.vocabKanji || finalReading.isEmpty || !RegExp(r'[a-zA-Z]').hasMatch(finalReading)) {
+      if (aiForeign.isNotEmpty && RegExp(r'[a-zA-Z]').hasMatch(aiForeign)) {
+        finalReading = aiForeign.trim();
+      } else if (finalReading == entry.vocabKanji || finalReading.isEmpty || !RegExp(r'[a-zA-Z]').hasMatch(finalReading)) {
         if (aiReading.isNotEmpty && RegExp(r'[a-zA-Z]').hasMatch(aiReading)) {
-          finalReading = aiReading;
+          finalReading = aiReading.trim();
         }
       }
     } else {
@@ -906,12 +946,14 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
     if (p.startsWith('他動') || p.startsWith('自動') || p.startsWith('自他動')) {
       return p;
     }
-    if (p == '名' || p == '名詞') return '名';
-    if (p == '副' || p == '副詞') return '副';
-    if (p == '形' || p == '形容詞') return '形';
-    if (p == '形動' || p == '形容動詞') return '形動';
-    if (p == '接続' || p == '接続詞') return '接続';
-    if (p == '感' || p == '感動詞') return '感';
+    if (p.startsWith('名') || p == '名詞') return '名';
+    if (p.startsWith('副') || p == '副詞') return '副';
+    if (p.startsWith('形動') || p == '形容動詞') return '形動';
+    if (p.startsWith('形') || p == '形容詞') return '形';
+    if (p.startsWith('接続') || p == '接続詞') return '接続';
+    if (p.startsWith('感') || p == '感動詞') return '感';
+    if (p.startsWith('連体') || p == '連体詞') return '連体';
+    if (p.startsWith('助') || p == '助詞') return '助';
 
     // 传统动词语法映射
     if (p.contains('下一') || p.contains('上一')) {
@@ -927,6 +969,10 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
     if (p.contains('サ変')) {
       if (p.contains('自')) return '自動サ変';
       return '動サ変';
+    }
+    if (p.contains('カ変')) {
+      if (p.contains('自')) return '自動カ変';
+      return '動カ変';
     }
 
     return p;
@@ -977,6 +1023,7 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
         'partOfSpeech': decoded['partOfSpeech']?.toString().trim() ?? '',
         'pitch': decoded['pitch']?.toString().trim() ?? '',
         'furigana': decoded['furigana']?.toString().trim() ?? '',
+        'foreignOrigin': decoded['foreignOrigin']?.toString().trim() ?? '',
         'exampleSc1': decoded['exampleSc1']?.toString().trim() ?? '',
         'exampleSc2': decoded['exampleSc2']?.toString().trim() ?? '',
         'supplementSentKanji1': decoded['supplementSentKanji1']?.toString().trim() ?? '',
@@ -998,6 +1045,7 @@ ${ex2.isNotEmpty ? '例句2：$ex2' : ''}
         'partOfSpeech': '',
         'pitch': '',
         'furigana': '',
+        'foreignOrigin': '',
         'exampleSc1': '',
         'exampleSc2': '',
       };

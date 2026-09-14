@@ -1,3 +1,35 @@
+## 2026-09-14 Fix: Compound Word Boundary Highlighting, Multi-Pitch Extraction, Foreign Word Parsing & Anki Export SharedPreferences Fallback (v1.41.0+42)
+
+### 变更文件
+- `lib/services/weblio_service.dart`:
+  - 修复 `highlightKeywordInFurigana` 误匹配复合汉字词内部字符问题（例如「行く」误加粗「銀行に行く」中的「銀行」后半汉字），增加前驱汉字与注音结束符 `]` 判定；
+  - 增强 `highlightKeywordInFurigana` 纯假名动词活用词干匹配（如「たべる」匹配「ご飯をたべた」中的「たべた」）；
+  - 升级 `cleanReading`：支持全角中括号声调 `［0］`、全角圆括号声调 `（0）` 及全角间隔点 `·` / `•` 的彻底清洗；
+  - 升级 `_parseSgkdj` 与 `_parseSingleKiji` 中的声调正则匹配：支持多重声调格式（如 `〔1・0〕`、`〔0・1〕`），并由 `formatPitchCircle` 提取主音调；
+  - 增强 `_parseSgkdj` 与 `_parseSingleKiji` 的词性兜底匹配：严格限制为日文词性关键字，防止误将见出语括号如 `［英語: thrill］` 识别为词性；
+  - 扩充 `extractForeignOriginWord`：新增对圆括号 `（thrill）` / `(thrill)`、角括号 `《thrill》`、全半角方括号 `［thrill］` / `[thrill]` 及带缩写撇号单词（如 `rock 'n' roll`）的全面提取支持。
+- `lib/services/vocabulary_service.dart`:
+  - 彻底确保入库词性规范化：在 `lookupWord` 初始化阶段及翻译完成后无条件调用 `normalizePartOfSpeech`，防止无 LLM 或 LLM 异常时词典生僻标记（如 `動ザ上一`、`動サ五（四）`）未规范化直接入库；
+  - 扩充 `normalizePartOfSpeech`：支持 `名(スル)` / `名・サ変` -> `名`、`カ変` -> `動カ変` 等多样传统词性规范化；
+  - 在 LLM 翻译与兜底提示词中新增显式 `"foreignOrigin"` 字段，并在解析阶段优先采纳英文原语拼写，彻底杜绝外来语片假名被错误转写为平假名（如「すりる」）；
+  - 若片假名外来语词性缺失时自动兜底为 `'名'`。
+- `lib/services/anki_export_service.dart`:
+  - 在 `exportEntries` 中增加 `SharedPreferences` 本地持久化降级回退机制：当未传入 `deckName` 或 `modelName` 时，自动读取本地存储的 `'anki_deck_name'` 与 `'anki_model_name'`，双重杜绝重进应用导出时回退为默认牌组名称；
+  - 在 `_vocabDefScAliases` 中补充 `'vocabdef'` 与 `'vocabularydef'` 别名。
+- `test/services/weblio_service_test.dart`:
+  - 增加复合词边界防误匹配测试（`銀行に行きました` 匹配 `行く`、`銀[ぎん]行[こう]へ 行[い]きました` 匹配 `行く`）；
+  - 增加纯假名动词活用匹配测试（`ご飯をたべた` 匹配 `たべる`）；
+  - 增加多重音调解析测试（`〔1・0〕` -> `①`、`〔0・1〕` -> `⓪`）；
+  - 增加圆括号、中括号及带撇号外来语提取测试。
+- `test/services/vocabulary_service_test.dart`:
+  - 更新 `講じる` 词性断言为日本语学习者标准词性 `'他動1'`；
+  - 更新兜底条目词性断言为规范词性 `'名'`；
+  - 新增 `normalizePartOfSpeech` 映射全量单元测试。
+- `test/services/anki_export_service_test.dart`:
+  - 新增 `exportEntries` 缺省自动回退 `SharedPreferences` 自定义牌组与卡片模板名称的异步测试。
+- `pubspec.yaml`, `.agents/AGENTS.md`, `.agents/context.md`:
+  - 版本号递增至 `1.41.0+42`，全量测试基线 876 个用例全部通过。
+
 ## 2026-09-14 Feat: Japanese Vocab Tag Alignment, Pitch Accent Extraction, Foreign Word Origin & Anki Config Persistence (v1.40.0+41)
 
 ### 变更文件
