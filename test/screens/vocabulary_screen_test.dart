@@ -819,6 +819,81 @@ void main() {
     expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('VocabularyScreen entry with empty vocabKanji renders fallback avatar without throwing', (tester) async {
+    final mockNotifier = MockVocabularyNotifier(
+      VocabularyState(
+        entries: [
+          VocabularyEntry(
+            id: 201,
+            vocabKanji: '',
+            vocabFurigana: 'てすと',
+            createdAt: DateTime(2026, 9, 15, 12, 0),
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('?'), findsOneWidget);
+    expect(find.text('てすと'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('VocabularyScreen current result card with extremely long sourceDict does not overflow', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final longEntry = VocabularyEntry(
+      id: 301,
+      vocabKanji: '言葉',
+      vocabFurigana: 'ことば',
+      vocabPitch: '③',
+      vocabPoS: '名',
+      vocabDefSc: '语言，言语，话。',
+      vocabDefJa: '人が声に出して言ったり、文字に書いたりするもの。',
+      sourceDict: 'スーパー大辞林 第三版 三省堂 国語辞典 日本語大辞典 辞書名極長版',
+      createdAt: DateTime(2026, 9, 15, 12, 0),
+    );
+
+    final mockNotifier = MockVocabularyNotifier(
+      VocabularyState(
+        entries: [longEntry],
+        currentResult: longEntry,
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('言葉'), findsNWidgets(2)); // in list and card
+    expect(find.byIcon(Icons.menu_book), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class MockVocabularyConfigNotifier extends StateNotifier<VocabularyConfigState>

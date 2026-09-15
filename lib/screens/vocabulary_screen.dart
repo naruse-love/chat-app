@@ -173,6 +173,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: 4,
         title: const Text('📚 单词本'),
         actions: [
           Consumer(
@@ -182,6 +183,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                   vocabCfg.model?.id ??
                   '专属模型';
               return IconButton(
+                visualDensity: VisualDensity.compact,
                 tooltip: '生词本专属翻译模型: $modelName',
                 icon: const Icon(Icons.psychology_outlined),
                 onPressed: () => showVocabularyModelSelectorDialog(context),
@@ -193,6 +195,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
               final notifState = ref.watch(persistentNotificationProvider);
               final isEnabled = notifState.isEnabled;
               return IconButton(
+                visualDensity: VisualDensity.compact,
                 tooltip: isEnabled ? '关闭通知栏常驻查词' : '开启通知栏常驻查词快捷入口',
                 icon: Icon(
                   isEnabled
@@ -245,6 +248,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                 ),
                 offset: const Offset(-4, 4),
                 child: IconButton(
+                  visualDensity: VisualDensity.compact,
                   tooltip: unexportedCount > 0
                       ? '导出 $unexportedCount 个新词到 Anki'
                       : '导出新词到 Anki（当前无新词）',
@@ -255,6 +259,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
             },
           ),
           IconButton(
+            visualDensity: VisualDensity.compact,
             tooltip: _isSearchingHistory ? '关闭搜索' : '搜索本地单词',
             icon: Icon(_isSearchingHistory ? Icons.search_off : Icons.search),
             onPressed: () {
@@ -268,6 +273,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
             },
           ),
           IconButton(
+            visualDensity: VisualDensity.compact,
             tooltip: '帮助说明',
             icon: const Icon(Icons.help_outline),
             onPressed: () => _showHelpDialog(context),
@@ -591,7 +597,9 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                             backgroundColor: colorScheme.primaryContainer,
                             foregroundColor: colorScheme.onPrimaryContainer,
                             child: Text(
-                              entry.vocabKanji.characters.first,
+                              entry.vocabKanji.characters.isNotEmpty
+                                  ? entry.vocabKanji.characters.first
+                                  : '?',
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -877,10 +885,13 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                       children: [
                         Icon(Icons.menu_book, size: 16, color: colorScheme.secondary),
                         const SizedBox(width: 6),
-                        Text(
-                          '日语释义 (${entry.sourceDict.isNotEmpty ? entry.sourceDict : "Weblio"})',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: colorScheme.secondary,
+                        Expanded(
+                          child: Text(
+                            '日语释义 (${entry.sourceDict.isNotEmpty ? entry.sourceDict : "Weblio"})',
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: colorScheme.secondary,
+                            ),
                           ),
                         ),
                       ],

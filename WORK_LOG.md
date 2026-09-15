@@ -17,7 +17,9 @@
 ### 变更文件与模块
 - `lib/screens/vocabulary_screen.dart`:
   - 升级单词列表项 `title` 布局为 `Wrap`，配置更优的 `contentPadding`，杜绝任何屏幕尺寸或长词长标签下的溢出报错；
-  - 加载中指示器文字与同音词确认底部按钮增加 `Flexible` 与 `TextOverflow.ellipsis` 保护。
+  - 加载中指示器文字与同音词确认底部按钮增加 `Flexible` 与 `TextOverflow.ellipsis` 保护；
+  - 列表项 CircleAvatar 头像增加空汉字判断兜底（防 `StateError: No element` 崩溃），日语释义来源词典超长时增加 `Expanded` 与截断保护；
+  - 优化 AppBar 动作按钮视觉紧凑度（`VisualDensity.compact`）与标题间距，杜绝窄屏下将「📚 单词本」标题截断为「📚 单...」的显示缺陷。
 - `lib/services/anki_export_service.dart`:
   - 移除 `defaultQfmt` 与 `defaultAfmt` 前后的 `{{^Alt1}}` 与 `{{/Alt1}}`。
 - `正面.html`, `背面.html`, `原正面.html`, `原背面.html`:
@@ -25,7 +27,8 @@
 - `.agents/AGENTS.md`:
   - 升级 Rule 3（Git 提交与单次推送原则）与 Rule 6（按需求粒度单次升级与非功能性变更免升版本规范）。
 - `test/screens/vocabulary_screen_test.dart`:
-  - 新增 360px 窄屏包含已导出勾选图标及长假名/音调/词性标签无溢出测试用例。
+  - 新增 360px 窄屏包含已导出勾选图标及长假名/音调/词性标签无溢出测试用例；
+  - 新增空汉字条目安全兜底测试与超长词典名结果卡片防溢出测试。
 - `test/services/anki_export_service_test.dart`:
   - 增加正面与背面模板不包含 `Alt1` 的断言校验。
 - `pubspec.yaml`, `lib/services/update_service.dart`, `lib/screens/settings_screen.dart`, `.agents/context.md`:
