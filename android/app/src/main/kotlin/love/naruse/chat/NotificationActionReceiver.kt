@@ -1,4 +1,4 @@
-package com.example.chat
+package love.naruse.chat
 
 import android.content.BroadcastReceiver
 import android.content.Context

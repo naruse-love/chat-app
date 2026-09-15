@@ -33,7 +33,7 @@ class PathSanitizer {
     if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
       return Directory.current;
     }
-    return Directory('/data/user/0/com.example.chat/app_flutter/workspace');
+    return Directory('/data/user/0/love.naruse.chat/app_flutter/workspace');
   }
 
   /// Normalized canonical path string of the sandbox/workspace.

@@ -118,15 +118,15 @@ void main() {
 
     test('PathSanitizer handles Android internal /data/user/0 <=> /data/data symlink aliases', () {
       final androidSanitizer = PathSanitizer(
-        sandboxDir: Directory('/data/user/0/com.example.chat/app_flutter/workspace'),
+        sandboxDir: Directory('/data/user/0/love.naruse.chat/app_flutter/workspace'),
       );
 
       final rel = androidSanitizer.sanitizeRelativePath(
-        '/data/data/com.example.chat/app_flutter/workspace/notes/test.txt',
+        '/data/data/love.naruse.chat/app_flutter/workspace/notes/test.txt',
       );
       expect(rel, equals('notes/test.txt'));
       expect(
-        androidSanitizer.isExternalPath('/data/data/com.example.chat/app_flutter/workspace/notes/test.txt'),
+        androidSanitizer.isExternalPath('/data/data/love.naruse.chat/app_flutter/workspace/notes/test.txt'),
         isFalse,
       );
     });

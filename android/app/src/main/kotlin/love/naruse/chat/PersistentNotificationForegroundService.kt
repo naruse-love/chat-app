@@ -1,4 +1,4 @@
-package com.example.chat
+package love.naruse.chat
 
 import android.app.Service
 import android.content.Context
@@ -7,8 +7,8 @@ import android.os.IBinder
 
 class PersistentNotificationForegroundService : Service() {
     companion object {
-        const val ACTION_START = "com.example.chat.START_FOREGROUND_NOTIFICATION"
-        const val ACTION_STOP = "com.example.chat.STOP_FOREGROUND_NOTIFICATION"
+        const val ACTION_START = "love.naruse.chat.START_FOREGROUND_NOTIFICATION"
+        const val ACTION_STOP = "love.naruse.chat.STOP_FOREGROUND_NOTIFICATION"
         const val EXTRA_ID = "id"
         const val EXTRA_TITLE = "title"
         const val EXTRA_BODY = "body"

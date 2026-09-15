@@ -1,4 +1,4 @@
-package com.example.chat
+package love.naruse.chat
 
 import android.content.Intent
 import android.os.Build
@@ -24,7 +24,7 @@ class MainActivity : FlutterActivity() {
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
         val payload = intent.getStringExtra("payload")
-            ?: (if (intent.action == "com.example.chat.ACTION_VOCABULARY") "/vocabulary" else null)
+            ?: (if (intent.action == "love.naruse.chat.ACTION_VOCABULARY") "/vocabulary" else null)
 
         if (payload != null) {
             NotificationHelper.launchPayload = payload
@@ -71,4 +71,3 @@ class MainActivity : FlutterActivity() {
         super.onDestroy()
     }
 }
-

@@ -51,7 +51,7 @@
             android:name=".NotificationActionReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.example.chat.ACTION_INLINE_SEARCH" />
+                <action android:name="love.naruse.chat.ACTION_INLINE_SEARCH" />
             </intent-filter>
         </receiver>
     </application>

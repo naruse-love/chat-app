@@ -1,3 +1,30 @@
+## 2026-09-15 Feat: Android Application ID & Namespace Migration to love.naruse.chat (v1.48.0+49)
+
+### 变更背景与说明
+- 根据用户明确需求，将 Android 应用唯一标识符（Application ID）、Kotlin 命名空间（namespace）及包名结构整体迁移至 `love.naruse.chat`；
+- 根据用户指令，版本号保持 `1.48`（`1.48.0+49`）不变。
+
+### 变更文件与模块
+- `android/app/build.gradle.kts`:
+  - `namespace = "love.naruse.chat"`
+  - `applicationId = "love.naruse.chat"`
+- `android/app/src/main/AndroidManifest.xml`:
+  - 广播 Receiver Intent Action 更新为 `love.naruse.chat.ACTION_INLINE_SEARCH`
+- 原生 Kotlin 代码包名重构（从 `com.example.chat` 迁移至 `love.naruse.chat` 并移动目录结构）：
+  - `android/app/src/main/kotlin/love/naruse/chat/MainActivity.kt`
+  - `android/app/src/main/kotlin/love/naruse/chat/NotificationActionReceiver.kt`
+  - `android/app/src/main/kotlin/love/naruse/chat/NotificationHelper.kt`
+  - `android/app/src/main/kotlin/love/naruse/chat/PersistentNotificationForegroundService.kt`
+  - 删除旧目录 `android/app/src/main/kotlin/com/example/chat/`
+- Dart 业务与服务层通道/路径对齐：
+  - `lib/services/native/persistent_notification_service.dart`: 默认通道标识更新为 `love.naruse.chat/persistent_notification`
+  - `lib/services/path_sanitizer.dart`: Android 工作区降级路径对齐为 `/data/user/0/love.naruse.chat/app_flutter/workspace`
+  - `lib/providers/settings_provider.dart`: 对应工作区降级路径对齐
+  - `test/services/path_sanitizer_workspace_test.dart`: 单元测试用例路径对齐
+- 质量验证：
+  - 静态分析 `flutter analyze`：0 issues
+  - 全量自动化测试 `flutter test`：902 个测试用例全部通过
+
 ## 2026-09-15 Fix: PKCS12 Key Password Alignment & Private Key Unlocking Pre-validation (v1.48.0+49)
 
 ### 变更文件

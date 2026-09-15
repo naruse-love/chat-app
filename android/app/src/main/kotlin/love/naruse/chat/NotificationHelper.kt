@@ -1,4 +1,4 @@
-package com.example.chat
+package love.naruse.chat
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -15,12 +15,12 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.Collections
 
 object NotificationHelper {
-    const val CHANNEL_NAME = "com.example.chat/persistent_notification"
+    const val CHANNEL_NAME = "love.naruse.chat/persistent_notification"
     const val NOTIFICATION_CHANNEL_ID = "chat_persistent_shortcuts"
     const val NOTIFICATION_CHANNEL_NAME = "常驻查词入口"
     const val NOTIFICATION_ID_BASE = 9988
     const val KEY_TEXT_REPLY = "key_inline_vocab_query"
-    const val ACTION_INLINE_SEARCH = "com.example.chat.ACTION_INLINE_SEARCH"
+    const val ACTION_INLINE_SEARCH = "love.naruse.chat.ACTION_INLINE_SEARCH"
 
     var activeMethodChannel: MethodChannel? = null
     var backgroundEngine: FlutterEngine? = null
@@ -86,7 +86,7 @@ object NotificationHelper {
 
     private fun createContentIntent(context: Context, id: String, payload: String?): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
-            action = "com.example.chat.ACTION_VOCABULARY"
+            action = "love.naruse.chat.ACTION_VOCABULARY"
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("payload", payload ?: "/vocabulary")
         }

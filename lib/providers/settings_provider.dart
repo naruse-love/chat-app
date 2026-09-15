@@ -101,7 +101,7 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         }
         return wsDir.path;
       } catch (_) {
-        return '/data/user/0/com.example.chat/app_flutter/workspace';
+        return '/data/user/0/love.naruse.chat/app_flutter/workspace';
       }
     }
     return Directory.current.path;

@@ -303,7 +303,7 @@ class InMemoryPersistentNotificationService
 class MethodChannelPersistentNotificationService
     implements IPersistentNotificationService {
   static const String defaultChannelName =
-      'com.example.chat/persistent_notification';
+      'love.naruse.chat/persistent_notification';
 
   final MethodChannel _channel;
   final Set<String> _fallbackActiveIds = {};
