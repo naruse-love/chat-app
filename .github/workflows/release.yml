@@ -49,17 +49,29 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 --decode > android/release-key.jks
+          # 彻底清洗换行符、回车符、空格以及 certutil 可能生成的证书头尾
+          CLEAN_BASE64=$(echo "$KEYSTORE_BASE64" | grep -v '^-' | tr -d '\r\n ' || true)
+          
+          DECODE_SUCCESS=false
+          if [ -n "$CLEAN_BASE64" ]; then
+            if echo "$CLEAN_BASE64" | base64 -d > android/release-key.jks 2>/dev/null && [ -s android/release-key.jks ]; then
+              DECODE_SUCCESS=true
+            elif echo "$CLEAN_BASE64" | openssl base64 -d -A > android/release-key.jks 2>/dev/null && [ -s android/release-key.jks ]; then
+              DECODE_SUCCESS=true
+            fi
+          fi
+
+          if [ "$DECODE_SUCCESS" = "true" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ] && [ -n "$STORE_PASSWORD" ]; then
             cat <<EOF > android/key.properties
           storePassword=$STORE_PASSWORD
           keyPassword=$KEY_PASSWORD
           keyAlias=$KEY_ALIAS
           storeFile=../release-key.jks
           EOF
-            echo "Keystore successfully configured."
+            echo "Keystore successfully configured and verified."
           else
-            echo "::warning::KEYSTORE_BASE64 is not set. Building with debug signing fallback."
+            rm -f android/release-key.jks android/key.properties
+            echo "::warning::KEYSTORE_BASE64 is empty, invalid, or signing secrets missing. Building APK with debug signing fallback."
           fi
 
       - name: Extract App Version

@@ -1,3 +1,15 @@
+## 2026-09-15 Fix: Keystore Base64 Parsing Robustness & Automatic Debug Fallback (v1.46.0+47)
+
+### 变更文件
+- `.github/workflows/release.yml`:
+  - 修复 `Configure Keystore & Signing` 步骤中因 Base64 换行符/回车/空格或 certutil 证书头尾导致的 `base64: invalid input` 退出报错；
+  - 增加管道清洗 `grep -v '^-' | tr -d '\r\n '`，引入 OpenSSL 兜底解码与非空文件 `[ -s ]` 校验；
+  - 增加自愈回退容灾：当 Secrets 未配置、配置残缺或 Base64 解码异常时，自动清理并安全回退为 debug 签名，确保 Release 构建与发布流水线绝对不会崩溃中断。
+- `pubspec.yaml`, `lib/services/update_service.dart`, `lib/screens/settings_screen.dart`:
+  - 版本号与默认版本升级至 `1.46.0+47`。
+- `.agents/AGENTS.md`, `.agents/context.md`:
+  - 同步递增版本号至 `1.46.0+47`。
+
 ## 2026-09-15 Feat: Auto Release on Push to Main & Pubspec Version Extraction (v1.45.0+46)
 
 ### 变更文件
