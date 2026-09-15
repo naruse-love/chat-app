@@ -1,3 +1,16 @@
+## 2026-09-15 Feat: Auto Release on Push to Main & Pubspec Version Extraction (v1.45.0+46)
+
+### 变更文件
+- `.github/workflows/release.yml`:
+  - 增强触发条件：支持 `push: branches: [ main ]`、`push: tags: [ 'v*' ]` 及 `workflow_dispatch` 手动触发；
+  - 自动化版本解析：自动从 `pubspec.yaml` 提取版本号（如 `1.45.0`），自动构建 Release 签名 APK 并创建/更新对应的 GitHub Release（如 `v1.45.0`），无需手动打 Tag 即可实现全自动构建发布闭环。
+- `.github/workflows/ci.yml`:
+  - 针对 `pull_request` 运行质量门禁（代码格式检查、静态分析、测试），避免在 push main 时与 release.yml 发生重复构建与资源争抢。
+- `pubspec.yaml`, `lib/services/update_service.dart`, `lib/screens/settings_screen.dart`:
+  - 版本号与默认版本升级至 `1.45.0+46`。
+- `.agents/AGENTS.md`, `.agents/context.md`:
+  - 同步递增版本号至 `1.45.0+46`。
+
 ## 2026-09-15 Fix: Anki Full Original Template Alignment, Chinese/Japanese Definition Toggle & EdgeTTS Online Pronunciation (v1.44.0+45)
 
 ### 变更文件

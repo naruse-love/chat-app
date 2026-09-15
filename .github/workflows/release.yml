@@ -2,8 +2,10 @@ name: Build & Release APK
 
 on:
   push:
+    branches: [ main ]
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -60,16 +62,31 @@ jobs:
             echo "::warning::KEYSTORE_BASE64 is not set. Building with debug signing fallback."
           fi
 
+      - name: Extract App Version
+        id: app_version
+        run: |
+          PUBSPEC_VERSION=$(grep '^version:' pubspec.yaml | head -n 1 | awk '{print $2}' | tr -d '\r')
+          VERSION_BASE=$(echo "$PUBSPEC_VERSION" | cut -d'+' -f1)
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            RELEASE_TAG="${{ github.ref_name }}"
+          else
+            RELEASE_TAG="v${VERSION_BASE}"
+          fi
+          echo "pubspec_version=$PUBSPEC_VERSION" >> $GITHUB_OUTPUT
+          echo "version_base=$VERSION_BASE" >> $GITHUB_OUTPUT
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "Detected version: $PUBSPEC_VERSION, Release Tag: $RELEASE_TAG"
+
       - name: Build Release APK
         run: flutter build apk --release
 
       - name: Prepare APK Artifact Name
         id: apk_info
         run: |
-          TAG_NAME="${{ github.ref_name }}"
+          RELEASE_TAG="${{ steps.app_version.outputs.release_tag }}"
           OUTPUT_DIR="build/app/outputs/flutter-apk"
           SOURCE_APK="$OUTPUT_DIR/app-release.apk"
-          TARGET_APK="$OUTPUT_DIR/chat-app-$TAG_NAME.apk"
+          TARGET_APK="$OUTPUT_DIR/chat-app-$RELEASE_TAG.apk"
           if [ -f "$SOURCE_APK" ]; then
             cp "$SOURCE_APK" "$TARGET_APK"
             echo "apk_path=$TARGET_APK" >> $GITHUB_OUTPUT
@@ -78,11 +95,12 @@ jobs:
             exit 1
           fi
 
-      - name: Create GitHub Release
+      - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.app_version.outputs.release_tag }}
+          name: Release ${{ steps.app_version.outputs.release_tag }}
           files: ${{ steps.apk_info.outputs.apk_path }}
-          name: Release ${{ github.ref_name }}
           generate_release_notes: true
           draft: false
           prerelease: false
