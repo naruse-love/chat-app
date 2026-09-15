@@ -61,19 +61,25 @@ jobs:
           fi
 
           KEYSTORE_VALID=false
+          ACTUAL_KEY_PASSWORD="$KEY_PASSWORD"
           if [ "$DECODE_SUCCESS" = "true" ] && [ -n "$KEY_ALIAS" ] && [ -n "$STORE_PASSWORD" ]; then
-            # 使用 keytool 预先验证 keystore 别名与密码，验证失败则优雅降级，防止打包崩溃
-            if keytool -list -keystore android/release-key.jks -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null 2>&1; then
+            # 1. 首先尝试使用用户提供的 KEY_PASSWORD 验证能否提取私钥
+            if keytool -certreq -keystore android/release-key.jks -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" -keypass "$ACTUAL_KEY_PASSWORD" > /dev/null 2>&1; then
               KEYSTORE_VALID=true
+            # 2. 若失败，尝试 PKCS12 规范默认行为（keyPassword 与 storePassword 相同）
+            elif keytool -certreq -keystore android/release-key.jks -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" -keypass "$STORE_PASSWORD" > /dev/null 2>&1; then
+              ACTUAL_KEY_PASSWORD="$STORE_PASSWORD"
+              KEYSTORE_VALID=true
+              echo "PKCS12 standard detected: aligned keyPassword with storePassword."
             else
-              echo "::warning::Keystore verification failed (alias '$KEY_ALIAS' or storepass does not match, or keystore corrupted)."
+              echo "::warning::Keystore verification failed (private key cannot be unlocked with provided credentials)."
             fi
           fi
 
           if [ "$KEYSTORE_VALID" = "true" ]; then
             cat <<EOF > android/key.properties
           storePassword=$STORE_PASSWORD
-          keyPassword=$KEY_PASSWORD
+          keyPassword=$ACTUAL_KEY_PASSWORD
           keyAlias=$KEY_ALIAS
           storeFile=../release-key.jks
           EOF

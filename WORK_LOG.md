@@ -1,3 +1,18 @@
+## 2026-09-15 Fix: PKCS12 Key Password Alignment & Private Key Unlocking Pre-validation (v1.48.0+49)
+
+### 变更文件
+- `android/key.properties`:
+  - 修正 `keyPassword` 为 `chatnarusekey2024`，与 PKCS12 规范的 `storePassword` 严格对齐。
+- GitHub Secrets (`KEY_PASSWORD`):
+  - 通过 `gh secret set` 重新同步将 `KEY_PASSWORD` 更新为 `chatnarusekey2024`。
+- `.github/workflows/release.yml`:
+  - 签名预校验升级：采用 `keytool -certreq` 深度检验私钥解密提取能力；
+  - 增加 PKCS12 密码自动自愈：若用户设置的 `KEY_PASSWORD` 校验不通过，自动检测并对齐使用 `STORE_PASSWORD` 再次验证，彻底消除 `Given final block not properly padded` 报错。
+- `pubspec.yaml`, `lib/services/update_service.dart`, `lib/screens/settings_screen.dart`:
+  - 版本号与默认版本升级至 `1.48.0+49`。
+- `.agents/AGENTS.md`, `.agents/context.md`:
+  - 同步递增版本号至 `1.48.0+49`。
+
 ## 2026-09-15 Fix: Keytool Verification Pre-check, Setup-Java v5 & Resilient Release Fallback (v1.47.0+48)
 
 ### 变更文件
