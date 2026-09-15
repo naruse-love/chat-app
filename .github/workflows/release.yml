@@ -22,7 +22,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -49,7 +49,6 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: |
-          # 彻底清洗换行符、回车符、空格以及 certutil 可能生成的证书头尾
           CLEAN_BASE64=$(echo "$KEYSTORE_BASE64" | grep -v '^-' | tr -d '\r\n ' || true)
           
           DECODE_SUCCESS=false
@@ -61,17 +60,27 @@ jobs:
             fi
           fi
 
-          if [ "$DECODE_SUCCESS" = "true" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ] && [ -n "$STORE_PASSWORD" ]; then
+          KEYSTORE_VALID=false
+          if [ "$DECODE_SUCCESS" = "true" ] && [ -n "$KEY_ALIAS" ] && [ -n "$STORE_PASSWORD" ]; then
+            # 使用 keytool 预先验证 keystore 别名与密码，验证失败则优雅降级，防止打包崩溃
+            if keytool -list -keystore android/release-key.jks -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null 2>&1; then
+              KEYSTORE_VALID=true
+            else
+              echo "::warning::Keystore verification failed (alias '$KEY_ALIAS' or storepass does not match, or keystore corrupted)."
+            fi
+          fi
+
+          if [ "$KEYSTORE_VALID" = "true" ]; then
             cat <<EOF > android/key.properties
           storePassword=$STORE_PASSWORD
           keyPassword=$KEY_PASSWORD
           keyAlias=$KEY_ALIAS
           storeFile=../release-key.jks
           EOF
-            echo "Keystore successfully configured and verified."
+            echo "Keystore successfully verified and configured for release signing."
           else
             rm -f android/release-key.jks android/key.properties
-            echo "::warning::KEYSTORE_BASE64 is empty, invalid, or signing secrets missing. Building APK with debug signing fallback."
+            echo "::warning::Falling back to debug signing for Release APK."
           fi
 
       - name: Extract App Version

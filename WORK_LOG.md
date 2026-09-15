@@ -1,3 +1,17 @@
+## 2026-09-15 Fix: Keytool Verification Pre-check, Setup-Java v5 & Resilient Release Fallback (v1.47.0+48)
+
+### 变更文件
+- `.github/workflows/release.yml`:
+  - 引入 Java 原生 `keytool -list` 预校验机制：在生成 `key.properties` 签名配置前，严格校验 keystore 文件完整性、`STORE_PASSWORD` 密码正确性以及 `KEY_ALIAS` 别名有效性；
+  - 校验失败时自动删除残留配置并输出清晰警告，无缝优雅回退到 debug 签名，根除 `Failed to read key from store` 导致 Release 编译崩溃的隐患；
+  - 升级 `actions/setup-java` 至 `@v5`（消除 Node.js 20 弃用警告）。
+- `.github/workflows/ci.yml`:
+  - 同步升级 `actions/setup-java` 至 `@v5`。
+- `pubspec.yaml`, `lib/services/update_service.dart`, `lib/screens/settings_screen.dart`:
+  - 版本号与默认版本升级至 `1.47.0+48`。
+- `.agents/AGENTS.md`, `.agents/context.md`:
+  - 同步递增版本号至 `1.47.0+48`。
+
 ## 2026-09-15 Fix: Keystore Base64 Parsing Robustness & Automatic Debug Fallback (v1.46.0+47)
 
 ### 变更文件

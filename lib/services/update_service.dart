@@ -15,7 +15,7 @@ class UpdateService {
 
   static const String defaultOwner = 'naruse-love';
   static const String defaultRepo = 'chat-app';
-  static const String fallbackVersion = '1.46.0+47';
+  static const String fallbackVersion = '1.47.0+48';
 
   UpdateService({
     Dio? dio,

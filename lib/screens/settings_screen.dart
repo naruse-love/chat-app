@@ -28,7 +28,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _obscureBingCookie = true;
 
   bool _hasSynced = false;
-  String _currentVersion = '1.46.0+47';
+  String _currentVersion = '1.47.0+48';
 
   void _syncFieldsIfNeeded(AppSettings settings) {
     if (settings.isLoaded && !_hasSynced) {
