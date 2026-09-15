@@ -7,7 +7,7 @@
 
 **所有 Milestone（1–27）已全部完成并交付，项目目前处于稳定维护与高阶演进阶段。**
 
-- **当前版本**：`1.48.0+49`
+- **当前版本**：`1.49.0+50`
 - **全量测试基线**：**全部通过（0 failures）**
 - **静态分析基线**：`No issues found!`（0 errors, 0 warnings, 0 lints）
 - **在开始任何代码修改前，必须先阅读 [context.md](./context.md) 恢复完整上下文。**
@@ -27,7 +27,7 @@
 
 ### 3. Git 提交与推送规范
 - 每个有意义的变更必须 commit，commit message 使用标准前缀：`feat:` / `fix:` / `test:` / `refactor:` / `docs:`
-- 提交后必须执行 `git push` 同步至 `origin/main`
+- **单次推送（Push）原则**：在多 Agent 协作（如 boost 模型下主 Agent 与子 Agent 分步/分次操作）或复杂分步任务中，整个用户需求生命周期内只需要由主 Agent 在子 Agent 完全搞完并全部验证通过后，统一执行**一次 `git push`** 同步至 `origin/main` 即可。严禁子 Agent 在协同中间随意 push 导致多余提交碎片推送。
 
 ### 4. WORK_LOG.md 必须同步更新
 - 每次 Milestone 或重要功能/修复级别的变更，必须在项目根目录 `WORK_LOG.md` 的**顶部**追加记录
@@ -38,7 +38,9 @@
 - 新增任何功能时，必须沿用中文用户界面风格与友好降级提示
 
 ### 6. 版本号递增规范
-- 每次新增功能（feat）、修复缺陷（fix）或变更代码，必须给项目版本号增加 0.01（在 `pubspec.yaml` 的 `version` 字段，以及 `WORK_LOG.md` / `context.md` 等相关版本标注处同步递增）
+- **按需求粒度单次升级**：版本号只在**一次完整的用户需求**中递增一次（增加 0.01）。如果当前任务采用多 Agent 协作分步操作（例如 boost 模型由主 Agent 与子 Agent 分次操作），整个需求生命周期内**都只需要升级一个版本号**，严禁每个子 Agent 或每步操作重复递增，防止一次任务连续跳升多个版本。
+- **非功能性修改不递增版本号**：对于不涉及应用运行时功能逻辑、不需要重新构建发布安装包的修改（例如纯 Git 配置修改、工作流/CI 调整、纯文档 `.agents/` / `docs/` / `README.md` / `WORK_LOG.md` 修改、代码注释微调等），**严禁修改版本号**。
+- **功能变更必须递增**：仅当需求包含实质性应用功能或 Bug 修复（`feat:` / `fix:` 等需要打包构建的代码变更）时，在 `pubspec.yaml` 的 `version` 字段以及 `WORK_LOG.md` / `context.md` / `settings_screen.dart` / `update_service.dart` 等相关版本标注处统一递增一次。
 
 ---
 

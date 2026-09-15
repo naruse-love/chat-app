@@ -1,3 +1,36 @@
+## 2026-09-15 Fix: 生词本列表渲染溢出修复、Anki 模板 Alt1 校验异常根除与智能体规范升级 (v1.49.0+50)
+
+### 变更背景与说明
+1. **生词本列表项渲染溢出修复**：
+   - 修复窄屏/大字号/包含音调词性及导出对勾图标时 `ListTile` 标题 `Row` 产生横向 `RenderFlex` 溢出（如 `RIGHT OVERFLOWED BY 0.357 PIXELS`）；
+   - 将 `title` 布局从无界 `Row` 升级为自适应 `Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 6, runSpacing: 2)`，优化 `ListTile` 内边距，并在窄屏或长词时支持音调与词性标签自动换行，彻底杜绝溢出；
+   - 增强加载中提示文本与候选词确认按钮的 `Flexible` 及文本截断保护。
+2. **Anki 卡片模板 Alt1 校验异常根除**：
+   - 解决导入 Anki/AnkiDroid 时报错「正面内容模板存在问题：已找到「{{^Alt1}}」，但字段「Alt1」不存在」；
+   - 彻底移除 `lib/services/anki_export_service.dart`（`defaultQfmt`、`defaultAfmt`）以及 `正面.html`、`背面.html`、`原正面.html`、`原背面.html` 中多余的 `{{^Alt1}}` 与 `{{/Alt1}}` 条件块包裹；
+   - 新增针对 `defaultQfmt` 与 `defaultAfmt` 绝不含 `Alt1` 的自动化单元测试。
+3. **智能体开发规范升级（AGENTS.md）**：
+   - 版本号规范：优化为“单个需求单次升级”原则，在多 Agent 协作（如 boost 模型分步操作）时全流程只递增一个版本号（+0.01），严禁子 Agent 重复升级；
+   - 非功能性变更规范：明确非功能性修改（如纯 Git 配置、纯文档修改、CI 调整等不需重新打包构建的修改）不修改版本号；
+   - Git Push 规范：多 Agent 协作时，子 Agent 严禁在中间随意 push，统一由主 Agent 在子 Agent 完全搞完并全部验证通过后执行一次 `git push`。
+
+### 变更文件与模块
+- `lib/screens/vocabulary_screen.dart`:
+  - 升级单词列表项 `title` 布局为 `Wrap`，配置更优的 `contentPadding`，杜绝任何屏幕尺寸或长词长标签下的溢出报错；
+  - 加载中指示器文字与同音词确认底部按钮增加 `Flexible` 与 `TextOverflow.ellipsis` 保护。
+- `lib/services/anki_export_service.dart`:
+  - 移除 `defaultQfmt` 与 `defaultAfmt` 前后的 `{{^Alt1}}` 与 `{{/Alt1}}`。
+- `正面.html`, `背面.html`, `原正面.html`, `原背面.html`:
+  - 同步清理 `{{^Alt1}}` 与 `{{/Alt1}}`。
+- `.agents/AGENTS.md`:
+  - 升级 Rule 3（Git 提交与单次推送原则）与 Rule 6（按需求粒度单次升级与非功能性变更免升版本规范）。
+- `test/screens/vocabulary_screen_test.dart`:
+  - 新增 360px 窄屏包含已导出勾选图标及长假名/音调/词性标签无溢出测试用例。
+- `test/services/anki_export_service_test.dart`:
+  - 增加正面与背面模板不包含 `Alt1` 的断言校验。
+- `pubspec.yaml`, `lib/services/update_service.dart`, `lib/screens/settings_screen.dart`, `.agents/context.md`:
+  - 版本号与默认版本升级至 `1.49.0+50`。
+
 ## 2026-09-15 Feat: Android Application ID & Namespace Migration to love.naruse.chat (v1.48.0+49)
 
 ### 变更背景与说明

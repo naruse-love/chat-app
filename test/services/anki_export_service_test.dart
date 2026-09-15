@@ -652,6 +652,7 @@ void main() {
       expect(AnkiExportService.defaultQfmt, contains('function CONFIG()'));
       expect(AnkiExportService.defaultQfmt, contains('function lookUp('));
       expect(AnkiExportService.defaultQfmt, contains('function checkVersion('));
+      expect(AnkiExportService.defaultQfmt, isNot(contains('Alt1')));
     });
 
     test('defaultAfmt contains definition toggle button, setupDefSwitch and EdgeTTS playback', () {
@@ -666,6 +667,7 @@ void main() {
       expect(AnkiExportService.defaultAfmt, contains('{{#VocabPlus}}'));
       expect(AnkiExportService.defaultAfmt, contains('function setupDefSwitch()'));
       expect(AnkiExportService.defaultAfmt, contains('setEdgeTTS()'));
+      expect(AnkiExportService.defaultAfmt, isNot(contains('Alt1')));
     });
 
     test('defaultCss contains full original styles and toggle button css', () {

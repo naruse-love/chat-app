@@ -439,10 +439,13 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    '正在从 Weblio 抓取并调用大模型翻译...',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.secondary,
+                  Flexible(
+                    child: Text(
+                      '正在从 Weblio 抓取并调用大模型翻译...',
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.secondary,
+                      ),
                     ),
                   ),
                 ],
@@ -578,6 +581,10 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                           }
                         },
                         child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 2,
+                          ),
                           selected: isSelected,
                           selectedTileColor: colorScheme.primaryContainer.withAlpha(60),
                           leading: CircleAvatar(
@@ -588,23 +595,23 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
-                          title: Row(
+                          title: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 6,
+                            runSpacing: 2,
                             children: [
                               Text(
                                 entry.vocabKanji,
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
-                              if (entry.vocabFurigana.isNotEmpty) ...[
-                                const SizedBox(width: 8),
+                              if (entry.vocabFurigana.isNotEmpty)
                                 Text(
                                   entry.vocabFurigana,
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     color: colorScheme.secondary,
                                   ),
                                 ),
-                              ],
-                              if (entry.vocabPitch.isNotEmpty) ...[
-                                const SizedBox(width: 6),
+                              if (entry.vocabPitch.isNotEmpty)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 5,
@@ -622,9 +629,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                                     ),
                                   ),
                                 ),
-                              ],
-                              if (entry.vocabPoS.isNotEmpty) ...[
-                                const SizedBox(width: 8),
+                              if (entry.vocabPoS.isNotEmpty)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 6,
@@ -639,7 +644,6 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                                     style: theme.textTheme.labelSmall,
                                   ),
                                 ),
-                              ],
                             ],
                           ),
                           subtitle: Text(
@@ -1165,11 +1169,16 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton(
-                onPressed: () {
-                  ref.read(vocabularyProvider.notifier).confirmOriginalWord();
-                },
-                child: Text('仍按原输入「${state.pendingCandidateWord}」查询'),
+              Flexible(
+                child: TextButton(
+                  onPressed: () {
+                    ref.read(vocabularyProvider.notifier).confirmOriginalWord();
+                  },
+                  child: Text(
+                    '仍按原输入「${state.pendingCandidateWord}」查询',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
             ],
           ),

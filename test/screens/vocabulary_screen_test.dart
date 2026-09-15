@@ -762,6 +762,63 @@ void main() {
     expect(mockNotifier.exportToAnkiCalled, isTrue);
     expect(find.text('全部 2 个新词在 AnkiDroid 中已存在，已自动跳过'), findsOneWidget);
   });
+
+  testWidgets('VocabularyScreen list item with long kanji, furigana, pitch, pos and exported checkmark renders without overflow on narrow 360px screen', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final mockNotifier = MockVocabularyNotifier(
+      VocabularyState(
+        entries: [
+          VocabularyEntry(
+            id: 101,
+            vocabKanji: 'すっ飛ばす',
+            vocabFurigana: 'すっとばす',
+            vocabPitch: '⓪',
+            vocabPoS: '他下一',
+            vocabDefSc: '1. 猛烈弹飞；（车辆等）飞速驾驶，疾驰...',
+            vocabDefJa: '勢いよくはね飛ばす。',
+            exportedToAnki: true,
+            createdAt: DateTime(2026, 9, 14, 22, 34),
+          ),
+          VocabularyEntry(
+            id: 102,
+            vocabKanji: '借金取り',
+            vocabFurigana: 'しゃっきんとり',
+            vocabPitch: '④',
+            vocabPoS: '名',
+            vocabDefSc: '催债，逼债；讨债人，催债者。',
+            vocabDefJa: '借金を取り立てること。また、その人。',
+            exportedToAnki: false,
+            createdAt: DateTime(2026, 9, 15, 11, 38),
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vocabularyProvider.overrideWith((ref) => mockNotifier),
+        ],
+        child: const MaterialApp(
+          home: VocabularyScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify entries are rendered and no RenderFlex overflow exception occurred
+    expect(find.text('すっ飛ばす'), findsOneWidget);
+    expect(find.text('すっとばす'), findsOneWidget);
+    expect(find.text('他下一'), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class MockVocabularyConfigNotifier extends StateNotifier<VocabularyConfigState>

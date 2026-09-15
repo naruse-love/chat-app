@@ -214,8 +214,6 @@ class AnkiExportService implements AnkiExportServiceInterface {
   static const String defaultQfmt = r'''
 <!-- Card1 [日-中] 正面 -->
 
-{{^Alt1}}
-
 <main id="FrontSide" class="CardSide">
   <div class="Top">
     <span class="Level">{{Tags}}</span>
@@ -874,14 +872,10 @@ class AnkiExportService implements AnkiExportServiceInterface {
   hideFurigana()
   setAnkiWebAudio()
 </script>
-
-{{/Alt1}}
 ''';
 
   static const String defaultAfmt = r'''
 <!-- Card1 [日-中] 背面 -->
-
-{{^Alt1}}
 
 {{FrontSide}}
 
@@ -1040,8 +1034,6 @@ class AnkiExportService implements AnkiExportServiceInterface {
   // 安卓平台需要重复正面调用的方法
   if (isAndroid()) setupCard()
 </script>
-
-{{/Alt1}}
 ''';
 
   static const String defaultCss = r'''
