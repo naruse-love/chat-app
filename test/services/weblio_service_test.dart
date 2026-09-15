@@ -349,7 +349,7 @@ void main() {
       expect(result.examples.first.kanji, '適切な処置を講じる');
     });
 
-    test('mergeRedirectResult preserves original headword and combines definitions and examples', () {
+    test('mergeRedirectResult uses the target headword and reading consistently', () {
       const original = WeblioResult(
         word: '講じる',
         reading: 'こうじる',
@@ -377,8 +377,8 @@ void main() {
 
       final merged = WeblioService.mergeRedirectResult(original: original, target: target);
 
-      expect(merged.word, '講じる');
-      expect(merged.reading, 'こうじる');
+      expect(merged.word, '講ずる');
+      expect(merged.reading, 'こうずる');
       expect(merged.partOfSpeech, '動ザ上一');
       expect(merged.definition, contains('「こう（講）ずる」（サ変）の上一段化。'));
       expect(merged.definition, contains('１ 講義をする。'));
@@ -447,8 +447,8 @@ void main() {
       final mockService = WeblioService(dio: dio);
       final result = await mockService.lookupWord('講じる');
 
-      expect(result.word, '講じる');
-      expect(result.reading, 'こうじる');
+      expect(result.word, '講ずる');
+      expect(result.reading, 'こうずる');
       expect(result.partOfSpeech, contains('動ザ上一'));
       expect(result.definition, contains('「こう（講）ずる」（サ変）の上一段化。'));
       expect(result.definition, contains('１ 講義をする。'));

@@ -146,6 +146,33 @@ void main() {
       expect(AnkiExportService.ankiFields.contains('Tags'), isFalse);
     });
 
+    test('default model fields cover every optional field used by the templates', () {
+      expect(AnkiExportService.defaultModelFields, containsAll([
+        'VocabPitch',
+        'VocabDefTC',
+        'VocabPlus',
+        'VocabAudio',
+        'SentKanji3',
+        'SentFurigana3',
+        'SentDefSC3',
+        'SentDefTC3',
+        'SentType3',
+        'SentAudio3',
+        'SentKanji4',
+        'SentFurigana4',
+        'SentDefSC4',
+        'SentDefTC4',
+        'SentType4',
+        'SentAudio4',
+        'SentDefTC1',
+        'SentDefTC2',
+        'SentType1',
+        'SentType2',
+        'SentAudio1',
+        'SentAudio2',
+      ]));
+    });
+
     test('entryToFields maps VocabularyEntry to exact 13 fields correctly with VocabKanji first', () {
       final fields = AnkiExportService.entryToFields(sampleEntry);
       expect(fields.length, 13);
@@ -687,6 +714,8 @@ void main() {
       final modelId = await service.getOrCreateModel('测试新模型');
       expect(modelId, isNotNull);
       expect(bridge.models[modelId], '测试新模型');
+      expect(bridge.modelFields[modelId], contains('VocabPitch'));
+      expect(bridge.modelFields[modelId], contains('SentKanji4'));
     });
   });
 }

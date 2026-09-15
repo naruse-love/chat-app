@@ -12,7 +12,7 @@
 - **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支）
 - **包名 / Application ID**：`love.naruse.chat`
 - **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过，`flutter analyze` 必须 0 issues
-- **当前版本**：`1.49.0+50`
+- **当前版本**：`1.50.0+51`
 
 ---
 
@@ -285,4 +285,3 @@ D:\work\flutter-sdk\flutter\bin\flutter.bat build apk --debug
 # 提交并推送
 git add -A && git commit -m "..." && git push
 ```
-

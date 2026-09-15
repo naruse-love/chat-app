@@ -1,3 +1,31 @@
+## 2026-09-15 Fix: Anki 模型迁移与日语活用词形读音统一 (v1.50.0+51)
+
+### 变更背景与说明
+1. **Anki 旧模型兼容修复**：
+   - 默认模型升级为 `日语生词本-AI-v2`，避免继续复用设备上包含非法 `Alt1` 条件引用的旧模型；
+   - 自动将已保存的旧默认模型配置迁移到新模型，不修改用户自定义模型与既有卡片。
+2. **日语活用形查词修复**：
+   - Weblio 活用形重定向成功后统一采用目标原形及其读音，避免词条显示与读音不一致；
+   - 覆盖“一線を画し”这类活用形场景的回归逻辑。
+3. **Anki 默认模型字段完整性修复**：
+   - 默认模型创建时补齐模板引用的音调、补充释义、音频及第 3/4 条例句字段；
+   - 保留原 13 字段列表用于旧模型兼容和数据映射，避免破坏既有自定义模板。
+
+### 变更文件
+- `lib/services/anki_export_service.dart`
+- `lib/providers/anki_config_provider.dart`
+- `lib/services/weblio_service.dart`
+- `test/services/anki_export_service_test.dart`
+- `test/providers/anki_config_provider_test.dart`
+- `test/services/weblio_service_test.dart`
+- `test/services/anki_export_service_test.dart`
+- `pubspec.yaml`
+- `lib/services/update_service.dart`
+- `lib/screens/settings_screen.dart`
+- `.agents/context.md`
+
+---
+
 ## 2026-09-15 Fix: 生词本列表渲染溢出修复、Anki 模板 Alt1 校验异常根除与智能体规范升级 (v1.49.0+50)
 
 ### 变更背景与说明
@@ -2038,5 +2066,3 @@
 4. **Empty Manual Query Protection**: If the user types `@search` or `@search   ` without a query, the service throws an `ArgumentError('Search query cannot be empty')` to terminate the stream early and prevent empty search API requests.
 5. **Dio and Search Cancellation checks**: Passed `CancelToken` to the Dio streams and inserted pre-emptive checks before and after asynchronous search execution, ensuring immediate execution halt when requested.
 6. **Subclass-based Mocking**: Implemented lightweight stubs extending `ChatService` and `SearchService` in the test suite, avoiding mock library overhead.
-
-

@@ -4,7 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Anki 导出配置状态
 class AnkiConfig {
   static const String defaultDeckName = 'gal';
-  static const String defaultModelName = '日语生词本-AI';
+  static const String legacyDefaultModelName = '日语生词本-AI';
+  static const String defaultModelName = '日语生词本-AI-v2';
 
   final String deckName;
   final String modelName;
@@ -51,7 +52,14 @@ class AnkiConfigNotifier extends StateNotifier<AnkiConfig> {
       final prefs = await SharedPreferences.getInstance();
       if (!mounted) return;
       final deckName = prefs.getString(_prefKeyDeckName) ?? AnkiConfig.defaultDeckName;
-      final modelName = prefs.getString(_prefKeyModelName) ?? AnkiConfig.defaultModelName;
+      final savedModelName = prefs.getString(_prefKeyModelName);
+      final modelName = savedModelName == null ||
+              savedModelName.trim() == AnkiConfig.legacyDefaultModelName
+          ? AnkiConfig.defaultModelName
+          : savedModelName;
+      if (savedModelName != modelName) {
+        await prefs.setString(_prefKeyModelName, modelName);
+      }
       state = state.copyWith(
         deckName: deckName,
         modelName: modelName,

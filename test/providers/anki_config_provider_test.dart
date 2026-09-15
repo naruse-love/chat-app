@@ -16,7 +16,7 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 50));
 
       expect(notifier.state.deckName, 'gal');
-      expect(notifier.state.modelName, '日语生词本-AI');
+      expect(notifier.state.modelName, '日语生词本-AI-v2');
       expect(notifier.state.isLoaded, isTrue);
     });
 
@@ -32,6 +32,19 @@ void main() {
       expect(notifier.state.deckName, '自定义牌组');
       expect(notifier.state.modelName, '自定义模型');
       expect(notifier.state.isLoaded, isTrue);
+    });
+
+    test('migrates the legacy default model to the repaired model', () async {
+      SharedPreferences.setMockInitialValues({
+        'anki_model_name': AnkiConfig.legacyDefaultModelName,
+      });
+
+      final notifier = AnkiConfigNotifier();
+      await notifier.ensureLoaded();
+
+      expect(notifier.state.modelName, AnkiConfig.defaultModelName);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('anki_model_name'), AnkiConfig.defaultModelName);
     });
 
     test('updateDeckName updates state and persists to SharedPreferences', () async {

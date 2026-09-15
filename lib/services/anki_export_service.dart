@@ -192,7 +192,8 @@ class NativeAnkidroidBridge implements AnkidroidBridge {
 /// AnkiDroid 导出生词服务核心实现类
 class AnkiExportService implements AnkiExportServiceInterface {
   static const String defaultDeckName = 'gal';
-  static const String defaultModelName = '日语生词本-AI';
+  static const String legacyDefaultModelName = '日语生词本-AI';
+  static const String defaultModelName = '日语生词本-AI-v2';
 
   /// 13 个标准 Anki 卡片字段（首字段为唯一主键 VocabKanji，确保 AnkiDroid 重复检测与卡片标题精准匹配）
   static const List<String> ankiFields = [
@@ -209,6 +210,34 @@ class AnkiExportService implements AnkiExportServiceInterface {
     'SentDefSC2',
     'SourceDict',
     'NoteID',
+  ];
+
+  /// 默认模板实际引用的完整字段集合。
+  /// 保留 [ankiFields] 作为旧模型与纯数据映射的兼容字段列表。
+  static const List<String> defaultModelFields = [
+    ...ankiFields,
+    'VocabPitch',
+    'VocabDefTC',
+    'VocabPlus',
+    'VocabAudio',
+    'SentKanji3',
+    'SentFurigana3',
+    'SentDefSC3',
+    'SentDefTC3',
+    'SentType3',
+    'SentAudio3',
+    'SentKanji4',
+    'SentFurigana4',
+    'SentDefSC4',
+    'SentDefTC4',
+    'SentType4',
+    'SentAudio4',
+    'SentDefTC1',
+    'SentDefTC2',
+    'SentType1',
+    'SentType2',
+    'SentAudio1',
+    'SentAudio2',
   ];
 
   static const String defaultQfmt = r'''
@@ -2173,7 +2202,7 @@ a.Feedback {
     }
     return await _bridge.addNewCustomModel(
       name: modelName.trim(),
-      fields: ankiFields,
+      fields: defaultModelFields,
       cards: const ['Card 1'],
       qfmt: const [defaultQfmt],
       afmt: const [defaultAfmt],
@@ -2222,7 +2251,11 @@ a.Feedback {
             targetDeck = prefs.getString('anki_deck_name') ?? defaultDeckName;
           }
           if (targetModel.isEmpty) {
-            targetModel = prefs.getString('anki_model_name') ?? defaultModelName;
+            final savedModelName = prefs.getString('anki_model_name');
+            targetModel = savedModelName == null ||
+                    savedModelName.trim() == legacyDefaultModelName
+                ? defaultModelName
+                : savedModelName;
           }
         } catch (_) {
           if (targetDeck.isEmpty) targetDeck = defaultDeckName;

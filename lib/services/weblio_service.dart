@@ -429,10 +429,9 @@ class WeblioService {
     required WeblioResult original,
     required WeblioResult target,
   }) {
-    final word = original.word;
-    final reading = (original.reading.isNotEmpty && original.reading != original.word)
-        ? original.reading
-        : (target.reading.isNotEmpty ? target.reading : original.reading);
+    final word = target.word.isNotEmpty ? target.word : original.word;
+    final reading =
+        target.reading.isNotEmpty ? target.reading : original.reading;
     final pos = original.partOfSpeech.isNotEmpty ? original.partOfSpeech : target.partOfSpeech;
     final pitch = original.pitch.isNotEmpty ? original.pitch : target.pitch;
     final foreignOrigin = original.foreignOrigin.isNotEmpty
