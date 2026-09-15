@@ -1,3 +1,19 @@
+## 2026-09-15 Fix: Anki Full Original Template Alignment, Chinese/Japanese Definition Toggle & EdgeTTS Online Pronunciation (v1.44.0+45)
+
+### 变更文件
+- `lib/services/anki_export_service.dart`:
+  - 彻底废除精简缩略模板，将原版 `eggrolls-JLPT10k-v3.5` 的完整前端架构（635+ 行正面 HTML、160+ 行背面 HTML、530+ 行原生 CSS）完整内嵌至 `defaultQfmt`、`defaultAfmt` 与 `defaultCss`；
+  - `defaultQfmt` 嵌入原版完整 JavaScript 体系（多平台词典跳转 `lookUp()`、版本检查 `checkVersion()`、反馈系统 `feedback()`、词性标注 `setType()`、生词高亮 `markWords()` 等），并在 `setEdgeTTS()` 中扩充支持卡片正面 `.VocabAudio` 在线单词发音，启动脚本显式调用 `setEdgeTTS()`；
+  - `defaultAfmt` 在释义区域新增 `.VocabDefWrap` 包装与 `.DefSwitchBtn` 切换按钮，同时兼容 `{{VocabDefJa}}` 与 `{{VocabPlus}}`，默认显示日文原文，点击无缝切换中文翻译；日中任一缺失时自动优雅隐藏切换按钮；
+  - `defaultCss` 完整内置原版 509 行完整样式表（包含暗色主题、字体体系、移动端自适应响应式布局、音频播放按钮样式等），并追加中日释义切换按钮样式。
+- `背面.html`:
+  - 强化释义显示区域，同时支持 `{{VocabDefJa}}` 与 `{{VocabPlus}}` 双重日文释义来源；
+  - 优化 `setupDefSwitch()`，在任一释义为空时自动隐藏切换按钮，杜绝空白切换。
+- `test/services/anki_export_service_test.dart`:
+  - 新增 `defaultQfmt`、`defaultAfmt`、`defaultCss` 完整模板与 EdgeTTS 单词音频在内的一系列自动化测试用例，全量 34 个用例全部通过。
+- `pubspec.yaml`, `.agents/AGENTS.md`, `.agents/context.md`:
+  - 版本号自增至 `1.44.0+45`。
+
 ## 2026-09-14 Feat: GitHub Actions CI/CD Pipeline & In-App Version Update Detection (v1.43.0+44)
 
 ### 变更文件

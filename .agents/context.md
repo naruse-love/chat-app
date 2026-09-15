@@ -1,5 +1,5 @@
 # 项目接手上下文（Context）
-> 最后更新：2026-09-14
+> 最后更新：2026-09-15
 
 ---
 
@@ -11,7 +11,7 @@
 - **Flutter SDK**：`D:\work\flutter-sdk\flutter\bin\flutter.bat`
 - **Git 远程仓库**：`github.com:naruse-love/chat-app.git`（`main` 分支）
 - **开发约束**：Benchmark 模式 —— `flutter test` 必须 100% 通过，`flutter analyze` 必须 0 issues
-- **当前版本**：`1.43.0+44`
+- **当前版本**：`1.44.0+45`
 
 ---
 

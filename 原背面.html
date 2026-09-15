@@ -14,20 +14,14 @@
     </h2>
 
     <h3 class="VocabPoS LabelIndent2">
-      <div class="VocabDefWrap">
-        <span class="VocabDef" id="VocabDefDisplay" lang="ja">{{#VocabDefJa}}{{VocabDefJa}}{{/VocabDefJa}}{{^VocabDefJa}}{{#VocabPlus}}{{VocabPlus}}{{/VocabPlus}}{{^VocabPlus}}{{VocabDefSC}}{{/VocabPlus}}{{/VocabDefJa}}</span>
-        {{#VocabDefJa}}
-        <a class="DefSwitchBtn" id="DefSwitchBtn" href="javascript:void(0);" title="切换为中文翻译">译</a>
-        {{/VocabDefJa}}
-        {{^VocabDefJa}}
-        {{#VocabPlus}}
-        <a class="DefSwitchBtn" id="DefSwitchBtn" href="javascript:void(0);" title="切换为中文翻译">译</a>
-        {{/VocabPlus}}
-        {{/VocabDefJa}}
-      </div>
-      <div id="DefStoreSc" style="display:none;">{{VocabDefSC}}</div>
-      <div id="DefStoreJa" style="display:none;">{{#VocabDefJa}}{{VocabDefJa}}{{/VocabDefJa}}{{^VocabDefJa}}{{#VocabPlus}}{{VocabPlus}}{{/VocabPlus}}{{/VocabDefJa}}</div>
+      <span class="VocabDef">{{VocabDefSC}}</span>
     </h3>
+
+    {{#VocabPlus}}
+    <h3 class="VocabPlus LabelIndent" lang="ja">
+      {{furigana:VocabPlus}}
+    </h3>
+    {{/VocabPlus}}
   </section>
 
   <ul class="SentenceList">
@@ -86,68 +80,7 @@
   </ul>
 </main>
 
-<style>
-  .VocabDefWrap {
-    display: inline-flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .DefSwitchBtn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1.2;
-    color: #0284c7;
-    background: #f0f9ff;
-    border: 1px solid #bae6fd;
-    border-radius: 10px;
-    padding: 2px 7px;
-    cursor: pointer;
-    user-select: none;
-    text-decoration: none !important;
-    vertical-align: middle;
-  }
-  .DefSwitchBtn:active {
-    background: #0284c7;
-    color: #ffffff;
-  }
-</style>
-
 <script>
-  function setupDefSwitch() {
-    const btn = document.getElementById('DefSwitchBtn')
-    const display = document.getElementById('VocabDefDisplay')
-    const storeSc = document.getElementById('DefStoreSc')
-    const storeJa = document.getElementById('DefStoreJa')
-    if (!btn || !display || !storeSc || !storeJa) return
-    if (!storeSc.textContent.trim() || !storeJa.textContent.trim()) {
-      btn.style.display = 'none'
-      return
-    }
-
-    let isJa = true
-    btn.addEventListener('click', e => {
-      e.preventDefault()
-      e.stopPropagation()
-      isJa = !isJa
-      if (isJa) {
-        display.innerHTML = storeJa.innerHTML
-        display.setAttribute('lang', 'ja')
-        btn.textContent = '译'
-        btn.setAttribute('title', '切换为中文翻译')
-      } else {
-        display.innerHTML = storeSc.innerHTML
-        display.setAttribute('lang', 'zh-Hans')
-        btn.textContent = '原'
-        btn.setAttribute('title', '切换为日文原文')
-      }
-    })
-  }
-
-  setupDefSwitch()
   showHint()
   setEdgeTTS()
   autoCopyWord()

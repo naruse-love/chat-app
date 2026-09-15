@@ -640,5 +640,51 @@ void main() {
       expect(bridge.decks.values, contains('自定义收藏牌组'));
       expect(bridge.models.values, contains('自定义卡片模板'));
     });
+
+    test('defaultQfmt contains full original template, EdgeTTS word audio and scripts', () {
+      expect(AnkiExportService.defaultQfmt, contains('<main id="FrontSide" class="CardSide">'));
+      expect(AnkiExportService.defaultQfmt, contains('{{furigana:VocabKanji}}'));
+      expect(AnkiExportService.defaultQfmt, contains('function setEdgeTTS()'));
+      expect(AnkiExportService.defaultQfmt, contains('.VocabAudio'));
+      expect(AnkiExportService.defaultQfmt, contains('ja-JP-NanamiNeural'));
+      expect(AnkiExportService.defaultQfmt, contains('setEdgeTTS()'));
+      expect(AnkiExportService.defaultQfmt, contains('setupCard()'));
+      expect(AnkiExportService.defaultQfmt, contains('function CONFIG()'));
+      expect(AnkiExportService.defaultQfmt, contains('function lookUp('));
+      expect(AnkiExportService.defaultQfmt, contains('function checkVersion('));
+    });
+
+    test('defaultAfmt contains definition toggle button, setupDefSwitch and EdgeTTS playback', () {
+      expect(AnkiExportService.defaultAfmt, contains('<main id="BackSide" class="CardSide">'));
+      expect(AnkiExportService.defaultAfmt, contains('{{FrontSide}}'));
+      expect(AnkiExportService.defaultAfmt, contains('VocabDefWrap'));
+      expect(AnkiExportService.defaultAfmt, contains('id="VocabDefDisplay"'));
+      expect(AnkiExportService.defaultAfmt, contains('id="DefSwitchBtn"'));
+      expect(AnkiExportService.defaultAfmt, contains('id="DefStoreSc"'));
+      expect(AnkiExportService.defaultAfmt, contains('id="DefStoreJa"'));
+      expect(AnkiExportService.defaultAfmt, contains('{{#VocabDefJa}}'));
+      expect(AnkiExportService.defaultAfmt, contains('{{#VocabPlus}}'));
+      expect(AnkiExportService.defaultAfmt, contains('function setupDefSwitch()'));
+      expect(AnkiExportService.defaultAfmt, contains('setEdgeTTS()'));
+    });
+
+    test('defaultCss contains full original styles and toggle button css', () {
+      expect(AnkiExportService.defaultCss, contains('@charset "UTF-8";'));
+      expect(AnkiExportService.defaultCss, contains('--canvas: #fffaf0;'));
+      expect(AnkiExportService.defaultCss, contains('night-mode'));
+      expect(AnkiExportService.defaultCss, contains('.VocabDefWrap'));
+      expect(AnkiExportService.defaultCss, contains('.DefSwitchBtn'));
+      expect(AnkiExportService.defaultCss, contains('.replay-button'));
+      expect(AnkiExportService.defaultCss, contains('.tts.replay-button'));
+    });
+
+    test('getOrCreateModel creates model with full default templates and css', () async {
+      final bridge = MockAnkidroidBridge();
+      final service = AnkiExportService(bridge: bridge);
+
+      final modelId = await service.getOrCreateModel('测试新模型');
+      expect(modelId, isNotNull);
+      expect(bridge.models[modelId], '测试新模型');
+    });
   });
 }
