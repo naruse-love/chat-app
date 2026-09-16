@@ -650,7 +650,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         autofocus: true,
                         decoration: const InputDecoration(
                           labelText: '模板名称',
-                          hintText: '如：日语生词本-AI',
+                          hintText: '如：日语生词本-AI-v2',
                         ),
                       ),
                       actions: [

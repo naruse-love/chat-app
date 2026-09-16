@@ -24,6 +24,7 @@ test/*
 
 # HTML 调试与卡片模板文件
 /*.html
+/*.css
 
 # 计划与历史规划文档
 implementation_plan.md

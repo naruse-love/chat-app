@@ -129,6 +129,18 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
 
     if (!mounted) return;
 
+    if (result.modelUpgradedTo != null) {
+      await ref
+          .read(ankiConfigProvider.notifier)
+          .updateModelName(result.modelUpgradedTo!);
+    }
+
+    if (!mounted) return;
+
+    final upgradeMsg = result.modelUpgradedFrom != null
+        ? '\n已自动从旧模板「${result.modelUpgradedFrom}」升级为「${result.modelUpgradedTo}」，旧卡片不受影响'
+        : '';
+
     if (result.errors.isNotEmpty &&
         result.successCount == 0 &&
         result.skipCount == 0) {
@@ -136,16 +148,16 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
         SnackBar(
           content: Text('导出失败: ${result.errors.join("; ")}'),
           backgroundColor: Theme.of(context).colorScheme.error,
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 4),
         ),
       );
     } else if (result.successCount == 0 && result.skipCount > 0 && result.failedEntries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '全部 ${result.skipCount} 个新词在 AnkiDroid 中已存在，已自动跳过',
+            '全部 ${result.skipCount} 个新词在 AnkiDroid 中已存在，已自动跳过$upgradeMsg',
           ),
-          duration: const Duration(seconds: 3),
+          duration: Duration(seconds: result.modelUpgradedFrom != null ? 5 : 3),
         ),
       );
     } else {
@@ -157,9 +169,9 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '已成功导出 ${result.successCount} 个新词到 Anki$skipMsg$failMsg',
+            '已成功导出 ${result.successCount} 个新词到 Anki$skipMsg$failMsg$upgradeMsg',
           ),
-          duration: const Duration(seconds: 3),
+          duration: Duration(seconds: result.modelUpgradedFrom != null ? 5 : 3),
         ),
       );
     }

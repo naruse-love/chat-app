@@ -189,6 +189,21 @@ class NativeAnkidroidBridge implements AnkidroidBridge {
   }
 }
 
+/// Anki 模型解析与自愈结果
+class AnkiModelResolution {
+  final int modelId;
+  final String modelName;
+  final bool isUpgraded;
+  final String? upgradedFrom;
+
+  const AnkiModelResolution({
+    required this.modelId,
+    required this.modelName,
+    this.isUpgraded = false,
+    this.upgradedFrom,
+  });
+}
+
 /// AnkiDroid 导出生词服务核心实现类
 class AnkiExportService implements AnkiExportServiceInterface {
   static const String defaultDeckName = 'gal';
@@ -214,8 +229,10 @@ class AnkiExportService implements AnkiExportServiceInterface {
 
   /// 默认模板实际引用的完整字段集合。
   /// 保留 [ankiFields] 作为旧模型与纯数据映射的兼容字段列表。
+  /// 包含 'Alt1' 占位防御字段，彻底杜绝任何残存模板校验异常。
   static const List<String> defaultModelFields = [
     ...ankiFields,
+    'Alt1',
     'VocabPitch',
     'VocabDefTC',
     'VocabPlus',
@@ -1150,7 +1167,7 @@ body,
 }
 
 .VocabKanji :lang(ja) {
-  font-family: 'YuKyokasho Yoko', 'UD Digi Kyokasho NK', 'UD Digi Kyokasho NK-R', 'Source Han Serif JP', serif;
+  font-family: 'YuKyokasho Yoko', 'UD Digi Kyokasho NK-R', 'Source Han Serif JP', serif;
 }
 
 :root {
@@ -1186,6 +1203,8 @@ body,
   --label-indent2-padding: calc(11 / 18 * 1em);
   --label-indent2-text: calc(-13 / 18 * 1em);
   --audio-button-size: calc(32 / 18 * 1em);
+  --modal-padding-top: 12vh;
+  --modal-max-width: 80%;
 }
 
 :root.night-mode,
@@ -1226,6 +1245,8 @@ body,
     --label-indent-text: calc(-66 / 22 * 1em);
     --label-indent2-padding: calc(14 / 22 * 1em);
     --label-indent2-text: calc(-16 / 22 * 1em);
+    --modal-padding-top: 15vh;
+    --modal-max-width: 28em;
   }
 }
 
@@ -1260,7 +1281,8 @@ body,
 .card .Top,
 .card .Search,
 .card .Feedback,
-.card .VocabPitch {
+.card .VocabPitch,
+.card .DialogContent {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -1542,6 +1564,34 @@ a.Feedback {
   padding: 0;
 }
 
+#quiz .DialogOverlay {
+  display: flex;
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  padding-top: 0;
+  overflow: hidden;
+}
+
+#quiz .DialogContent {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--modal-padding-top);
+  max-height: calc(100% - var(--modal-padding-top));
+  overflow: hidden;
+}
+
+#quiz .DialogBody {
+  overflow: auto;
+  min-height: 0;
+}
+
+#quiz .DialogFooter {
+  position: sticky;
+  bottom: 0;
+  background: var(--canvas-inset);
+}
+
 /* --- iOS 思源宋体振假名高度修复 --- */
 .ios rt,
 .safari rt {
@@ -1551,7 +1601,7 @@ a.Feedback {
 /* --- iOS 若安装教科书字体开启以下样式 --- */
 .ios .VocabKanji rt,
 .safari .VocabKanji rt {
-  /* transform: none; */
+  /* transform: 0; */
 }
 
 /* --- 安卓平台使用系统默认字体 --- */
@@ -1576,7 +1626,129 @@ a.Feedback {
   min-height: 0;
 }
 
-/* --- 中日释义切换按钮样式 --- */
+/* --- 弹出模态框样式 --- */
+.DialogOverlay {
+  /* display: none; */
+  display: flex;
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  height: 100vh;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: hidden;
+  padding-top: var(--modal-padding-top);
+  background-color: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(1px);
+
+}
+
+.DialogTitle {
+  text-align: center;
+  font-size: var(--text-xl);
+  letter-spacing: 2px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+
+.DialogTitle span {
+  display: block;
+  font-size: var(--text-sm);
+  letter-spacing: 0;
+  padding-top: 2px;
+}
+
+.DialogContent {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: var(--modal-max-width);
+  width: 100%;
+  border-radius: var(--border-radius);
+  background-color: var(--canvas-inset);
+  padding: 22px 16px;
+  font-size: var(--text-sm);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--modal-padding-top));
+  overflow: hidden;
+}
+
+@supports (height: 100dvh) {
+  .DialogOverlay  { height: 100dvh; }
+  .DialogContent  { max-height: calc(100dvh - var(--modal-padding-top)); }
+}
+
+.DialogBody {
+  margin: 0 auto;
+  max-width: 26em;
+  display: flex;
+  flex-direction: column;
+  row-gap: 6px;
+  padding: 10px 0 20px;
+  overflow: auto;
+  min-height: 0; 
+}
+
+.DialogBody ul {
+  font-size: var(--text-xs);
+  padding-left: 1.2em;
+  white-space: pre-wrap;
+}
+
+.DialogBody ul code {
+  background-color: var(--button-bg);
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  color: var(--fg);
+  vertical-align: text-bottom;
+  padding: .2em .4em;
+  font-size: 85%;
+  white-space: break-spaces;
+}
+
+.DialogBody ul b {
+  font-weight: 600;
+}
+
+.DialogFooter {
+  margin: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 20px;
+}
+
+.DialogButton {
+  width: 100%;
+  cursor: pointer;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius);
+  background-color: var(--button-bg);
+  padding: 6px 0;
+  text-align: center;
+  color: var(--fg);
+  letter-spacing: 2px;
+}
+
+.DialogButton:hover {
+  background-color: var(--button-gradient-start);
+}
+
+.DialogButton.CancelButton {
+  color: var(--fg);
+  background-color: var(--button-bg);
+}
+
+.DialogButton.ConfirmButton {
+  color: #fff;
+  background-color: var(--button-primary-bg);
+}
+
+.DialogButton.ConfirmButton:hover {
+  background-color: var(--button-primary-gradient-start);
+}
+
+/* --- 切换按钮样式 --- */
 .VocabDefWrap {
   display: inline-flex;
   align-items: center;
@@ -1925,6 +2097,12 @@ a.Feedback {
     '链接',
   };
 
+  static const Set<String> _alt1Aliases = {
+    'alt1',
+    'alt',
+    'alternative1',
+  };
+
   static const Set<String> _vocabPitchAliases = {
     'vocabpitch',
     'vocabularypitch',
@@ -2137,6 +2315,9 @@ a.Feedback {
     if (_tagsAliases.contains(norm)) {
       return entry.sourceDict.isNotEmpty ? entry.sourceDict : 'AI生词本';
     }
+    if (_alt1Aliases.contains(norm)) {
+      return '';
+    }
 
     // 彻底废除 fallbackIndex 盲目回退！未识别字段一律安全返回空字符串，杜绝错位污染
     return '';
@@ -2192,16 +2373,136 @@ a.Feedback {
     return await _bridge.addNewDeck(deckName.trim());
   }
 
-  /// 查找或创建卡片模型，返回 modelId
-  Future<int> getOrCreateModel(String modelName) async {
+  /// 计算自适应升级的模型名称（如 naruse -> naruse-v2, naruse-v2 -> naruse-v3）
+  static String computeUpgradedModelName(String modelName) {
+    final clean = modelName.trim();
+    final match = RegExp(r'^(.*?)-v(\d+)$').firstMatch(clean);
+    if (match != null) {
+      final base = match.group(1)!;
+      final version = int.tryParse(match.group(2)!) ?? 1;
+      return '$base-v${version + 1}';
+    }
+    return '$clean-v2';
+  }
+
+  /// 查找或创建卡片模型，并校验字段完整性。
+  /// 若目标模型已存在但缺少关键字段（如残存旧模板导致的 Alt1/Pitch 缺失），
+  /// 自动创建平滑升级的独立新模型（如 <name>-v2），确保既有卡片与新卡片均安全可用。
+  Future<AnkiModelResolution> resolveOrCreateModel(String modelName) async {
+    final cleanName = modelName.trim();
     final models = await _bridge.getModelList();
+
+    // 查找同名模型
+    MapEntry<int, String>? matchedEntry;
     for (final entry in models.entries) {
-      if (entry.value.trim() == modelName.trim()) {
-        return entry.key;
+      if (entry.value.trim() == cleanName) {
+        matchedEntry = entry;
+        break;
       }
     }
-    return await _bridge.addNewCustomModel(
-      name: modelName.trim(),
+
+    if (matchedEntry != null) {
+      // 检查字段完整性与是否属于需自愈升级的软件旧模型
+      bool isComplete = true;
+      try {
+        final existingFields = await _bridge.getFieldList(matchedEntry.key);
+        if (existingFields.isEmpty) {
+          isComplete = false;
+        } else {
+          final existingSet =
+              existingFields.map((f) => f.trim().toLowerCase()).toSet();
+          
+          final isDefaultModel = cleanName == defaultModelName ||
+              cleanName == legacyDefaultModelName;
+          
+          // 仅当是默认模型，或者属于软件生成的生词本模型（包含 VocabKanji、VocabFurigana 但缺失 Alt1 且非带有 Tags 的特殊模型）
+          // 才判定为需要自愈升级的受影响旧模型，绝对不误改用户第三方的自定义基础卡片或句子卡片
+          final isCandidateForUpgrade = isDefaultModel ||
+              (existingSet.contains('vocabkanji') &&
+                  existingSet.contains('vocabfurigana') &&
+                  !existingSet.contains('alt1') &&
+                  !existingSet.contains('tags'));
+
+          if (isCandidateForUpgrade) {
+            for (final f in defaultModelFields) {
+              if (!existingSet.contains(f.trim().toLowerCase())) {
+                isComplete = false;
+                break;
+              }
+            }
+          }
+        }
+      } catch (_) {
+        isComplete = true;
+      }
+
+      if (isComplete) {
+        return AnkiModelResolution(
+          modelId: matchedEntry.key,
+          modelName: cleanName,
+        );
+      }
+
+      // 字段不完整，平滑升级到新模型
+      String candidateName = computeUpgradedModelName(cleanName);
+      while (true) {
+        MapEntry<int, String>? existingCandidate;
+        for (final entry in models.entries) {
+          if (entry.value.trim() == candidateName) {
+            existingCandidate = entry;
+            break;
+          }
+        }
+
+        if (existingCandidate == null) {
+          final newId = await _bridge.addNewCustomModel(
+            name: candidateName,
+            fields: defaultModelFields,
+            cards: const ['Card 1'],
+            qfmt: const [defaultQfmt],
+            afmt: const [defaultAfmt],
+            css: defaultCss,
+            sortf: 0,
+          );
+          return AnkiModelResolution(
+            modelId: newId,
+            modelName: candidateName,
+            isUpgraded: true,
+            upgradedFrom: cleanName,
+          );
+        }
+
+        // 候选模型已存在，校验其字段是否完整
+        bool candidateComplete = true;
+        try {
+          final fields = await _bridge.getFieldList(existingCandidate.key);
+          final set = fields.map((f) => f.trim().toLowerCase()).toSet();
+          for (final f in defaultModelFields) {
+            if (!set.contains(f.trim().toLowerCase())) {
+              candidateComplete = false;
+              break;
+            }
+          }
+        } catch (_) {
+          candidateComplete = true;
+        }
+
+        if (candidateComplete) {
+          return AnkiModelResolution(
+            modelId: existingCandidate.key,
+            modelName: candidateName,
+            isUpgraded: true,
+            upgradedFrom: cleanName,
+          );
+        }
+
+        candidateName = computeUpgradedModelName(candidateName);
+      }
+    }
+
+    // 全新创建
+    final newId = await _bridge.addNewCustomModel(
+      name: cleanName,
       fields: defaultModelFields,
       cards: const ['Card 1'],
       qfmt: const [defaultQfmt],
@@ -2209,6 +2510,16 @@ a.Feedback {
       css: defaultCss,
       sortf: 0,
     );
+    return AnkiModelResolution(
+      modelId: newId,
+      modelName: cleanName,
+    );
+  }
+
+  /// 查找或创建卡片模型，返回 modelId（兼容既有接口）
+  Future<int> getOrCreateModel(String modelName) async {
+    final res = await resolveOrCreateModel(modelName);
+    return res.modelId;
   }
 
   @override
@@ -2264,7 +2575,15 @@ a.Feedback {
       }
 
       final deckId = await getOrCreateDeck(targetDeck);
-      final modelId = await getOrCreateModel(targetModel);
+      final modelResolution = await resolveOrCreateModel(targetModel);
+      final modelId = modelResolution.modelId;
+
+      if (modelResolution.isUpgraded) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('anki_model_name', modelResolution.modelName);
+        } catch (_) {}
+      }
 
       List<String> modelFields;
       try {
@@ -2349,6 +2668,10 @@ a.Feedback {
         skipCount: skipCount,
         failedEntries: failedEntries,
         errors: errors,
+        modelUpgradedFrom:
+            modelResolution.isUpgraded ? modelResolution.upgradedFrom : null,
+        modelUpgradedTo:
+            modelResolution.isUpgraded ? modelResolution.modelName : null,
       );
     } catch (e) {
       return AnkiExportResult(

@@ -6,12 +6,16 @@ class AnkiExportResult {
   final int skipCount;
   final List<VocabularyEntry> failedEntries;
   final List<String> errors;
+  final String? modelUpgradedFrom;
+  final String? modelUpgradedTo;
 
   const AnkiExportResult({
     this.successCount = 0,
     this.skipCount = 0,
     this.failedEntries = const [],
     this.errors = const [],
+    this.modelUpgradedFrom,
+    this.modelUpgradedTo,
   });
 
   bool get isSuccess => failedEntries.isEmpty && errors.isEmpty;
@@ -19,7 +23,7 @@ class AnkiExportResult {
 
   @override
   String toString() =>
-      'AnkiExportResult(success: $successCount, skipped: $skipCount, failed: ${failedEntries.length}, errors: $errors)';
+      'AnkiExportResult(success: $successCount, skipped: $skipCount, failed: ${failedEntries.length}, errors: $errors, modelUpgradedFrom: $modelUpgradedFrom, modelUpgradedTo: $modelUpgradedTo)';
 }
 
 /// Anki 导出服务抽象接口
