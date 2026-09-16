@@ -478,12 +478,13 @@ class AgentService {
     Map<String, dynamic>? context,
     CancelToken? cancelToken,
   }) async {
+    // MCP 动态工具（mcp_ 前缀）不参与外层重试：MCP 层已有 60s 超时与会话过期自愈，
+    // 外层 3 次指数退避重试会把单次失败放大成约 4 分钟的假死等待
     final isExternalOrMcp = name == 'web_search' ||
         name == 'google_search' ||
         name == 'bing_search' ||
         name == 'url_fetch' ||
-        name == 'weather_query' ||
-        name.startsWith('mcp_');
+        name == 'weather_query';
 
     ToolExecutionResult result;
     try {

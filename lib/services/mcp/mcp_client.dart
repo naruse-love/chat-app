@@ -5,6 +5,7 @@ import '../../models/mcp/mcp_tool_info.dart';
 import '../../models/mcp/mcp_transport_type.dart';
 import 'json_rpc_engine.dart';
 import 'transports/mcp_transport.dart';
+import 'transports/streamable_post_helper.dart' show McpSessionExpiredException;
 
 /// Model Context Protocol (MCP) 客户端核心协议驱动
 /// 遵循 MCP 2024-11-05 标准协议规范
@@ -193,6 +194,18 @@ class McpClient {
           },
           timeout ?? defaultTimeout,
         );
+      } on McpSessionExpiredException {
+        // 会话过期自愈：重新握手获取新 Session 后重试一次
+        rawResponse = await _reinitializeAndRetry(
+          () => _engine.sendRequest(
+            'tools/call',
+            {
+              'name': name,
+              'arguments': safeArgs,
+            },
+            timeout ?? defaultTimeout,
+          ),
+        );
       } catch (e) {
         if (!_transport.isConnected) {
           await _transport.connect();
@@ -225,6 +238,26 @@ class McpClient {
     } catch (e) {
       return McpToolCallResult.error('MCP 工具调用异常: $e');
     }
+  }
+
+  /// 会话过期自愈：重新执行协议握手（获取新 Session ID）后重试一次原请求
+  /// 传输层在会话过期时已置 error 态，此处通过重连 + 重新 initialize 恢复
+  Future<dynamic> _reinitializeAndRetry(
+    Future<dynamic> Function() retryAction,
+  ) async {
+    // 重置握手标记，强制重新走完整 initialize 流程
+    _isInitialized = false;
+
+    // 传输层处于 error 态时先重连（connect 会重置状态并准备新会话）
+    if (!_transport.isConnected) {
+      await _transport.connect();
+    }
+
+    // 重新协议握手协商新 Session
+    await initialize();
+
+    // 重试一次原请求
+    return retryAction();
   }
 
   /// 5. 资源列表发现 (resources/list)

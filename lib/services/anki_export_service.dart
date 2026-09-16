@@ -693,6 +693,8 @@ class AnkiExportService implements AnkiExportServiceInterface {
 
   function removeSpaces() {
     document.querySelectorAll('.VocabPlus, .VocabPoS, .SentKanji, .SentFurigana, .SentDef').forEach(el => {
+      // 防御：含释义切换按钮的元素跳过 innerHTML 重建，避免销毁已挂载的 click 监听器
+      if (el.querySelector('.DefSwitchBtn')) return
       el.innerHTML = el.innerHTML
         .replace(/\s*\n\s*/g, '')
         .replace(/>\s+</g, '><')
@@ -1073,6 +1075,11 @@ class AnkiExportService implements AnkiExportServiceInterface {
     })
   }
 
+  // 安卓平台需要重复正面调用的方法
+  // 注意：必须先于 setupDefSwitch() 执行——setupCard 内的 removeSpaces() 会重建
+  // .VocabPoS 子树 DOM，若在挂载切换监听器之后执行会销毁 #DefSwitchBtn 的监听器
+  if (isAndroid()) setupCard()
+
   setupDefSwitch()
   showHint()
   setEdgeTTS()
@@ -1081,9 +1088,6 @@ class AnkiExportService implements AnkiExportServiceInterface {
   audioStylePatch()
   hideFrontElements()
   typeof onShownHook !== 'undefined' ? onShownHook.push(forcePlayback) : forcePlayback()
-
-  // 安卓平台需要重复正面调用的方法
-  if (isAndroid()) setupCard()
 </script>
 ''';
 

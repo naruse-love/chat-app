@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../../../models/mcp/mcp_transport_type.dart';
 import 'mcp_transport.dart';
+import 'streamable_post_helper.dart';
 
 /// 基于 HTTP Server-Sent Events (SSE) + POST 的 MCP 传输通道实现
 class SseMcpTransport implements McpTransport {
   final Uri uri;
   final Map<String, String>? headers;
   final Dio _dio;
+  late final StreamablePostHelper _postHelper;
 
   McpConnectionStatus _status = McpConnectionStatus.disconnected;
   final StreamController<McpConnectionStatus> _statusController =
@@ -34,7 +36,20 @@ class SseMcpTransport implements McpTransport {
                 receiveTimeout: const Duration(seconds: 60),
                 sendTimeout: const Duration(seconds: 30),
               ),
-            );
+            ) {
+    _postHelper = StreamablePostHelper(
+      dio: _dio,
+      onMessage: (msg) {
+        if (!_messageController.isClosed) {
+          _messageController.add(msg);
+        }
+      },
+      onError: (error) {
+        // HTTP 降级模式的响应流中断：置错误态使挂起请求快速失败
+        _setStatus(McpConnectionStatus.error);
+      },
+    );
+  }
 
   @override
   McpTransportType get transportType => McpTransportType.sse;
@@ -209,144 +224,29 @@ class SseMcpTransport implements McpTransport {
       throw StateError('SseMcpTransport is not connected');
     }
 
-    final postHeaders = <String, dynamic>{
-      'Content-Type': 'application/json',
-      'Accept': 'application/json, text/event-stream',
-      'MCP-Protocol-Version': '2024-11-05',
-      if (_sessionId != null) 'Mcp-Session-Id': _sessionId!,
-      if (headers != null) ...headers!,
-    };
-
     final safeMessage = _deepSanitizeForJson(message) as Map<String, dynamic>;
 
-    final response = await _dio.post(
-      _postUri.toString(),
-      data: safeMessage,
-      options: Options(
-        headers: postHeaders,
-        contentType: 'application/json',
-        responseType: ResponseType.plain,
-        validateStatus: (s) => s != null && s < 500,
-      ),
-    );
+    try {
+      final result = await _postHelper.post(
+        uri: _postUri!,
+        message: safeMessage,
+        headers: headers,
+        sessionId: _sessionId,
+        cancelToken: _cancelToken,
+      );
 
-    // 捕获并维护服务端可能返回的 Session ID
-    final sessionHeader = response.headers.value('mcp-session-id') ??
-        response.headers.value('Mcp-Session-Id');
-    if (sessionHeader != null && sessionHeader.isNotEmpty) {
-      _sessionId = sessionHeader;
-    }
-
-    // 无论是否为 Streamable HTTP 降级模式，只要 POST 响应体包含数据，立即解析分发（直接 JSON 或 SSE 格式）
-    final data = response.data;
-    if (data != null) {
-      if (data is Map<String, dynamic>) {
-        if (_isJsonRpcMessage(data)) {
-          _messageController.add(data);
-        }
-      } else if (data is List) {
-        for (final item in data) {
-          if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
-            _messageController.add(item);
-          }
-        }
-      } else {
-        _dispatchMessagePayload(data.toString(), _messageController);
+      // 捕获并维护服务端可能返回的 Session ID
+      if (result.sessionId != null) {
+        _sessionId = result.sessionId;
       }
-    }
-  }
-
-  /// 验证是否为合法的 JSON-RPC 2.0 消息（过滤仅表示 HTTP 状态确认的 {'ok': true} 等非 RPC 响应）
-  static bool _isJsonRpcMessage(Map<String, dynamic> map) {
-    return map.containsKey('jsonrpc') ||
-        (map.containsKey('id') && (map.containsKey('result') || map.containsKey('error') || map.containsKey('method')));
-  }
-
-  /// 通用 JSON-RPC 及标准 SSE 消息分发解析器 (支持直接 JSON 对象/数组，以及以空行分隔的标准 SSE 事件块)
-  static void _dispatchMessagePayload(
-    String rawBody,
-    StreamController<Map<String, dynamic>> controller,
-  ) {
-    final body = rawBody.trim();
-    if (body.isEmpty) return;
-
-    // 1. 直接作为 JSON-RPC 对象或数组解析
-    if (body.startsWith('{') || body.startsWith('[')) {
-      try {
-        final decoded = jsonDecode(body);
-        if (decoded is Map<String, dynamic>) {
-          if (_isJsonRpcMessage(decoded)) {
-            controller.add(decoded);
-          }
-          return;
-        } else if (decoded is List) {
-          for (final item in decoded) {
-            if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
-              controller.add(item);
-            }
-          }
-          return;
-        }
-      } catch (_) {}
-    }
-
-    // 2. 标准 SSE 格式块解析 (事件块以双换行 \n\n 或 \r\n\r\n 分隔，支持多行 data:)
-    final blocks = body.split(RegExp(r'\r?\n\r?\n'));
-    for (final block in blocks) {
-      final trimmedBlock = block.trim();
-      if (trimmedBlock.isEmpty) continue;
-
-      final dataLines = <String>[];
-      for (final line in trimmedBlock.split(RegExp(r'\r?\n'))) {
-        final trimmedLine = line.trim();
-        if (trimmedLine.startsWith('data:')) {
-          dataLines.add(trimmedLine.substring(5).trimLeft());
-        }
-      }
-
-      if (dataLines.isNotEmpty) {
-        final joined = dataLines.join('\n').trim();
-        bool decodedSuccess = false;
-        if (joined.isNotEmpty && (joined.startsWith('{') || joined.startsWith('['))) {
-          try {
-            final decoded = jsonDecode(joined);
-            if (decoded is Map<String, dynamic>) {
-              if (_isJsonRpcMessage(decoded)) {
-                controller.add(decoded);
-              }
-              decodedSuccess = true;
-            } else if (decoded is List) {
-              for (final item in decoded) {
-                if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
-                  controller.add(item);
-                }
-              }
-              decodedSuccess = true;
-            }
-          } catch (_) {}
-        }
-
-        // 容错：若合并多行解析失败，可能是非标服务端按单换行分隔了多个独立 JSON 消息
-        if (!decodedSuccess && dataLines.length > 1) {
-          for (final singleLine in dataLines) {
-            final lineTrimmed = singleLine.trim();
-            if (lineTrimmed.startsWith('{') || lineTrimmed.startsWith('[')) {
-              try {
-                final decoded = jsonDecode(lineTrimmed);
-                if (decoded is Map<String, dynamic> && _isJsonRpcMessage(decoded)) {
-                  controller.add(decoded);
-                } else if (decoded is List) {
-                  for (final item in decoded) {
-                    if (item is Map<String, dynamic> && _isJsonRpcMessage(item)) {
-                      controller.add(item);
-                    }
-                  }
-                }
-              } catch (_) {}
-            }
-          }
-        }
-      }
+    } on McpSessionExpiredException {
+      // 会话过期：清除失效 Session ID 并置错误态，由上层重新握手自愈
+      _sessionId = null;
+      _setStatus(McpConnectionStatus.error);
+      rethrow;
+    } catch (e) {
+      _setStatus(McpConnectionStatus.error);
+      rethrow;
     }
   }
 
@@ -359,6 +259,7 @@ class SseMcpTransport implements McpTransport {
     _cancelToken?.cancel('Transport closed');
     await _streamSubscription?.cancel();
     _streamSubscription = null;
+    await _postHelper.close();
 
     await _statusController.close();
     await _messageController.close();
