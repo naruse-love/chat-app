@@ -332,29 +332,35 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
     state = state.copyWith(clearError: true);
   }
 
-  /// 导出所有未导出的生词到 AnkiDroid
+  /// 导出所有未导出的生词到 AnkiDroid（若 [forceAll] 为 true，全量检查所有生词并利用 Anki 原生查重机制补漏）
   Future<AnkiExportResult> exportToAnki({
     String? deckName,
     String? modelName,
+    bool forceAll = false,
   }) async {
     state = state.copyWith(isExporting: true, clearError: true);
     try {
-      final unexported = await vocabularyDao.getUnexported();
-      if (unexported.isEmpty) {
+      final List<VocabularyEntry> entriesToExport;
+      if (forceAll) {
+        entriesToExport = await vocabularyDao.getAll();
+      } else {
+        entriesToExport = await vocabularyDao.getUnexported();
+      }
+      if (entriesToExport.isEmpty) {
         if (!mounted) return const AnkiExportResult();
         state = state.copyWith(isExporting: false);
         return const AnkiExportResult();
       }
 
       final result = await ankiExportService.exportEntries(
-        unexported,
+        entriesToExport,
         deckName: deckName,
         modelName: modelName,
       );
 
       final failedIds =
           result.failedEntries.map((e) => e.id).whereType<int>().toSet();
-      final idsToMark = unexported
+      final idsToMark = entriesToExport
           .where((e) => e.id != null && !failedIds.contains(e.id))
           .map((e) => e.id!)
           .toList();
@@ -367,11 +373,19 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
       final freshList =
           await vocabularyDao.getAll(searchQuery: state.searchQuery);
       final count = await vocabularyDao.unexportedCount();
+      VocabularyEntry? updatedCurrent = state.currentResult;
+      if (updatedCurrent != null && updatedCurrent.id != null) {
+        updatedCurrent = freshList.firstWhere(
+          (e) => e.id == updatedCurrent!.id,
+          orElse: () => updatedCurrent!,
+        );
+      }
       if (!mounted) return result;
       state = state.copyWith(
         isExporting: false,
         entries: freshList,
         unexportedCount: count,
+        currentResult: updatedCurrent,
       );
       return result;
     } catch (e) {
@@ -384,6 +398,58 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
       state = state.copyWith(isExporting: false, error: e.toString());
       return AnkiExportResult(
         failedEntries: const [],
+        errors: [e.toString()],
+      );
+    }
+  }
+
+  /// 单独导出单个生词到 AnkiDroid（支持重复导出，借助 Anki 原生查重防重与删后补漏）
+  Future<AnkiExportResult> exportSingleEntry(
+    VocabularyEntry entry, {
+    String? deckName,
+    String? modelName,
+  }) async {
+    state = state.copyWith(isExporting: true, clearError: true);
+    try {
+      final result = await ankiExportService.exportEntries(
+        [entry],
+        deckName: deckName,
+        modelName: modelName,
+      );
+
+      if (entry.id != null && result.failedEntries.isEmpty) {
+        await vocabularyDao.markAsExported(entry.id!);
+      }
+
+      if (!mounted) return result;
+      final freshList =
+          await vocabularyDao.getAll(searchQuery: state.searchQuery);
+      final count = await vocabularyDao.unexportedCount();
+      VocabularyEntry? updatedCurrent = state.currentResult;
+      if (updatedCurrent != null && updatedCurrent.id == entry.id) {
+        updatedCurrent = freshList.firstWhere(
+          (e) => e.id == entry.id,
+          orElse: () => entry.copyWith(exportedToAnki: true),
+        );
+      }
+      if (!mounted) return result;
+      state = state.copyWith(
+        isExporting: false,
+        entries: freshList,
+        unexportedCount: count,
+        currentResult: updatedCurrent,
+      );
+      return result;
+    } catch (e) {
+      if (!mounted) {
+        return AnkiExportResult(
+          failedEntries: [entry],
+          errors: [e.toString()],
+        );
+      }
+      state = state.copyWith(isExporting: false, error: e.toString());
+      return AnkiExportResult(
+        failedEntries: [entry],
         errors: [e.toString()],
       );
     }

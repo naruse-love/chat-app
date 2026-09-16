@@ -90,10 +90,17 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
     final count = vocabState.unexportedCount;
 
     if (count == 0) {
+      final hasAnyWords = vocabState.entries.isNotEmpty;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('暂无未导出的新词'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: const Text('暂无未导出的新词'),
+          action: hasAnyWords
+              ? SnackBarAction(
+                  label: '重新同步全部',
+                  onPressed: _handleSyncAllToAnki,
+                )
+              : null,
+          duration: const Duration(seconds: 3),
         ),
       );
       return;
@@ -172,6 +179,141 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
             '已成功导出 ${result.successCount} 个新词到 Anki$skipMsg$failMsg$upgradeMsg',
           ),
           duration: Duration(seconds: result.modelUpgradedFrom != null ? 5 : 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleSyncAllToAnki() async {
+    await ref.read(ankiConfigProvider.notifier).ensureLoaded();
+    if (!mounted) return;
+
+    final vocabState = ref.read(vocabularyProvider);
+    final totalCount = vocabState.entries.length;
+    if (totalCount == 0) return;
+
+    final ankiConfig = ref.read(ankiConfigProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重新同步生词到 AnkiDroid'),
+        content: Text(
+          '是否重新检查本地全部 $totalCount 个生词并同步到牌组「${ankiConfig.deckName}」？\n\n系统内置智能查重：已存在于 Anki 中的卡片会自动跳过，仅会补录在 Anki 中被删除的卡片，绝不会生成重复卡片。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('开始检查补录'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final result = await ref.read(vocabularyProvider.notifier).exportToAnki(
+          deckName: ankiConfig.deckName,
+          modelName: ankiConfig.modelName,
+          forceAll: true,
+        );
+
+    if (!mounted) return;
+
+    if (result.modelUpgradedTo != null) {
+      await ref
+          .read(ankiConfigProvider.notifier)
+          .updateModelName(result.modelUpgradedTo!);
+    }
+
+    if (!mounted) return;
+
+    final upgradeMsg = result.modelUpgradedFrom != null
+        ? '\n已自动平滑升级为「${result.modelUpgradedTo}」'
+        : '';
+
+    if (result.errors.isNotEmpty &&
+        result.successCount == 0 &&
+        result.skipCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('同步失败: ${result.errors.join("; ")}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } else if (result.successCount == 0 && result.skipCount > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('全部 ${result.skipCount} 个单词在 AnkiDroid 中均已存在，无需补录$upgradeMsg'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } else {
+      final skipMsg =
+          result.skipCount > 0 ? '（${result.skipCount} 个已存在已跳过）' : '';
+      final failMsg = result.failedEntries.isNotEmpty
+          ? '，${result.failedEntries.length} 个失败'
+          : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已成功补录 ${result.successCount} 个单词到 Anki$skipMsg$failMsg$upgradeMsg'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleExportSingleEntry(VocabularyEntry entry) async {
+    await ref.read(ankiConfigProvider.notifier).ensureLoaded();
+    if (!mounted) return;
+
+    final ankiConfig = ref.read(ankiConfigProvider);
+    final result = await ref.read(vocabularyProvider.notifier).exportSingleEntry(
+          entry,
+          deckName: ankiConfig.deckName,
+          modelName: ankiConfig.modelName,
+        );
+
+    if (!mounted) return;
+
+    if (result.modelUpgradedTo != null) {
+      await ref
+          .read(ankiConfigProvider.notifier)
+          .updateModelName(result.modelUpgradedTo!);
+    }
+
+    if (!mounted) return;
+
+    final upgradeMsg = result.modelUpgradedFrom != null
+        ? '\n已自动平滑升级为「${result.modelUpgradedTo}」'
+        : '';
+
+    if (result.errors.isNotEmpty && result.successCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('导出失败: ${result.errors.join("; ")}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } else if (result.skipCount > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('「${entry.vocabKanji}」在 AnkiDroid 中已存在，已自动跳过$upgradeMsg'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } else if (result.successCount > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '已成功${entry.exportedToAnki ? "重新" : ""}导入「${entry.vocabKanji}」到 Anki 牌组「${ankiConfig.deckName}」$upgradeMsg',
+          ),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -699,6 +841,60 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                                 .read(vocabularyProvider.notifier)
                                 .selectEntry(entry);
                           },
+                          onLongPress: () {
+                            showModalBottomSheet<void>(
+                              context: context,
+                              builder: (ctx) => SafeArea(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ListTile(
+                                      leading: Icon(
+                                        entry.exportedToAnki
+                                            ? Icons.cloud_sync_outlined
+                                            : Icons.send_to_mobile,
+                                        color: entry.exportedToAnki
+                                            ? colorScheme.primary
+                                            : null,
+                                      ),
+                                      title: Text(
+                                        entry.exportedToAnki
+                                            ? '重新导入到 AnkiDroid（内置查重）'
+                                            : '导出到 AnkiDroid',
+                                      ),
+                                      subtitle: Text(
+                                        entry.exportedToAnki
+                                            ? '若卡片在 Anki 中已删除将自动补回，已存在将安全跳过'
+                                            : '导出该单词卡片到当前配置的牌组',
+                                      ),
+                                      onTap: () {
+                                        Navigator.pop(ctx);
+                                        _handleExportSingleEntry(entry);
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: Icon(
+                                        Icons.delete_outline,
+                                        color: colorScheme.error,
+                                      ),
+                                      title: Text(
+                                        '从本地生词本删除',
+                                        style: TextStyle(color: colorScheme.error),
+                                      ),
+                                      onTap: () async {
+                                        Navigator.pop(ctx);
+                                        if (entry.id != null) {
+                                          await ref
+                                              .read(vocabularyProvider.notifier)
+                                              .deleteEntry(entry.id!);
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       );
                     },
@@ -793,6 +989,17 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
                     icon: const Icon(Icons.open_in_new, size: 20),
                     onPressed: () => _launchWeblioUrl(entry.sourceUrl),
                   ),
+                IconButton(
+                  tooltip: entry.exportedToAnki ? '重新导入到 Anki（内置查重）' : '导出到 Anki',
+                  icon: Icon(
+                    entry.exportedToAnki
+                        ? Icons.cloud_sync_outlined
+                        : Icons.send_to_mobile,
+                    size: 20,
+                    color: entry.exportedToAnki ? colorScheme.primary : null,
+                  ),
+                  onPressed: () => _handleExportSingleEntry(entry),
+                ),
                 IconButton(
                   tooltip: '重新抓取与翻译',
                   icon: const Icon(Icons.refresh, size: 20),

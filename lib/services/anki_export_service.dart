@@ -1013,14 +1013,17 @@ class AnkiExportService implements AnkiExportServiceInterface {
     align-items: center;
     flex-wrap: wrap;
     gap: 6px;
+    text-indent: 0;
   }
   .DefSwitchBtn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    text-align: center;
+    text-indent: 0 !important;
     font-size: 11px;
     font-weight: 600;
-    line-height: 1.2;
+    line-height: 1;
     color: #0284c7;
     background: #f0f9ff;
     border: 1px solid #bae6fd;
@@ -1030,6 +1033,8 @@ class AnkiExportService implements AnkiExportServiceInterface {
     user-select: none;
     text-decoration: none !important;
     vertical-align: middle;
+    box-sizing: border-box;
+    white-space: nowrap;
   }
   .DefSwitchBtn:active {
     background: #0284c7;
@@ -1754,14 +1759,17 @@ a.Feedback {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+  text-indent: 0;
 }
 .DefSwitchBtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
+  text-indent: 0 !important;
   font-size: 11px;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1;
   color: #0284c7;
   background: #f0f9ff;
   border: 1px solid #bae6fd;
@@ -1771,6 +1779,8 @@ a.Feedback {
   user-select: none;
   text-decoration: none !important;
   vertical-align: middle;
+  box-sizing: border-box;
+  white-space: nowrap;
 }
 .DefSwitchBtn:active {
   background: #0284c7;
@@ -2237,6 +2247,7 @@ a.Feedback {
     String fieldName,
     VocabularyEntry entry, [
     int? fallbackIndex,
+    bool hasExplicitDefJa = false,
   ]) {
     final norm = fieldName
         .trim()
@@ -2262,7 +2273,9 @@ a.Feedback {
       return '';
     }
     if (_vocabPlusAliases.contains(norm)) {
-      return entry.vocabDefJa;
+      // 若目标模型已包含独立的 VocabDefJa 字段，VocabPlus 保留为空，防止与 VocabDefJa 重复；
+      // 仅当目标模型缺少 VocabDefJa（如原版 JLPT 牌组）时，才降级承载 entry.vocabDefJa
+      return hasExplicitDefJa ? '' : entry.vocabDefJa;
     }
     if (_vocabAudioAliases.contains(norm)) {
       return '';
@@ -2356,9 +2369,21 @@ a.Feedback {
     if (modelFields.isEmpty) {
       return entryToFields(entry);
     }
+    final hasExplicitDefJa = modelFields.any((f) {
+      final norm = f
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9\u4e00-\u9fa5\u3040-\u30ff\u3400-\u4dbf]'), '');
+      return _vocabDefJaAliases.contains(norm);
+    });
     return List<String>.generate(
       modelFields.length,
-      (index) => mapFieldValue(modelFields[index], entry),
+      (index) => mapFieldValue(
+        modelFields[index],
+        entry,
+        index,
+        hasExplicitDefJa,
+      ),
     );
   }
 
