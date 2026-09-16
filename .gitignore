@@ -13,9 +13,27 @@
 migrate_working_dir/
 .github/agents/
 .github/prompts/
-.agents/*/
-test/**/*challenger*
-test/**/*empirical*
+.agents/
+
+# 根目录图片
+/*.png
+
+# 测试文件精简：仅跟踪极简冒烟测试 widget_test.dart
+test/*
+!test/widget_test.dart
+
+# HTML 调试与卡片模板文件
+/*.html
+
+# 计划与历史规划文档
+implementation_plan.md
+newimplementation_plan.md
+PROJECT.md
+TEST_INFRA.md
+
+# 工作记录与 Agent 记录
+WORK_LOG.md
+ORIGINAL_REQUEST.md
 
 # Android 签名密钥（禁止提交）
 android/key.properties

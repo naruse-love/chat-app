@@ -1,4 +1,4 @@
-# 🤖 9Chat - 现代化 Flutter AI Agent 移动端客户端
+# Chat - 现代化 Flutter AI Agent 移动端客户端
 
 <div align="center">
 
@@ -7,9 +7,8 @@
 ![Riverpod](https://img.shields.io/badge/State-Riverpod%202.x-blue?style=for-the-badge)
 ![SQLite](https://img.shields.io/badge/Storage-SQLite%20(sqflite%20v5)-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Desktop-green?style=for-the-badge)
-![Tests](https://img.shields.io/badge/Tests-811%2F811%20Passed%20(100%25)-brightgreen?style=for-the-badge)
 ![Analyzer](https://img.shields.io/badge/Analyzer-0%20Issues-brightgreen?style=for-the-badge)
-![Version](https://img.shields.io/badge/Version-v1.33.0-orange?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v1.49.0-orange?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-purple?style=for-the-badge)
 
 <p align="center">
@@ -39,11 +38,6 @@
   - [环境依赖](#环境依赖)
   - [安装依赖与运行](#安装依赖与运行)
   - [Android APK 编译打包](#android-apk-编译打包)
-- [🧪 自动化测试与质量门禁](#-自动化测试与质量门禁)
-- [🤖 AI Agent 快速接手与开发指南](#-ai-agent-快速接手与开发指南)
-  - [快速接手清单](#快速接手清单)
-  - [核心开发规范](#核心开发规范)
-  - [常见陷阱与避坑指南](#常见陷阱与避坑指南)
 - [📄 开源协议](#-开源协议)
 
 ---
@@ -326,87 +320,7 @@ flutter build apk --release
 
 ---
 
-## 🧪 自动化测试与质量门禁
-
-本项目强制执行 **100% 测试通过率** 与 **0 静态分析问题** 严格质量红线：
-
-```bash
-# 1. 静态代码分析（必须输出 No issues found!）
-D:\work\flutter-sdk\flutter\bin\flutter.bat analyze
-
-# 2. 运行全量 811 个自动化测试用例（必须 100% 通过）
-D:\work\flutter-sdk\flutter\bin\flutter.bat test --no-pub
-```
-
-### 测试矩阵概览（811 个测试全部通过）
-
-| 测试套件 | 验证范围 |
-|---|---|
-| `test/services/vocabulary_service_test.dart` | Weblio 抓取、AI 翻译容错、缺陷条目 AI 补全、中文套话清洗与缓存自愈 |
-| `test/services/weblio_service_test.dart` | Weblio HTML 解析、活用递归“查到底”、送假名还原、防叠字例句拼装 |
-| `test/services/vocabulary_disambiguation_test.dart` | 纯假名消歧、AI 笔误推测、候选词状态机与点选入库流 |
-| `test/services/vocabulary_service_model_selection_test.dart` | 生词本专属模型凭据独立解析、本地空释义自愈补全与手动重新翻译 |
-| `test/services/persistent_notification_service_test.dart` | 系统常驻通知栏内存/平台通道、RemoteInput 行内搜索、冷启动查询缓冲队列与防乱序序号 |
-| `test/services/new_features_comprehensive_test.dart` | LaTeX 数学公式解析、CJK 汉字边界判定、货币防误触、思考 Markdown 渲染、模型持久化秒开 |
-| `test/services/path_sanitizer_workspace_test.dart` | Android 符号链接别名自愈、WSL/宿主盘越权阻断、工作区路径动态重定向 |
-| `test/services/code_execution_service_extended_test.dart`| 代码解释器 `main()` 自动执行、`Math` 与 `console`、`len`/`range`、自定义递归函数 |
-| `test/services/token_budget_manager_test.dart` | Token 精准估算、滑动窗口修剪摘要保留、1M 预算上限与全局超限熔断器 |
-| `test/services/agent_fault_tolerance_test.dart` | DSML/XML/JSON 畸形入参自动纠错、退避重试与 Jitter、自愈错误格式化 |
-| `test/services/unified_agent_pipeline_test.dart` | 四大维度工具统一协同调度端到端链路与步骤遥测一致性 |
-| `test/services/mcp/*_test.dart` | HTTP (POST /mcp)、SSE 智能降级、WS、Stdio、JsonRpcEngine、McpClient 协议 |
-| `test/services/native_tools_test.dart` | 日历冲突算法与中文时间解析、通知提醒、通讯录脱敏网关、真实定位逆编码 |
-| `test/screens/vocabulary_screen_test.dart` | 生词本查词输入、卡片渲染、小屏防溢出、消歧候选词点选与滑动删除交互 |
-| `test/screens/sandbox_management_screen_test.dart` | 沙箱文件管理器配额进度条、文件树展开、文本图片预览与清空导出 |
-| `test/widgets/vocabulary_model_selector_dialog_test.dart`| 生词本专属模型弹窗渲染、供应商切换安全重绑、自定义模型录入与去重容错 |
-| `test/widgets/*_test.dart` | 执行时间线、Token 徽章、HITL 确认卡片、DiffViewer、聊天气泡渲染交互 |
-| `test/e2e_integration_test.dart` | 完整生命周期端到端集成测试 |
-
----
-
-## 🤖 AI Agent 快速接手与开发指南
-
-> **写给接手此项目的 AI Agent**：请严格遵守本节规范与约定，确保项目演进的高效与质量。
-
-### 快速接手清单（按序执行）
-
-1. **阅读 [AGENTS.md](.agents/AGENTS.md)** 与 **[context.md](.agents/context.md)**，恢复完整的项目上下文；
-2. **查阅 [WORK_LOG.md](WORK_LOG.md)** 了解最近版本迭代与技术决策；
-3. 运行静态分析验证现状：
-   ```powershell
-   D:\work\flutter-sdk\flutter\bin\flutter.bat analyze
-   ```
-   （必须为 `No issues found!`）
-4. 运行全量回归测试确认基线状态：
-   ```powershell
-   D:\work\flutter-sdk\flutter\bin\flutter.bat test --no-pub
-   ```
-   （必须为 `All tests passed!` 0 failures）
-5. 明确任务目标后方可开展代码变更。
-
-### 核心开发规范（不可违反）
-
-1. **测试必须 100% 全部通过**：每次修改后必须重跑 `flutter test --no-pub`，严禁提交存在测试失败的代码；
-2. **静态分析 0 问题**：必须输出 `No issues found!`，不接受任何 warning 或 error；
-3. **中文 UI 与友好错误**：所有面向用户的界面文字、错误提示、SnackBar 内容统一使用中文；
-4. **版本号递增规范**：每次新增功能（feat）、修复缺陷（fix）或变更代码，必须给项目版本号递增 0.01（在 `pubspec.yaml` 的 `version` 字段、`WORK_LOG.md` 顶部与 `.agents/context.md` 同步递增）；
-5. **更新 WORK_LOG.md**：每次实质性变更必须在项目根目录 `WORK_LOG.md` **顶部**追加记录，包含变更文件列表与核心技术指标；
-6. **Git 提交规范**：使用标准语义化前缀（`feat:` / `fix:` / `test:` / `refactor:` / `docs:`），提交后执行 `git push`。
-
-### 常见陷阱与避坑指南
-
-| 场景 / 陷阱 | 正确做法 |
-|---|---|
-| **Riverpod StateNotifier 异步写入** | 所有 `await` 异步调用之后必须第一行检查 `if (!mounted) return;`，防止已销毁组件报错。 |
-| **可空状态更新 (`copyWith`)** | 可空字段（如 `activeConversation`）必须通过标志参数（如 `clearActive: true`）处理，禁止直接传 `null` 导致 fallback 到旧值。 |
-| **SQLite 操作规范** | 必须通过对应 DAO 操作数据库，禁止在 Provider 或 Widget 中硬编码 `db.rawQuery`。 |
-| **DropdownButtonFormField 切换崩溃** | 动态切换候选列表时必须为表单项指定动态 `key: ValueKey(...)` 并清洗候选列表去重，防止旧值在新候选集不存在导致断言报错。 |
-| **测试中使用安全存储 / SP** | 必须使用 `MockFlutterSecureStorage`（基于 `noSuchMethod`）并调用 `SharedPreferences.setMockInitialValues({})`。 |
-| **持久化图片路径** | 图片必须通过 `ImageService.compressAndSaveImage()` 压缩后保存至 `Documents` 沙盒，数据库只存永久绝对路径。 |
-| **MCP Streamable HTTP 协议** | MCP `POST /mcp` 端点需直接发送 HTTP POST 请求并支持处理 JSON 与 SSE 流，不可仅发送 GET。 |
-| **通知栏后台引擎插件缺失** | 后台唤醒 `FlutterEngine` 必须显式调用 `GeneratedPluginRegistrant.registerWith(engine)` 注册插件。 |
-
----
-
 ## 📄 开源协议
 
 本项目基于 [MIT License](LICENSE) 协议开源。
+
