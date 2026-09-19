@@ -14,6 +14,9 @@ enum CandidateReason {
 
   /// 词典未收录或拼写笔误，由 AI 智能推测的可能目标词
   typoOrNotFound,
+
+  /// 汉字同形多音词输入，存在多个对应读音或词义
+  heteronym,
 }
 
 /// 单词候选项目模型

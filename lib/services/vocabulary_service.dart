@@ -191,6 +191,39 @@ class VocabularyService {
     return isAllKanaChars && hasActualKanaLetter;
   }
 
+  /// 从用户输入中提取词头与显式读音（如「盛る　もる」、「盛る もる」、「盛る(もる)」）
+  static ({String word, String? reading}) extractWordAndReading(String rawWord) {
+    final trimmed = rawWord.trim();
+    if (trimmed.isEmpty) return (word: '', reading: null);
+
+    // 1. 括号形式：盛る(もる) 或 盛る（もる）
+    final bracketMatch =
+        RegExp(r'^([^\s\(（]+)[\(（]([^\)）]+)[\)）]$').firstMatch(trimmed);
+    if (bracketMatch != null) {
+      final w = bracketMatch.group(1)!.trim();
+      final r = bracketMatch.group(2)!.trim();
+      if (w.isNotEmpty &&
+          r.isNotEmpty &&
+          (isPureKana(r) || RegExp(r'^[a-zA-Z]+$').hasMatch(r))) {
+        return (word: w, reading: r);
+      }
+    }
+
+    // 2. 空格分隔形式：盛る　もる 或 盛る もる
+    final spaceParts = trimmed.split(RegExp(r'[\s\u3000]+'));
+    if (spaceParts.length == 2) {
+      final w = spaceParts[0].trim();
+      final r = spaceParts[1].trim();
+      if (w.isNotEmpty &&
+          r.isNotEmpty &&
+          (isPureKana(r) || RegExp(r'^[a-zA-Z]+$').hasMatch(r))) {
+        return (word: w, reading: r);
+      }
+    }
+
+    return (word: trimmed, reading: null);
+  }
+
   /// 获取纯假名对应的多汉字/多义项候选列表
   Future<List<WordCandidate>> getPureKanaCandidates(String kana) async {
     final trimmed = kana.trim();
@@ -395,8 +428,11 @@ class VocabularyService {
     String rawWord, {
     bool forceRefresh = false,
     bool allowLlmFallback = true,
+    String? targetReading,
   }) async {
-    final word = rawWord.trim();
+    final extracted = extractWordAndReading(rawWord);
+    final word = extracted.word;
+    final effectiveReading = targetReading ?? extracted.reading;
     if (word.isEmpty) {
       throw WeblioException('查询单词不能为空');
     }
@@ -410,19 +446,27 @@ class VocabularyService {
             cached.vocabDefJa,
             cached.sourceDict,
           )) {
-        // 若缓存已有但缺失中文释义，尝试通过 LLM 进行自愈补全翻译
-        if (cached.vocabDefSc.isEmpty) {
-          final llm = await resolveVocabLlm();
-          if (llm != null) {
-            try {
-              final translated = await retranslateEntry(cached);
-              return translated;
-            } catch (_) {
-              return cached;
+        // 若指定了目标读音，检查缓存中的读音是否与目标读音一致；不一致则穿透缓存向 Weblio 重查
+        final readingMismatch = effectiveReading != null &&
+            effectiveReading.isNotEmpty &&
+            WeblioService.cleanReading(cached.vocabFurigana) !=
+                WeblioService.cleanReading(effectiveReading);
+
+        if (!readingMismatch) {
+          // 若缓存已有但缺失中文释义，尝试通过 LLM 进行自愈补全翻译
+          if (cached.vocabDefSc.isEmpty) {
+            final llm = await resolveVocabLlm();
+            if (llm != null) {
+              try {
+                final translated = await retranslateEntry(cached);
+                return translated;
+              } catch (_) {
+                return cached;
+              }
             }
           }
+          return cached;
         }
-        return cached;
       }
     }
 
@@ -431,7 +475,10 @@ class VocabularyService {
     WeblioException? weblioError;
 
     try {
-      weblioResult = await weblioService.lookupWord(word);
+      weblioResult = await weblioService.lookupWord(
+        word,
+        targetReading: effectiveReading,
+      );
     } on WeblioException catch (e) {
       weblioError = e;
     } catch (e) {
@@ -444,7 +491,10 @@ class VocabularyService {
         final llm = await resolveVocabLlm();
         if (llm != null) {
           try {
-            final aiEntry = await _generateWithLlmFallback(word);
+            final aiEntry = await _generateWithLlmFallback(
+              word,
+              targetReading: effectiveReading,
+            );
             final insertedId = await vocabularyDao.insert(aiEntry);
             return aiEntry.copyWith(id: insertedId);
           } catch (aiError) {
@@ -466,6 +516,8 @@ class VocabularyService {
     final isKata = WeblioService.isKatakana(word);
     if (isKata && weblioResult.foreignOrigin.isNotEmpty) {
       finalReading = weblioResult.foreignOrigin;
+    } else if (effectiveReading != null && effectiveReading.isNotEmpty) {
+      finalReading = WeblioService.cleanReading(effectiveReading);
     } else {
       finalReading = WeblioService.cleanReading(finalReading);
     }
@@ -520,7 +572,9 @@ class VocabularyService {
           }
         }
       } else {
-        if ((finalReading.isEmpty || finalReading == word) && aiReading.isNotEmpty) {
+        if (effectiveReading == null &&
+            (finalReading.isEmpty || finalReading == word) &&
+            aiReading.isNotEmpty) {
           finalReading = WeblioService.cleanReading(aiReading);
         }
       }
@@ -574,18 +628,25 @@ class VocabularyService {
   }
 
   /// 词典未收录或网络故障时的 AI 智能兜底生成
-  Future<VocabularyEntry> _generateWithLlmFallback(String word) async {
+  Future<VocabularyEntry> _generateWithLlmFallback(
+    String word, {
+    String? targetReading,
+  }) async {
     final llm = await resolveVocabLlm();
     if (llm == null) {
       throw WeblioException('未在 Weblio 找到「$word」的相关释义，且未配置 AI 模型');
     }
 
+    final readingInstruction = (targetReading != null && targetReading.isNotEmpty)
+        ? '\n注意：用户指定的目标假名读音为「$targetReading」，请严格以此读音对应的词义进行生成！'
+        : '';
+
     final prompt = '''
 你是一位资深日语词典编纂专家与专业翻译助手。
-用户需要查询日语单词「$word」，但在基础词典中未收录该词。请你以权威词典（如《大辞泉》）的标准，为该单词补充完整的词条信息。
+用户需要查询日语单词「$word」，但在基础词典中未收录该词。请你以权威词典（如《大辞泉》）的标准，为该单词补充完整的词条信息。$readingInstruction
 
 要求：
-1. furigana：普通词输出纯平假名；片假名外来语单词（如「スリル」）必须输出其英文/原语原词（如「thrill」），严禁转写为平假名（如「すりる」）！
+1. furigana：普通词输出纯平假名${targetReading != null && targetReading.isNotEmpty ? '（严格输出「$targetReading」）' : ''}；片假名外来语单词（如「スリル」）必须输出其英文/原语原词（如「thrill」），严禁转写为平假名（如「すりる」）！
 2. foreignOrigin：若当前单词是外来语/借词，必须提供其英文或原语原词拼写（如 thrill），非外来语则留空字符串。
 3. partOfSpeech：严格输出日本语学习者规范词性（五段动词输出 他動1/自動1/自他動1；一段动词输出 他動2/自動2/自他動2；サ変输出 他動3/自動3/自他動3/動サ変；カ変输出 動カ変；名、副、形、形動、接続、感等），严禁输出“他動5”、“自動5”、“動サ五（四）”、“動バ下一”等错误或日日生僻标记！
 4. pitch：日语标准音调圆圈数字（如：⓪、①、②、③等）。
@@ -632,11 +693,15 @@ class VocabularyService {
       messages: messages,
     );
 
-    return parseFallbackEntryJson(response, word);
+    return parseFallbackEntryJson(response, word, targetReading: targetReading);
   }
 
   /// 解析 AI 兜底生成的 JSON 数据
-  VocabularyEntry parseFallbackEntryJson(String content, String word) {
+  VocabularyEntry parseFallbackEntryJson(
+    String content,
+    String word, {
+    String? targetReading,
+  }) {
     var raw = content.trim();
 
     final codeBlockMatch = RegExp(r'```(?:json)?\s*([\s\S]*?)\s*```').firstMatch(raw);
@@ -652,7 +717,10 @@ class VocabularyService {
 
     try {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      final furigana = decoded['furigana']?.toString().trim() ?? word;
+      final parsedFurigana = decoded['furigana']?.toString().trim() ?? word;
+      final furigana = (targetReading != null && targetReading.isNotEmpty)
+          ? targetReading
+          : parsedFurigana;
       final foreignOrigin = decoded['foreignOrigin']?.toString().trim() ?? '';
       String finalFurigana = furigana;
       if (WeblioService.isKatakana(word)) {

@@ -1216,6 +1216,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isPureKana = state.candidateReason == CandidateReason.pureKana;
+    final isHeteronym = state.candidateReason == CandidateReason.heteronym;
     final candidates = state.candidates ?? [];
 
     return Container(
@@ -1225,7 +1226,7 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
         color: colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isPureKana
+          color: (isPureKana || isHeteronym)
               ? colorScheme.primary.withAlpha(128)
               : colorScheme.secondary.withAlpha(128),
           width: 1.5,
@@ -1245,17 +1246,19 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
           Row(
             children: [
               Icon(
-                isPureKana ? Icons.alt_route : Icons.auto_fix_high,
-                color: isPureKana ? colorScheme.primary : colorScheme.secondary,
+                (isPureKana || isHeteronym) ? Icons.alt_route : Icons.auto_fix_high,
+                color: (isPureKana || isHeteronym) ? colorScheme.primary : colorScheme.secondary,
                 size: 20,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  isPureKana ? '假名同音多义词确认' : '词典未收录 · AI 智能推测',
+                  isPureKana
+                      ? '假名同音多义词确认'
+                      : (isHeteronym ? '同形多音词确认' : '词典未收录 · AI 智能推测'),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: isPureKana
+                    color: (isPureKana || isHeteronym)
                         ? colorScheme.primary
                         : colorScheme.secondary,
                   ),
@@ -1274,7 +1277,9 @@ class _VocabularyScreenState extends ConsumerState<VocabularyScreen> {
           Text(
             isPureKana
                 ? '您输入的是纯假名「${state.pendingCandidateWord}」，可能对应以下汉字与含义，请选择您的目标词：'
-                : '未在词典中检索到「${state.pendingCandidateWord}」，AI 为您智能推测了以下可能的目标词：',
+                : (isHeteronym
+                    ? '「${state.pendingCandidateWord}」包含多个不同读音与词义，请选择您的目标词：'
+                    : '未在词典中检索到「${state.pendingCandidateWord}」，AI 为您智能推测了以下可能的目标词：'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),

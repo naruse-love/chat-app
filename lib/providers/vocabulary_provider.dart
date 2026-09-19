@@ -124,8 +124,11 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
     bool forceRefresh = false,
     bool checkConfirmation = false,
     bool forceDirect = false,
+    String? targetReading,
   }) async {
-    final word = rawWord.trim();
+    final extracted = VocabularyService.extractWordAndReading(rawWord);
+    final word = extracted.word;
+    final effectiveTargetReading = targetReading ?? extracted.reading;
     if (word.isEmpty) return;
 
     // 清理先前的候选状态与错误
@@ -137,25 +140,68 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
       clearCandidateReason: true,
     );
 
-    // 1. 若开启候选确认且非强制直查：检查是否为纯假名输入
-    if (checkConfirmation && !forceDirect && VocabularyService.isPureKana(word)) {
-      try {
-        final kanaCandidates =
-            await vocabularyService.getPureKanaCandidates(word);
-        if (!mounted) return;
+    // 1. 若开启候选确认且非强制直查：检查是否为纯假名输入或汉字同形多音词
+    if (checkConfirmation && !forceDirect && effectiveTargetReading == null) {
+      if (VocabularyService.isPureKana(word)) {
+        try {
+          final kanaCandidates =
+              await vocabularyService.getPureKanaCandidates(word);
+          if (!mounted) return;
 
-        // 若发现存在多个不同汉字/释义候选，呈现供用户选择
-        if (kanaCandidates.length > 1) {
-          state = state.copyWith(
-            isLoading: false,
-            candidates: kanaCandidates,
-            pendingCandidateWord: word,
-            candidateReason: CandidateReason.pureKana,
-          );
-          return;
+          // 若发现存在多个不同汉字/释义候选，呈现供用户选择
+          if (kanaCandidates.length > 1) {
+            state = state.copyWith(
+              isLoading: false,
+              candidates: kanaCandidates,
+              pendingCandidateWord: word,
+              candidateReason: CandidateReason.pureKana,
+            );
+            return;
+          }
+        } catch (_) {
+          if (!mounted) return;
         }
-      } catch (_) {
-        if (!mounted) return;
+      } else {
+        // 汉字同形多音词消歧（如「盛る」存在「さかる」和「もる」）
+        try {
+          final candidates =
+              await vocabularyService.weblioService.fetchCandidates(word);
+          if (!mounted) return;
+
+          final matchedCandidates = candidates.where((c) {
+            return c.searchWord == word ||
+                c.kanji == word ||
+                c.kanji.startsWith('$word ') ||
+                c.kanji.startsWith('$word(') ||
+                c.kanji.startsWith('$word（');
+          }).toList();
+
+          final distinctReadings = <String>{};
+          for (final c in matchedCandidates) {
+            final r = WeblioService.cleanReading(c.reading);
+            if (r.isNotEmpty && r != word) {
+              distinctReadings.add(r);
+            }
+          }
+
+          if (distinctReadings.length > 1) {
+            // 过滤有效候选：排除读音缺失、读音等于原词汉字或释义为空的项
+            final validCandidates = matchedCandidates.where((c) {
+              final r = WeblioService.cleanReading(c.reading);
+              return r.isNotEmpty && r != word && c.definition.trim().isNotEmpty;
+            }).toList();
+
+            state = state.copyWith(
+              isLoading: false,
+              candidates: validCandidates.isNotEmpty ? validCandidates : matchedCandidates,
+              pendingCandidateWord: word,
+              candidateReason: CandidateReason.heteronym,
+            );
+            return;
+          }
+        } catch (_) {
+          if (!mounted) return;
+        }
       }
     }
 
@@ -165,6 +211,7 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
         word,
         forceRefresh: forceRefresh,
         allowLlmFallback: !checkConfirmation || forceDirect,
+        targetReading: effectiveTargetReading,
       );
       if (!mounted) return;
 
@@ -228,6 +275,7 @@ class VocabularyNotifier extends StateNotifier<VocabularyState> {
       candidate.searchWord,
       forceDirect: true,
       forceRefresh: true,
+      targetReading: candidate.reading,
     );
   }
 
